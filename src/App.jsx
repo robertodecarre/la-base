@@ -1,81 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-
-const PALOS = [
-  { n: "Oros",    e: "🟡", col: "#8B6914" },
-  { n: "Copas",   e: "🏆", col: "#c0392b" },
-  { n: "Espadas", e: "⚔️",  col: "#1a1a2e" },
-  { n: "Bastos",  e: "🪵", col: "#2d4a1e" },
-];
-const VALS = [1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
-const NV = { 1: "As", 10: "Sota", 11: "Caballo", 12: "Rey" };
-const nv = (v) => NV[v] || String(v);
-
-function jerarquia(carta) {
-  if (carta.valor === 1 && carta.palo.n === "Bastos") return 100;
-  return carta.valor;
-}
-function crearMazo(dosMazos=false) {
-  let id = 0; const m = [];
-  // Primer mazo completo
-  for (const p of PALOS) for (const v of VALS) m.push({ palo: p, valor: v, uid: id++, mazo: 1 });
-  // Segundo mazo sin ases (vals 2-7, 10-12)
-  if (dosMazos) {
-    const VALS2 = [2,3,4,5,6,7,10,11,12];
-    for (const p of PALOS) for (const v of VALS2) m.push({ palo: p, valor: v, uid: id++, mazo: 2 });
-  }
-  return m;
-}
-function mezclar(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-  return a;
-}
-
-const ESTRUCTURAS = {
-  clasica2004:  [1,3,5,5,3,1,1,3,5,5,3,1],
-  alt2004:      [1,3,5,6,6,5,3,1,1,3,5,6,6,5,3,1],
-  postpandemia: [1,2,3,4,5,6,6,5,4,3,2,1],
-};
-// Máximo de cartas por cantidad de jugadores y modo
-function maxCartas(nJug, dosMazos) {
-  if (nJug === 4) return 7;
-  if (nJug === 6) return 6;
-  if (nJug === 8) return dosMazos ? 7 : 5;
-  return 6;
-}
-// Nombres por defecto según cantidad de jugadores
-const NOMBRES_POR_CANT = {
-  4: ["Micho","Tincho","Leo","Negro"],
-  6: ["Micho","Tincho","Leo","Negro","Gordo","CabezonIA"],
-  8: ["Micho","Tincho","Leo","Negro","Gordo","CabezonIA","Flaco","Pelado"],
-};
-const POS_ANGULOS = {
-  4: [270, 0, 90, 180],
-  6: [270, 330, 30, 90, 150, 210],
-  8: [270, 315, 0, 45, 90, 135, 180, 225],
-};
-function posEnCirculo(idx, rx, ry, cx, cy, nJug=6) {
-  const angulos = POS_ANGULOS[nJug] || POS_ANGULOS[6];
-  const ang = (angulos[idx] * Math.PI) / 180;
-  return { x: cx + rx * Math.cos(ang), y: cy + ry * Math.sin(ang) };
-}
-
-function calcularPuntos(pedN, pedE, hechoN, hechoE) {
-  const cumpleN = hechoN === pedN, cumpleE = hechoE === pedE;
-  if (cumpleN && !cumpleE) return { deltaN: 10 + hechoN, deltaE: -(Math.abs(hechoE - pedE)) };
-  if (cumpleE && !cumpleN) return { deltaN: -(Math.abs(hechoN - pedN)), deltaE: 10 + hechoE };
-  return { deltaN: -(Math.abs(hechoN - pedN)), deltaE: -(Math.abs(hechoE - pedE)) };
-}
-
-function opcionesValidas(pedidoMano, totalBases) {
-  // La suma debe ser exactamente total-1 o total+1
-  const opts = [];
-  const a = totalBases - 1 - pedidoMano; // suma = total-1
-  const b = totalBases + 1 - pedidoMano; // suma = total+1
-  if (a >= 0 && a <= totalBases) opts.push(a);
-  if (b >= 0 && b <= totalBases && b !== a) opts.push(b);
-  return opts.sort((x,y)=>x-y);
-}
+import { nv } from "./engine/cards";
+import { crearMazo, mezclar } from "./engine/deck";
+import { jerarquia } from "./engine/hierarchy";
+import { calcularPuntos } from "./engine/scoring";
+import { opcionesValidas } from "./engine/bidding";
+import { ESTRUCTURAS, maxCartas, NOMBRES_POR_CANT, posEnCirculo } from "./engine/structures";
 
 function fmtTiempo(seg) {
   if (seg <= 0) return "0:00";
