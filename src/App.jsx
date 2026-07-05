@@ -1208,11 +1208,11 @@ function PantallaSorteo({ jugadores, onComenzar }) {
 // ══════════════════════════════════════════════
 function PantallaPartida({ jugadoresInit, estructura, tiempoInicial, modoTiempo, pieInicial, capN, capE, kamikazesIniciales, nJug, dosMazos, ases, onReset, onReiniciar }) {
   const pi = pieInicial ?? 0;
-  const manoInicial = (pi + 5) % 6;
+  const nJugTotal = nJug || jugadoresInit.length || 6;
+  const manoInicial = (pi + nJugTotal - 1) % nJugTotal;
   const hayTiempo = tiempoInicial !== null;
 
   const [jugadores,setJugadores]=useState(()=>jugadoresInit.map((nombre,i)=>({nombre,eq:i%2===0?0:1,mano:[],bases:0})));
-  const nJugTotal = nJug || jugadoresInit.length || 6;
   const [cartasMesa,setCartasMesa]=useState([]);
   const [historial,setHistorial]=useState([]);
   const [manoActual,setManoActual]=useState(0);
@@ -1251,7 +1251,7 @@ function PantallaPartida({ jugadoresInit, estructura, tiempoInicial, modoTiempo,
   const clock=useClock(tiempoInicial??0,tiempoInicial??0,modoTiempo,onAgotado);
 
 
-  const manoJugIdx=(pieIdx+5)%6;
+  const manoJugIdx=(pieIdx+nJugTotal-1)%nJugTotal;
   const eqManoActual=jugadores[manoJugIdx]?.eq??0;
   const nombresPorEq=(eq)=>jugadores.filter(j=>j.eq===eq).map(j=>j.nombre);
 
