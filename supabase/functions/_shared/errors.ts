@@ -10,6 +10,17 @@ const STATUS_POR_ERROR: Record<string, number> = {
   room_not_open: 409,
   room_full: 409,
   could_not_allocate_code: 500,
+  not_room_member: 403,
+  not_dealing_phase: 409,
+  not_enough_cards: 500,
+  not_bidding_phase: 409,
+  not_your_teams_turn: 403,
+  not_captain: 403,
+  already_bid: 409,
+  invalid_bid: 400,
+  kamikaze_only_for_mano: 400,
+  kamikaze_not_available: 400,
+  no_kamikazes_left: 400,
 };
 
 export function statusParaError(mensaje: string): number {

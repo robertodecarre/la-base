@@ -10,3 +10,14 @@ export async function repartirMano(roomId) {
   if (error) throw error;
   return data; // fila de game_state
 }
+
+// Solo el capitán del equipo a quien le toca pedir puede llamar esto.
+// kamikaze solo es válido en el pedido de mano (0 o el total de bases).
+export async function enviarPedido(roomId, value, kamikaze = false) {
+  await asegurarSesion();
+  const { data, error } = await supabase.functions.invoke("submit-bid", {
+    body: { roomId, value, kamikaze },
+  });
+  if (error) throw error;
+  return data; // fila de game_state
+}
