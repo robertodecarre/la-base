@@ -21,3 +21,15 @@ export async function enviarPedido(roomId, value, kamikaze = false) {
   if (error) throw error;
   return data; // fila de game_state
 }
+
+// Solo válido cuando es el turno del jugador y la base todavía no se
+// completa con esta carta (esa resolución es una pieza futura).
+export async function jugarCarta(roomId, cardUid) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("play_card", {
+    p_room_id: roomId,
+    p_card_uid: cardUid,
+  });
+  if (error) throw error;
+  return data; // fila de game_state
+}
