@@ -354,6 +354,7 @@ function PantallaPartida({ jugadoresInit, estructura, tiempoInicial, modoTiempo,
 
     // As de copas: solo si el superpoder está activado
     if(ases?.copas && carta.valor===1&&carta.palo.n==="Copas"){
+      setCopasPortador(jugIdx);
       setCopasMenu(true);
       setFase("copas-menu");
       return;
