@@ -1,8 +1,9 @@
 import { useState, useCallback } from "react";
 import { nv } from "../engine/cards";
 import { crearMazo, mezclar } from "../engine/deck";
-import { jerarquia } from "../engine/hierarchy";
-import { calcularPuntos } from "../engine/scoring";
+import { siguienteTurno } from "../engine/turn";
+import { resolverBase as calcularGanadorBase, ganadorParcial, detectarTriggerOros } from "../engine/trick";
+import { evaluarCierreMano } from "../engine/hand";
 import { useClock } from "../hooks/useClock";
 import { DisplayReloj } from "../components/DisplayReloj";
 import { PanelPedir } from "../components/PanelPedir";
@@ -108,31 +109,14 @@ export function PantallaPartida({ jugadoresInit, estructura, tiempoInicial, modo
 
     if(nuevosMesa.length%nJugTotal===0){resolverBase(nuevosMesa.slice(-nJugTotal),nuevosJ);}
     else{
-      // Siguiente turno según sentido
-      const sig = sentido===1 ? (jugIdx+nJugTotal-1)%nJugTotal : (jugIdx+1)%nJugTotal;
-      setTurnoIdx(sig);
+      setTurnoIdx(siguienteTurno(jugIdx, nJugTotal, sentido));
     }
   };
 
   const resolverBase=(ronda,jActuales)=>{
-    // Buscar ancho de bastos y as de espadas en la ronda
-    const anchoItem = ronda.find(x=>x.carta.valor===1&&x.carta.palo.n==="Bastos");
-    const espItem   = ronda.find(x=>x.carta.valor===1&&x.carta.palo.n==="Espadas");
-
-    // Superpoder del as de espadas: si el ancho de bastos fue jugado
-    // Y el as de espadas fue jugado DESPUES del ancho, gana el as de espadas
-    let ganIdx;
-    if(anchoItem && espItem && espItem.orden > anchoItem.orden){
-      ganIdx = espItem.jugadorIdx;
+    const {ganIdx, viaSuperpoderEspadas} = calcularGanadorBase(ronda);
+    if(viaSuperpoderEspadas){
       addLog(`¡As de Espadas mata al Ancho de Bastos!`);
-    } else {
-      // Resolución normal: mayor jerarquía, empate = menor orden (más cercano al mano)
-      let maxJ=-1,ganOrden=999;
-      ganIdx=-1;
-      for(const item of ronda){
-        const j=jerarquia(item.carta);
-        if(j>maxJ||(j===maxJ&&item.orden<ganOrden)){maxJ=j;ganIdx=item.jugadorIdx;ganOrden=item.orden;}
-      }
     }
 
     const nuevaBase=baseNum+1;
@@ -141,12 +125,10 @@ export function PantallaPartida({ jugadoresInit, estructura, tiempoInicial, modo
     addLog(`BASE ${nuevaBase}: ¡${jActuales[ganIdx].nombre} gana!`);
 
     // As de oros: solo si el superpoder está activado
-    const orosItem=ases?.oros ? ronda.find(x=>x.carta.valor===1&&x.carta.palo.n==="Oros") : null;
-    const orosEq = orosItem ? jActuales[orosItem.jugadorIdx].eq : -1;
-    const ganEq = jActuales[ganIdx].eq;
-    if(orosItem && orosEq===ganEq && nuevaBase<estructura[manoActual]){
-      addLog(`🟡 As de Oros: ${jActuales[orosItem.jugadorIdx].nombre} elige quién abre la siguiente base.`);
-      setOrosMenu({jugadorIdx:orosItem.jugadorIdx, eqIdx:orosEq});
+    const orosTrigger = detectarTriggerOros(ronda, jActuales, ganIdx, ases);
+    if(orosTrigger && nuevaBase<estructura[manoActual]){
+      addLog(`🟡 As de Oros: ${jActuales[orosTrigger.jugadorIdx].nombre} elige quién abre la siguiente base.`);
+      setOrosMenu(orosTrigger);
       setFase("oros-menu");
       return;
     }
@@ -160,14 +142,7 @@ export function PantallaPartida({ jugadoresInit, estructura, tiempoInicial, modo
   };
 
   const cerrarMano=()=>{
-    let hechoN=0,hechoE=0;
-    for(const j of jugadores){if(j.eq===0)hechoN+=j.bases;else hechoE+=j.bases;}
-    const pedN=pedidos?.[0]??0,pedE=pedidos?.[1]??0;
-    const{deltaN,deltaE}=calcularPuntos(pedN,pedE,hechoN,hechoE);
-    // Detectar kamikaze no declarado
-    const eqManoEq=jugadores[manoJugIdx]?.eq??0;
-    const deltaEqMano=eqManoEq===0?deltaN:deltaE;
-    const noDeclarado=!kamikazeDeclarado&&deltaEqMano<=-2;
+    const {deltaN,deltaE,pedN,pedE,hechoN,hechoE,noDeclarado}=evaluarCierreMano({jugadores,pedidos,manoJugIdx,kamikazeDeclarado});
     const nuevoHist=[...historial];
     nuevoHist[manoActual]={deltaN,deltaE,pedN,pedE,hechoN,hechoE};
     setHistorial(nuevoHist);
@@ -269,20 +244,7 @@ export function PantallaPartida({ jugadoresInit, estructura, tiempoInicial, modo
           {(()=>{
             const enRonda = cartasMesa.length % nJugTotal;
             const rondaActual = enRonda > 0 ? cartasMesa.slice(-enRonda) : [];
-            let ganaActual = null;
-            if (rondaActual.length > 0) {
-              const anchoItem = rondaActual.find(x=>x.carta.valor===1&&x.carta.palo.n==="Bastos");
-              const espItem   = rondaActual.find(x=>x.carta.valor===1&&x.carta.palo.n==="Espadas");
-              if (ases?.espadas && anchoItem && espItem && espItem.orden > anchoItem.orden) {
-                ganaActual = espItem.jugadorIdx;
-              } else {
-                let maxJ=-1, ganOrden=999;
-                for (const item of rondaActual) {
-                  const j = jerarquia(item.carta);
-                  if (j>maxJ||(j===maxJ&&item.orden<ganOrden)){maxJ=j;ganaActual=item.jugadorIdx;ganOrden=item.orden;}
-                }
-              }
-            }
+            const ganaActual = ganadorParcial(rondaActual, ases);
             return (
               <MesaCircular
                 jugadores={jugadores} cartasMesa={cartasMesa}
