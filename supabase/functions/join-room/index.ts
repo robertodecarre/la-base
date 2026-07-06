@@ -1,0 +1,37 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
+import { statusParaError } from "../_shared/errors.ts";
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) throw new Error("not_authenticated");
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+
+    const body = await req.json();
+    const code = typeof body?.code === "string" ? body.code : "";
+    const name = typeof body?.name === "string" ? body.name : "";
+    if (!code) throw new Error("invalid_config");
+
+    const { data, error } = await supabase.rpc("join_room", { p_code: code, p_name: name });
+    if (error) throw new Error(error.message);
+
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "unknown_error";
+    return new Response(JSON.stringify({ error: message }), {
+      status: statusParaError(message),
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
