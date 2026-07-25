@@ -81,3 +81,18 @@ export async function siguienteBase(roomId) {
   if (error) throw error;
   return data; // fila de game_state
 }
+
+// Válido para cualquier miembro de la sala (sin restricción de capitán ni
+// ganador — igual que el botón "CERRAR MANO" offline) mientras la sala
+// está en fase 'closing'. Calcula el puntaje de la mano, inserta la fila
+// en hand_results y, según el resultado, termina la partida
+// (phase='finished') o deja la sala en 'dealing' lista para el próximo
+// repartirMano.
+export async function cerrarMano(roomId) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("close_hand", {
+    p_room_id: roomId,
+  });
+  if (error) throw error;
+  return data; // fila de game_state
+}
