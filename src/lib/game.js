@@ -66,3 +66,18 @@ export async function resolverOros(roomId, seat) {
   if (error) throw error;
   return data; // fila de game_state
 }
+
+// Solo válido para quien ganó la base recién completada (game_state.
+// last_trick_winner_seat) mientras la sala está en fase 'resolving' (base
+// completada sin trigger de As de Copas ni de As de Oros). No hay ninguna
+// decisión que tomar — solo confirma el avance a la siguiente base,
+// abriendo con el ganador. Mirror online de PantallaPartida.jsx's botón
+// "SIGUIENTE BASE →".
+export async function siguienteBase(roomId) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("resolve_resolving", {
+    p_room_id: roomId,
+  });
+  if (error) throw error;
+  return data; // fila de game_state
+}
