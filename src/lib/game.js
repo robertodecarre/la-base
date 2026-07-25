@@ -96,3 +96,21 @@ export async function cerrarMano(roomId) {
   if (error) throw error;
   return data; // fila de game_state
 }
+
+// Válido para cualquier miembro de la sala, en fase 'bidding', mientras la
+// sala tenga reloj activado en modo "muerte" y el tiempo del equipo que le
+// toca pedir ya se haya agotado (el chequeo lo hace el servidor al
+// momento de la llamada, no un proceso en segundo plano — cualquier
+// jugador que note que el reloj llegó a cero puede reclamarlo). Si no
+// llegó a cero todavía, la llamada falla con 'not_expired_yet'. El equipo
+// cuyo reloj corría pierde la partida (phase='finished',
+// end_cause='clock_expired'); en modo "deportivo" esta RPC no aplica —
+// ese modo es puro ritmo de cliente, sin consecuencia server-side.
+export async function reclamarTiempo(roomId) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("claim_timeout", {
+    p_room_id: roomId,
+  });
+  if (error) throw error;
+  return data; // fila de game_state
+}
