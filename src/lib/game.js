@@ -49,3 +49,20 @@ export async function resolverCopas(roomId, sentido) {
   if (error) throw error;
   return data; // fila de game_state
 }
+
+// Solo válido para quien tiró el As de Oros (game_state.pending_action.
+// carrier_seat) mientras la sala está en fase oros_menu. seat: asiento de
+// cualquier jugador del equipo ganador (pending_action.team), incluido el
+// propio portador, que abrirá la siguiente base. A diferencia de
+// resolverCopas, la base ya quedó resuelta antes de entrar a este menú
+// (oros_menu solo se entra después de que resolve_trick corrió), así que
+// esta llamada no dispara ninguna resolución de ganador.
+export async function resolverOros(roomId, seat) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("resolve_oros_menu", {
+    p_room_id: roomId,
+    p_seat: seat,
+  });
+  if (error) throw error;
+  return data; // fila de game_state
+}
