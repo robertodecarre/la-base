@@ -22,13 +22,29 @@ export async function enviarPedido(roomId, value, kamikaze = false) {
   return data; // fila de game_state
 }
 
-// Solo válido cuando es el turno del jugador y la base todavía no se
-// completa con esta carta (esa resolución es una pieza futura).
+// Válido cuando es el turno del jugador. Si la carta jugada completa la
+// base, la resolución (ganador, trigger de As de Oros) corre server-side
+// dentro del mismo RPC.
 export async function jugarCarta(roomId, cardUid) {
   await asegurarSesion();
   const { data, error } = await supabase.rpc("play_card", {
     p_room_id: roomId,
     p_card_uid: cardUid,
+  });
+  if (error) throw error;
+  return data; // fila de game_state
+}
+
+// Solo válido para quien tiró el As de Copas (game_state.pending_action.
+// carrier_seat) mientras la sala está en fase copas_menu. sentido: 1 =
+// sigue, -1 = se da vuelta. Si esa jugada ya había completado la base
+// (pending_action.trick_complete), la resolución de ganador corre
+// server-side dentro del mismo RPC, igual que en jugarCarta.
+export async function resolverCopas(roomId, sentido) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("resolve_copas_menu", {
+    p_room_id: roomId,
+    p_direction: sentido,
   });
   if (error) throw error;
   return data; // fila de game_state
