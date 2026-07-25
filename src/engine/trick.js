@@ -1,4 +1,4 @@
-import { jerarquia } from "./hierarchy";
+import { jerarquia } from "./hierarchy.js";
 
 // Mayor jerarquía gana; empate = menor orden (más cercano al mano).
 function ganadorPorJerarquia(ronda) {
