@@ -97,8 +97,14 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
   // LOBBY
   const nJug = room.config?.nJug ?? players.length;
   const asientos = Array.from({length:nJug}, (_,seat)=>({seat, jugador: players.find(p=>p.seat===seat) ?? null}));
-  const equipo0 = asientos.filter(a=>a.seat%2===0);
-  const equipo1 = asientos.filter(a=>a.seat%2===1);
+  // A diferencia de PantallaPartida.jsx (hotseat, una sola pantalla
+  // compartida sin punto de vista individual), acá "NOSOTROS"/"ELLOS" es
+  // relativo a mySeat: cada jugador ve su propio equipo primero, no
+  // siempre team 0. Si mySeat todavía no se resolvió (debería ser
+  // momentáneo), se cae al mapeo fijo team0="NOSOTROS" en vez de adivinar.
+  const miEquipo = mySeat!=null ? mySeat%2 : 0;
+  const misCompaneros = asientos.filter(a=>a.seat%2===miEquipo);
+  const rivales = asientos.filter(a=>a.seat%2!==miEquipo);
   const salaCompleta = players.length===nJug;
 
   return (
@@ -113,13 +119,13 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
         <div style={{display:"flex",gap:12,width:"100%"}}>
           <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
             <div style={{fontSize:10,color:"#5b9bd5",letterSpacing:1,textAlign:"center",marginBottom:2}}>NOSOTROS</div>
-            {equipo0.map(({seat,jugador})=>(
+            {misCompaneros.map(({seat,jugador})=>(
               <FilaAsiento key={seat} seat={seat} jugador={jugador} mySeat={mySeat} color="#5b9bd5"/>
             ))}
           </div>
           <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
             <div style={{fontSize:10,color:"#e07b54",letterSpacing:1,textAlign:"center",marginBottom:2}}>ELLOS</div>
-            {equipo1.map(({seat,jugador})=>(
+            {rivales.map(({seat,jugador})=>(
               <FilaAsiento key={seat} seat={seat} jugador={jugador} mySeat={mySeat} color="#e07b54"/>
             ))}
           </div>
