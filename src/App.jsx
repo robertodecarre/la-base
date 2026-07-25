@@ -2,13 +2,38 @@ import { useState, useEffect } from "react";
 import { PantallaInicio } from "./screens/PantallaInicio";
 import { PantallaSorteo } from "./screens/PantallaSorteo";
 import { PantallaPartida } from "./screens/PantallaPartida";
+import { PantallaModo } from "./screens/PantallaModo";
+import { PantallaOnlineMenu } from "./screens/PantallaOnlineMenu";
+import { PantallaOnlineCrear } from "./screens/PantallaOnlineCrear";
+import { PantallaOnlineUnirse } from "./screens/PantallaOnlineUnirse";
+import { PantallaOnlineSala } from "./screens/PantallaOnlineSala";
+
+const ROOM_ID_KEY = "laBaseOnlineRoomId";
 
 // ══════════════════════════════════════════════
 // APP
 // ══════════════════════════════════════════════
 export default function App() {
-  const [pantalla,setPantalla]=useState("inicio");
+  // Si ya había una sala online guardada de una visita anterior, se
+  // reconecta directo ahí en vez de mostrar el elegidor de modo — el
+  // asiento se recupera solo (join_room dedupea por user_id de la sesión
+  // anónima, ver lib/rooms.js), esto solo evita perder de vista a qué
+  // sala volver.
+  const [onlineRoomId,setOnlineRoomId]=useState(()=>localStorage.getItem(ROOM_ID_KEY));
+  const [pantalla,setPantalla]=useState(()=>localStorage.getItem(ROOM_ID_KEY)?"online-sala":"modo");
   const [datos,setDatos]=useState(null);
+
+  const irAOnlineSala = (roomId) => {
+    localStorage.setItem(ROOM_ID_KEY, roomId);
+    setOnlineRoomId(roomId);
+    setPantalla("online-sala");
+  };
+
+  const salirDeOnline = () => {
+    localStorage.removeItem(ROOM_ID_KEY);
+    setOnlineRoomId(null);
+    setPantalla("modo");
+  };
 
   // Cargar fuentes Google
   useEffect(()=>{
@@ -32,6 +57,25 @@ export default function App() {
 
   return (
     <div style={{background:"radial-gradient(ellipse at center, #0d2b1a 0%, #050f08 100%)",minHeight:"100vh",fontFamily:"Crimson Text, Georgia, serif",color:"#f0d080"}}>
+      {pantalla==="modo"&&(
+        <PantallaModo onHotseat={()=>setPantalla("inicio")} onOnline={()=>setPantalla("online-menu")}/>
+      )}
+      {pantalla==="online-menu"&&(
+        <PantallaOnlineMenu
+          onCrear={()=>setPantalla("online-crear")}
+          onUnirse={()=>setPantalla("online-unirse")}
+          onVolver={()=>setPantalla("modo")}
+        />
+      )}
+      {pantalla==="online-crear"&&(
+        <PantallaOnlineCrear onCreada={(room)=>irAOnlineSala(room.id)} onVolver={()=>setPantalla("online-menu")}/>
+      )}
+      {pantalla==="online-unirse"&&(
+        <PantallaOnlineUnirse onUnida={(player)=>irAOnlineSala(player.room_id)} onVolver={()=>setPantalla("online-menu")}/>
+      )}
+      {pantalla==="online-sala"&&onlineRoomId&&(
+        <PantallaOnlineSala roomId={onlineRoomId} onSalir={salirDeOnline}/>
+      )}
       {pantalla==="inicio"&&(
         <PantallaInicio onIniciar={(nombres,estructura,tiempoSeg,modoTiempo,capN,capE,kamikazes,nJug,dosMazos,ases)=>{
           setDatos({nombres,estructura,tiempoSeg,modoTiempo,capN,capE,kamikazes,nJug:nJug||6,dosMazos:dosMazos||false,ases:ases||{espadas:true,copas:true,oros:true}});
