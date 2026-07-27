@@ -1,38 +1,49 @@
 import { useEffect, useState } from "react";
 import { useSala } from "../hooks/useSala";
-import { Btn } from "../components/Btn";
 import { repartirMano } from "../lib/game";
 import { marcarListo } from "../lib/rooms";
 import { mensajeDeError } from "../lib/erroresSala";
 import { PantallaPartidaOnline } from "./PantallaPartidaOnline";
+import {
+  FONTS_URL, colors, fonts, panelStyle, badgeStyle, tituloStyle, codigoStyle,
+  equipoLabelStyle, filaStyle, filaVaciaStyle, puntoStyle, nombreStyle,
+  ctaStyle, secondaryBtnStyle, WORDMARK, diagonalWordmarkStyle,
+} from "../theme";
 
 // Fila de un asiento: nombre si está ocupado, placeholder si no, insignia
 // de capitán (seat 0 y 1, auto-asignados por join_room) y un indicador de
 // "listo" (●/○) por asiento — llega en vivo vía Realtime, players ya está
 // en el canal de useSala, no hace falta canal nuevo. Sub-componente local
 // no exportado, mismo patrón que MesaCircular.jsx (EstrellasSVG,
-// CartasManoSVG).
-function FilaAsiento({ seat, jugador, mySeat, color }) {
+// CartasManoSVG). El glyph ●/○ se mantiene como texto (no un círculo CSS)
+// a propósito: los tests de Playwright leen el estado "listo" por
+// textContent de la fila.
+function FilaAsiento({ seat, jugador, mySeat, team }) {
   const ocupado = !!jugador;
   const listo = ocupado && jugador.ready;
   return (
-    <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:6,
-      border:`1px solid ${listo?"rgba(126,207,158,0.5)":ocupado?"rgba(201,168,76,0.28)":"rgba(201,168,76,0.1)"}`,
-      background:listo?"rgba(126,207,158,0.08)":ocupado?"rgba(201,168,76,0.06)":"rgba(0,0,0,0.2)"}}>
-      <span style={{fontSize:9,color:"rgba(201,168,76,0.4)",width:16}}>#{seat}</span>
-      {ocupado&&<span style={{fontSize:10,color:listo?"#7ecf9e":"rgba(201,168,76,0.3)"}}>{listo?"●":"○"}</span>}
-      <span style={{flex:1,fontSize:12,textAlign:"left",fontStyle:ocupado?"normal":"italic",
-        color:!ocupado?"rgba(201,168,76,0.3)":(seat===mySeat?"#f0d080":color)}}>
-        {ocupado?jugador.name:"— vacío —"}{ocupado&&seat===mySeat?" (vos)":""}
+    <div style={ocupado ? filaStyle(team, { listo }) : filaVaciaStyle}>
+      <span style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", width: 14, flexShrink: 0 }}>#{seat}</span>
+      {ocupado && <span style={puntoStyle(team, { listo })}>{listo ? "●" : "○"}</span>}
+      <span style={{
+        ...nombreStyle, flex: 1, textAlign: "left",
+        fontStyle: ocupado ? "normal" : "italic",
+        color: ocupado ? nombreStyle.color : "rgba(255,255,255,0.3)",
+        fontSize: 13,
+      }}>
+        {ocupado ? jugador.name : "— vacío —"}{ocupado && seat === mySeat ? " (vos)" : ""}
       </span>
-      {ocupado&&jugador.is_captain&&<span style={{fontSize:9,color:"#c9a84c",whiteSpace:"nowrap"}}>★ CAP</span>}
+      {ocupado && jugador.is_captain && (
+        <span style={{ fontSize: 9, color: colors.team[team].accent, whiteSpace: "nowrap", fontFamily: fonts.body, fontWeight: 600 }}>★ CAP</span>
+      )}
     </div>
   );
 }
 
 // ══════════════════════════════════════════════
 // PANTALLA ONLINE SALA — lobby real (pieza 5c; "listo" por jugador en vez
-// de un botón único, pieza 5h)
+// de un botón único, pieza 5h; rework visual "chrome" NBA Live 2001, ver
+// src/theme.js y direccion-nba-live.html — pieza 5i, solo esta pantalla)
 // ══════════════════════════════════════════════
 // Sigue usando useSala (pieza 5a) como única fuente de estado en vivo, sin
 // duplicar nada de la suscripción. La transición a "partida arrancada" no
@@ -53,6 +64,17 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
   const { room, players, gameState, playedCards, handResults, userId, mySeat, myTeam, isCaptain, ready, error, fetchMyHand } = useSala(roomId);
   const [enviandoListo, setEnviandoListo] = useState(false);
   const [errorListo, setErrorListo] = useState(null);
+
+  // Fuente Saira Condensed / Barlow Semi Condensed, propia de esta
+  // pantalla — el resto de la app (menús, hotseat) sigue con Cinzel/Crimson
+  // Text hasta que se haga el rollout del resto de las piezas.
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = FONTS_URL;
+    document.head.appendChild(link);
+    return () => document.head.removeChild(link);
+  }, []);
 
   const yo = players.find((p) => p.user_id === userId) ?? null;
   const misListo = yo?.ready ?? false;
@@ -78,23 +100,31 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
     }
   };
 
+  const fondoStyle = {
+    background: colors.bg, minHeight: "100vh", fontFamily: fonts.body,
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+    padding: "30px 14px",
+  };
+
   if (error) {
     return (
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
-        <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA</div>
-        <div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",textAlign:"center"}}>
+      <div style={fondoStyle}>
+        <div style={badgeStyle}>LB</div>
+        <div style={tituloStyle}>SALA</div>
+        <div style={{ fontSize: 12, color: "#ffb3a8", background: "rgba(160,50,30,0.18)", border: "1px solid rgba(255,140,100,0.4)", borderRadius: 10, padding: "10px 14px", textAlign: "center", fontFamily: fonts.body }}>
           No se pudo cargar la sala: {error.message}
         </div>
-        <Btn onClick={onSalir}>Salir de la sala</Btn>
+        <button onClick={onSalir} style={secondaryBtnStyle()}>Salir de la sala</button>
       </div>
     );
   }
 
   if (!room) {
     return (
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
-        <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA</div>
-        <div style={{fontSize:12,color:"rgba(201,168,76,0.5)"}}>Cargando sala…</div>
+      <div style={fondoStyle}>
+        <div style={badgeStyle}>LB</div>
+        <div style={tituloStyle}>SALA</div>
+        <div style={{ fontSize: 12, color: colors.text.secondary, fontFamily: fonts.body }}>Cargando sala…</div>
       </div>
     );
   }
@@ -133,45 +163,52 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
   const rivales = asientos.filter(a=>a.seat%2!==miEquipo);
 
   return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
-      <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA</div>
+    <div style={fondoStyle}>
+      <div style={{ ...panelStyle, width: "100%", maxWidth: 420, padding: "20px 18px 24px", display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
+        <div style={diagonalWordmarkStyle}>
+          {Array(6).fill(WORDMARK).join(" · ")}
+        </div>
 
-      <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:12,padding:20,width:"100%",maxWidth:480,display:"flex",flexDirection:"column",gap:14,alignItems:"center"}}>
-        <div style={{fontSize:11,color:"rgba(201,168,76,0.45)",letterSpacing:2}}>CÓDIGO PARA COMPARTIR</div>
-        <div style={{fontSize:32,color:"#f0d080",letterSpacing:8,fontFamily:"Cinzel, Georgia, serif",fontWeight:"bold"}}>{room.code}</div>
-        <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>Jugadores conectados: {players.length}/{nJug}</div>
+        <div style={badgeStyle}>LB</div>
+        <div style={tituloStyle}>SALA</div>
+
+        <div>
+          <div style={{ fontSize: 11, color: colors.text.secondary, letterSpacing: 2, textAlign: "center", fontFamily: fonts.body, fontWeight: 600 }}>CÓDIGO PARA COMPARTIR</div>
+          <div style={codigoStyle}>{room.code}</div>
+        </div>
+        <div style={{ fontSize: 11, color: "rgba(200,210,255,0.5)", fontFamily: fonts.body, marginTop: -8 }}>Jugadores conectados: {players.length}/{nJug}</div>
 
         <div style={{display:"flex",gap:12,width:"100%"}}>
-          <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
-            <div style={{fontSize:10,color:"#5b9bd5",letterSpacing:1,textAlign:"center",marginBottom:2}}>NOSOTROS</div>
+          <div style={{flex:1,display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{...equipoLabelStyle("nosotros"), textAlign:"center", marginBottom:2}}>NOSOTROS</div>
             {misCompaneros.map(({seat,jugador})=>(
-              <FilaAsiento key={seat} seat={seat} jugador={jugador} mySeat={mySeat} color="#5b9bd5"/>
+              <FilaAsiento key={seat} seat={seat} jugador={jugador} mySeat={mySeat} team="nosotros"/>
             ))}
           </div>
-          <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
-            <div style={{fontSize:10,color:"#e07b54",letterSpacing:1,textAlign:"center",marginBottom:2}}>ELLOS</div>
+          <div style={{flex:1,display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{...equipoLabelStyle("ellos"), textAlign:"center", marginBottom:2}}>ELLOS</div>
             {rivales.map(({seat,jugador})=>(
-              <FilaAsiento key={seat} seat={seat} jugador={jugador} mySeat={mySeat} color="#e07b54"/>
+              <FilaAsiento key={seat} seat={seat} jugador={jugador} mySeat={mySeat} team="ellos"/>
             ))}
           </div>
         </div>
 
         {errorListo&&(
-          <div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",textAlign:"center",width:"100%"}}>
+          <div style={{ fontSize: 11, color: "#ffb3a8", background: "rgba(160,50,30,0.18)", border: "1px solid rgba(255,140,100,0.4)", borderRadius: 10, padding: "8px 12px", textAlign: "center", width: "100%", fontFamily: fonts.body }}>
             {errorListo}
           </div>
         )}
 
-        <Btn verde={!misListo} onClick={alternarListo} disabled={enviandoListo||!yo}>
+        <button onClick={alternarListo} disabled={enviandoListo||!yo} style={ctaStyle({ disabled: enviandoListo||!yo })}>
           {enviandoListo?"...":misListo?"✓ Listo — tocá para cancelar":"Estoy listo"}
-        </Btn>
+        </button>
 
-        <div style={{fontSize:10,color:"rgba(201,168,76,0.35)",fontStyle:"italic",textAlign:"center"}}>
+        <div style={{ fontSize: 10, color: "rgba(200,210,255,0.4)", fontStyle: "italic", textAlign: "center", fontFamily: fonts.body }}>
           {ready?"Conectado en vivo.":"Conectando…"} La partida arranca sola cuando la sala esté completa y todos estén listos.
         </div>
       </div>
 
-      <Btn onClick={onSalir}>Salir de la sala</Btn>
+      <button onClick={onSalir} style={secondaryBtnStyle()}>Salir de la sala</button>
     </div>
   );
 }
