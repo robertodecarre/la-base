@@ -13,7 +13,7 @@ function EstrellasSVG({ cantidad, cx, y, max=5 }) {
   ))}</>;
 }
 
-function CartasManoSVG({ mano, cx, cy, seleccionable, onTirar, expandido, onToggleExpandir, cartaLevantada, onLevantarCarta }) {
+function CartasManoSVG({ mano, cx, cy, seleccionable, onTirar, expandido, onToggleExpandir, cartaLevantada, onLevantarCarta, bocaAbajo }) {
   if (!mano.length) return null;
   const cw=28, ch=40;
   // Modo expandido: gap fijo para ver bien las cartas
@@ -66,7 +66,7 @@ function CartasManoSVG({ mano, cx, cy, seleccionable, onTirar, expandido, onTogg
             )}
             <g transform={`translate(${x},${y})`}
                style={{transition:"transform 0.15s"}}>
-              <CartaSVG carta={carta} w={cw} h={ch}/>
+              <CartaSVG carta={carta} w={cw} h={ch} bocaAbajo={bocaAbajo}/>
             </g>
           </g>
         );
@@ -75,7 +75,13 @@ function CartasManoSVG({ mano, cx, cy, seleccionable, onTirar, expandido, onTogg
   );
 }
 
-export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capN, capE, ganaActual, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta }) {
+// `mySeat` es para la mesa online (pieza 5e): en hotseat es undefined y el
+// tablero se comporta como siempre (cualquier mano visible es jugable en su
+// turno, porque las cuatro manos son reales — un solo dispositivo compartido
+// no tiene nada que ocultar). Online, la única mano real es la propia; el
+// resto llega ya boca abajo desde el caller (ver PantallaPartidaOnline.jsx),
+// y acá alcanza con no dejar tirar cartas ajenas aunque sea su turno.
+export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capN, capE, ganaActual, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat }) {
   const nJug = jugadores.length || 6;
   const SIZE=600, CX=300, CY=300;
   const RX = nJug===8 ? 200 : 220;
@@ -121,6 +127,7 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
       {jugadores.map((j,idx)=>{
         const pos=posEnCirculo(idx,RX,RY,CX,CY,nJug);
         const esTurno=idx===turnoIdx&&fase==="jugar";
+        const puedeElegir = mySeat==null ? esTurno : (esTurno && idx===mySeat);
         const esPie=idx===pieIdx, esMano=idx===manoIdx;
         const eqColor=idx%2===0?"#5b9bd5":"#e07b54";
         const boxW=112,boxH=104,bx=pos.x-boxW/2,by=pos.y-boxH/2;
@@ -138,11 +145,12 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
             {pedido!==undefined&&(
               <text x={pos.x} y={by+33} textAnchor="middle" fill="rgba(201,168,76,0.65)" fontSize={8} fontFamily="Crimson Text, Georgia, serif">pide: {pedido}</text>
             )}
-            <CartasManoSVG mano={j.mano} cx={pos.x} cy={by+58} seleccionable={esTurno} onTirar={(ci)=>onTirar(idx,ci)}
+            <CartasManoSVG mano={j.mano} cx={pos.x} cy={by+58} seleccionable={puedeElegir} onTirar={(ci)=>onTirar(idx,ci)}
               expandido={expandidos?.[idx]||false}
               onToggleExpandir={()=>onToggleExpandir(idx)}
               cartaLevantada={cartasLevantadas?.[idx]??-1}
               onLevantarCarta={(ci)=>onLevantarCarta(idx,ci)}
+              bocaAbajo={mySeat!=null && idx!==mySeat}
             />
             <EstrellasSVG cantidad={j.bases} cx={pos.x} y={by+boxH-6} max={5}/>
           </g>

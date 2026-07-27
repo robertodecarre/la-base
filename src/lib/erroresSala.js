@@ -1,8 +1,9 @@
 // Traduce los errores que puede tirar create-room/join-room/submit-bid (edge
-// functions) y deal_hand (RPC directa) a mensajes en español para mostrar
-// en pantalla. Solo cubre los códigos que esas llamadas pueden emitir
-// realmente — el resto de STATUS_POR_ERROR (supabase/functions/_shared/
-// errors.ts) es de RPCs de juego que todavía no tienen UI (piezas 5e+).
+// functions) y deal_hand/play_card/resolve_resolving (RPC directa) a
+// mensajes en español para mostrar en pantalla. Solo cubre los códigos que
+// esas llamadas pueden emitir realmente — el resto de STATUS_POR_ERROR
+// (supabase/functions/_shared/errors.ts) es de RPCs de juego que todavía no
+// tienen UI (piezas 5f+).
 const MENSAJES = {
   not_authenticated: "No se pudo verificar tu sesión. Probá de nuevo en unos segundos.",
   invalid_config: "La configuración de la sala no es válida.",
@@ -24,6 +25,13 @@ const MENSAJES = {
   kamikaze_only_for_mano: "El kamikaze solo lo puede declarar el equipo mano.",
   kamikaze_not_available: "No se puede declarar kamikaze con tan pocas bases.",
   no_kamikazes_left: "No quedan kamikazes disponibles.",
+  // play_card / resolve_resolving (RPC directa; pieza 5e)
+  not_playing_phase: "Ya no se pueden jugar cartas en esta base.",
+  not_your_turn: "Todavía no es tu turno.",
+  hand_not_found: "No se encontró tu mano para esta partida.",
+  card_not_in_hand: "Esa carta ya no está en tu mano.",
+  not_resolving_phase: "Esta base ya no está esperando confirmación.",
+  not_trick_winner: "Solo quien ganó la base puede avanzar a la siguiente.",
 };
 
 // Dos formas de error posibles acá, con dos formas distintas de sacarles

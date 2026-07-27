@@ -6,7 +6,20 @@ import { CaballoSVG } from "./CaballoSVG";
 import { FiguraCarta } from "./FiguraCarta";
 import { PaloDecorativo } from "./PaloDecorativo";
 
-export function CartaSVG({ carta, w=36, h=52 }) {
+// `bocaAbajo` es para la mesa online (pieza 5e): la mano de un rival nunca
+// llega al cliente (RLS de la tabla `hands` — ver useSala.js), así que ahí
+// solo se conoce CUÁNTAS cartas le quedan, nunca cuáles. `carta` no hace
+// falta en ese caso — ni se lee.
+export function CartaSVG({ carta, w=36, h=52, bocaAbajo=false }) {
+  if (bocaAbajo) {
+    return (
+      <g>
+        <rect width={w} height={h} rx={3} fill="#0f2519" stroke="#c9a84c" strokeWidth={1.5}/>
+        <rect x={3} y={3} width={w-6} height={h-6} rx={2} fill="none" stroke="rgba(201,168,76,0.3)" strokeWidth={1}/>
+        <text x={w/2} y={h/2+Math.min(w,h)*0.14} textAnchor="middle" fontSize={Math.min(w,h)*0.4} fill="rgba(201,168,76,0.35)" fontFamily="Cinzel, Georgia, serif">✦</text>
+      </g>
+    );
+  }
   const c = carta.palo.col;
   const v = carta.valor;
   const isAncho = v===1 && carta.palo.n==="Bastos";
