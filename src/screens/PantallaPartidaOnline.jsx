@@ -196,6 +196,19 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   const tiempoTeam1 = restante(1);
   const agotadoTeam0 = !!clockState?.expired?.[0] || (clockState?.running === 0 && tiempoTeam0 <= 0);
   const agotadoTeam1 = !!clockState?.expired?.[1] || (clockState?.running === 1 && tiempoTeam1 <= 0);
+  // DisplayReloj no sabe nada de team0/team1 — solo tiene un slot "N" y un
+  // slot "E" (fijo, NOSOTROS=team0 en el hotseat compartido, donde no hay
+  // viewer). Acá sí hay un viewer por sesión, así que hay que mapear el
+  // slot "N" al equipo de quien mira, igual que ya hacen 'closing'/
+  // 'finished' con su patrón mio/rival — de lo contrario un jugador de
+  // team1 vería su propio reloj etiquetado "ELLOS" (mismo bug que 5c tuvo
+  // con NOSOTROS/ELLOS en el lobby, corregido en 442d8a9).
+  const tiempoN = myTeam === 0 ? tiempoTeam0 : tiempoTeam1;
+  const tiempoE = myTeam === 0 ? tiempoTeam1 : tiempoTeam0;
+  const agotadoN = myTeam === 0 ? agotadoTeam0 : agotadoTeam1;
+  const agotadoE = myTeam === 0 ? agotadoTeam1 : agotadoTeam0;
+  // corriendo es el slot activo (0=N, 1=E), no el team index crudo.
+  const corriendoSlot = clockState?.running == null ? null : (clockState.running === myTeam ? 0 : 1);
 
   // Reclamo automático: en cuanto el reloj del equipo que corre llega a
   // cero en modo muerte, cualquier sesión puede — y acá, lo intenta —
@@ -712,9 +725,9 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       </div>
 
       <DisplayReloj
-        tiempoN={tiempoTeam0} tiempoE={tiempoTeam1}
-        corriendo={clockState?.running ?? null}
-        agotadoN={agotadoTeam0} agotadoE={agotadoTeam1}
+        tiempoN={tiempoN} tiempoE={tiempoE}
+        corriendo={corriendoSlot}
+        agotadoN={agotadoN} agotadoE={agotadoE}
         modoLento={false} modoTiempo={clockConfig?.modo} hayTiempo={hayReloj}
       />
 
