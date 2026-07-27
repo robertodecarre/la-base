@@ -135,6 +135,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   };
 
   useEffect(() => {
+    if (gameState.phase === "dealing") return; // hands todavía no existe para esta mano
     let cancelado = false;
     setMisCartas(null);
     setErrorMano(null);
@@ -142,7 +143,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       .then((cartas) => { if (!cancelado) setMisCartas(cartas ?? []); })
       .catch((err) => { if (!cancelado) setErrorMano(err); });
     return () => { cancelado = true; };
-  }, [gameState.hand_number, fetchMyHand]);
+  }, [gameState.hand_number, gameState.phase, fetchMyHand]);
 
   // El kamikaze elegido pero todavía no confirmado es puramente local:
   // game_state.kamikaze_declared solo pasa a true server-side después de un
