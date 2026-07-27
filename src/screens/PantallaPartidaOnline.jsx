@@ -3,7 +3,7 @@ import { PanelPedir } from "../components/PanelPedir";
 import { MesaCircular } from "../components/MesaCircular";
 import { CartaSVG } from "../components/cards/CartaSVG";
 import { Btn } from "../components/Btn";
-import { enviarPedido, jugarCarta, siguienteBase } from "../lib/game";
+import { enviarPedido, jugarCarta, siguienteBase, resolverCopas, resolverOros } from "../lib/game";
 import { mensajeDeError } from "../lib/erroresSala";
 import { ganadorParcial } from "../engine/trick";
 
@@ -50,35 +50,45 @@ function EsperaPedido({ totalBases, nombreCapitanTurno, colorTurno, bidMano, kam
   );
 }
 
+// Fila de cartas ya jugadas — played_cards es pública, así que mostrarla no
+// filtra nada. `seatDestacado` es opcional (quién ganó la base, o el
+// portador del As de Copas); sin ganador todavía (as de copas a mitad de
+// ronda, o menú de copas con la base recién completa pero sin resolver) se
+// puede pasar null y no se resalta a nadie.
+function FilaCartasJugadas({ cartas, seatDestacado }) {
+  return (
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center"}}>
+      {cartas.map(({ pc, nombre, seat }) => (
+        <div key={pc.id} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+          <div style={{fontSize:9,color:seat===seatDestacado?"#f0d080":"rgba(201,168,76,0.5)",fontWeight:seat===seatDestacado?"bold":"normal"}}>{nombre}</div>
+          <svg viewBox="0 0 34 50" width={34} height={50}>
+            <CartaSVG carta={pc.card} w={34} h={50}/>
+          </svg>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Fase 'resolving': la base ya se decidió server-side (last_trick_winner_seat)
 // pero nadie confirmó el avance todavía. Muestra las cartas de esa base ya
-// completa — played_cards es pública, no hay nada que ocultar acá — y quién
-// la ganó.
+// completa y quién la ganó.
 function BaseResuelta({ cartas, nombreGanador, seatGanador }) {
   return (
     <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:420,display:"flex",flexDirection:"column",gap:8,alignItems:"center"}}>
       <div style={{fontSize:12,color:"#f0d080"}}>¡<b>{nombreGanador}</b> gana la base!</div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center"}}>
-        {cartas.map(({ pc, nombre, seat }) => (
-          <div key={pc.id} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-            <div style={{fontSize:9,color:seat===seatGanador?"#f0d080":"rgba(201,168,76,0.5)",fontWeight:seat===seatGanador?"bold":"normal"}}>{nombre}</div>
-            <svg viewBox="0 0 34 50" width={34} height={50}>
-              <CartaSVG carta={pc.card} w={34} h={50}/>
-            </svg>
-          </div>
-        ))}
-      </div>
+      <FilaCartasJugadas cartas={cartas} seatDestacado={seatGanador}/>
     </div>
   );
 }
 
 // ══════════════════════════════════════════════
-// PANTALLA PARTIDA ONLINE — mesa real (piezas 5d/5e)
+// PANTALLA PARTIDA ONLINE — mesa real (piezas 5d/5e/5f)
 // ══════════════════════════════════════════════
 // Se monta desde PantallaOnlineSala una vez que gameState existe, reusando
 // la misma instancia de useSala (sin segunda suscripción). Cubre 'dealing'/
-// 'bidding' (5d) y ahora 'playing'/'resolving' (5e) — los menús de copas/oros
-// son la pieza 5f; cierre/reloj/fin de partida son la 5g.
+// 'bidding' (5d), 'playing'/'resolving' (5e) y ahora 'copas_menu'/'oros_menu'
+// (5f) — cierre/reloj/fin de partida es la 5g.
 export function PantallaPartidaOnline({ roomId, room, players, gameState, playedCards, mySeat, myTeam, isCaptain, fetchMyHand, onSalir }) {
   const [misCartas, setMisCartas] = useState(null);
   const [errorMano, setErrorMano] = useState(null);
@@ -91,6 +101,10 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   const [errorJugada, setErrorJugada] = useState(null);
   const [enviandoResolucion, setEnviandoResolucion] = useState(false);
   const [errorResolucion, setErrorResolucion] = useState(null);
+  const [enviandoCopas, setEnviandoCopas] = useState(false);
+  const [errorCopas, setErrorCopas] = useState(null);
+  const [enviandoOros, setEnviandoOros] = useState(false);
+  const [errorOros, setErrorOros] = useState(null);
 
   // La propia mano nunca viaja por Realtime (ver useSala) — hay que pedirla
   // explícitamente cada vez que cambia el número de mano (deal_hand ya dejó
@@ -125,6 +139,8 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     setKamikazeLocal(false);
     setErrorJugada(null);
     setErrorResolucion(null);
+    setErrorCopas(null);
+    setErrorOros(null);
     setExpandidos({});
     setCartasLevantadas({});
   }, [gameState.hand_number]);
@@ -197,6 +213,30 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       setErrorResolucion(await mensajeDeError(err));
     } finally {
       setEnviandoResolucion(false);
+    }
+  };
+
+  const onElegirSentido = async (direccion) => {
+    setEnviandoCopas(true);
+    setErrorCopas(null);
+    try {
+      await resolverCopas(roomId, direccion);
+    } catch (err) {
+      setErrorCopas(await mensajeDeError(err));
+    } finally {
+      setEnviandoCopas(false);
+    }
+  };
+
+  const onElegirAsiento = async (seat) => {
+    setEnviandoOros(true);
+    setErrorOros(null);
+    try {
+      await resolverOros(roomId, seat);
+    } catch (err) {
+      setErrorOros(await mensajeDeError(err));
+    } finally {
+      setEnviandoOros(false);
     }
   };
 
@@ -330,6 +370,114 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         ) : (
           <div style={{fontSize:12,color:"rgba(201,168,76,0.5)"}}>
             Esperando a que <b style={{color:"#f0d080"}}>{nombreGanador}</b> confirme la siguiente base…
+          </div>
+        )}
+
+        <Btn onClick={onSalir}>Salir de la sala</Btn>
+      </div>
+    );
+  }
+
+  if (gameState.phase === "copas_menu") {
+    const pa = gameState.pending_action ?? {};
+    const carrierSeat = pa.carrier_seat;
+    const trickComplete = !!pa.trick_complete;
+    const carrier = jugadorEnAsiento(carrierSeat);
+    const esCarrier = mySeat === carrierSeat;
+    const etapa = trickComplete ? "la próxima base" : "la ronda";
+
+    // La base detrás del As de Copas puede estar completa o no (a
+    // diferencia de oros_menu, que solo se entra con la base ya resuelta) —
+    // en ningún caso hay un ganador todavía: si trick_complete, resolve_trick
+    // recién corre dentro de resolve_copas_menu al elegir el sentido.
+    const cartasEstaBase = playedCards
+      .filter((pc) => pc.hand_number === gameState.hand_number && pc.trick_number === gameState.base_num)
+      .sort((a, b) => a.seq_in_trick - b.seq_in_trick)
+      .map((pc) => {
+        const seat = seatOfPlayerId(pc.player_id);
+        return { pc, seat, nombre: jugadorEnAsiento(seat)?.name ?? `Asiento ${seat}` };
+      });
+
+    return (
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+        <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
+        <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
+          Mano {gameState.hand_number+1} · base {gameState.base_num+1}/{totalBases}
+        </div>
+
+        <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(192,57,43,0.35)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:420,display:"flex",flexDirection:"column",gap:8,alignItems:"center"}}>
+          <div style={{fontSize:10,color:"rgba(192,57,43,0.6)",letterSpacing:3}}>AS DE COPAS</div>
+          <FilaCartasJugadas cartas={cartasEstaBase} seatDestacado={carrierSeat}/>
+        </div>
+
+        {errorCopas && (
+          <div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",textAlign:"center",maxWidth:340}}>
+            {errorCopas}
+          </div>
+        )}
+
+        {esCarrier ? (
+          <div style={{display:"flex",flexDirection:"column",gap:10,alignItems:"center",pointerEvents:enviandoCopas?"none":"auto",opacity:enviandoCopas?0.5:1}}>
+            <div style={{fontSize:12,color:"#f0d080"}}>🏆 Decidís cómo sigue {etapa}</div>
+            <div style={{display:"flex",gap:10}}>
+              <Btn verde onClick={()=>onElegirSentido(1)}>↺ Sigue</Btn>
+              <Btn danger onClick={()=>onElegirSentido(-1)}>↻ Se da vuelta</Btn>
+            </div>
+          </div>
+        ) : (
+          <div style={{fontSize:12,color:"rgba(201,168,76,0.5)"}}>
+            🏆 Esperando a que <b style={{color:"#f0d080"}}>{carrier?.name}</b> decida cómo sigue {etapa}…
+          </div>
+        )}
+
+        <Btn onClick={onSalir}>Salir de la sala</Btn>
+      </div>
+    );
+  }
+
+  if (gameState.phase === "oros_menu") {
+    const pa = gameState.pending_action ?? {};
+    const carrierSeat = pa.carrier_seat;
+    const team = pa.team;
+    const carrier = jugadorEnAsiento(carrierSeat);
+    const esCarrier = mySeat === carrierSeat;
+    const jugadoresDelEquipo = players.filter((p) => p.team === team);
+
+    return (
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+        <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
+        <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
+          Mano {gameState.hand_number+1} · base {gameState.base_num+1}/{totalBases}
+        </div>
+
+        <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:420,display:"flex",flexDirection:"column",gap:4,alignItems:"center"}}>
+          <div style={{fontSize:10,color:"rgba(201,168,76,0.4)",letterSpacing:3}}>AS DE OROS</div>
+          <div style={{fontSize:12,color:"#f0d080"}}>🟡 <b>{carrier?.name}</b> elige quién abre la siguiente base</div>
+        </div>
+
+        {errorOros && (
+          <div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",textAlign:"center",maxWidth:340}}>
+            {errorOros}
+          </div>
+        )}
+
+        {esCarrier ? (
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center",pointerEvents:enviandoOros?"none":"auto",opacity:enviandoOros?0.5:1}}>
+            {jugadoresDelEquipo.map((p) => (
+              <button key={p.seat} onClick={()=>onElegirAsiento(p.seat)} style={{
+                fontFamily:"Cinzel, Georgia, serif",fontSize:13,padding:"9px 18px",
+                border:"2px solid #c9a84c",borderRadius:6,
+                background:p.seat===carrierSeat?"rgba(201,168,76,0.25)":"rgba(201,168,76,0.1)",
+                color:"#f0d080",cursor:"pointer",transition:"all 0.15s",
+                fontWeight:p.seat===carrierSeat?"bold":"normal",
+              }}>
+                {p.name}{p.seat===carrierSeat?" 🟡":""}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div style={{fontSize:12,color:"rgba(201,168,76,0.5)"}}>
+            Esperando a que <b style={{color:"#f0d080"}}>{carrier?.name}</b> elija quién abre la siguiente base…
           </div>
         )}
 

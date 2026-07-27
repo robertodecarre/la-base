@@ -1,9 +1,9 @@
 // Traduce los errores que puede tirar create-room/join-room/submit-bid (edge
-// functions) y deal_hand/play_card/resolve_resolving (RPC directa) a
-// mensajes en español para mostrar en pantalla. Solo cubre los códigos que
-// esas llamadas pueden emitir realmente — el resto de STATUS_POR_ERROR
-// (supabase/functions/_shared/errors.ts) es de RPCs de juego que todavía no
-// tienen UI (piezas 5f+).
+// functions) y deal_hand/play_card/resolve_resolving/resolve_copas_menu/
+// resolve_oros_menu (RPC directa) a mensajes en español para mostrar en
+// pantalla. Solo cubre los códigos que esas llamadas pueden emitir
+// realmente — el resto de STATUS_POR_ERROR (supabase/functions/_shared/
+// errors.ts) es de RPCs de juego que todavía no tienen UI (pieza 5g).
 const MENSAJES = {
   not_authenticated: "No se pudo verificar tu sesión. Probá de nuevo en unos segundos.",
   invalid_config: "La configuración de la sala no es válida.",
@@ -32,6 +32,14 @@ const MENSAJES = {
   card_not_in_hand: "Esa carta ya no está en tu mano.",
   not_resolving_phase: "Esta base ya no está esperando confirmación.",
   not_trick_winner: "Solo quien ganó la base puede avanzar a la siguiente.",
+  // resolve_copas_menu / resolve_oros_menu (RPC directa; pieza 5f)
+  invalid_direction: "Ese sentido no es válido.",
+  not_copas_menu_phase: "El As de Copas ya no está esperando una decisión.",
+  not_copas_carrier: "Solo quien tiró el As de Copas puede decidir el sentido.",
+  not_oros_menu_phase: "El As de Oros ya no está esperando una decisión.",
+  not_oros_carrier: "Solo quien tiró el As de Oros puede elegir quién abre.",
+  invalid_seat: "Ese asiento no existe.",
+  seat_not_on_winning_team: "Tiene que ser alguien del equipo que ganó la base.",
 };
 
 // Dos formas de error posibles acá, con dos formas distintas de sacarles
