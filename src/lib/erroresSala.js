@@ -1,8 +1,8 @@
-// Traduce los errores que puede tirar create-room/join-room (edge
+// Traduce los errores que puede tirar create-room/join-room/submit-bid (edge
 // functions) y deal_hand (RPC directa) a mensajes en español para mostrar
 // en pantalla. Solo cubre los códigos que esas llamadas pueden emitir
 // realmente — el resto de STATUS_POR_ERROR (supabase/functions/_shared/
-// errors.ts) es de RPCs de juego que todavía no tienen UI (piezas 5d+).
+// errors.ts) es de RPCs de juego que todavía no tienen UI (piezas 5e+).
 const MENSAJES = {
   not_authenticated: "No se pudo verificar tu sesión. Probá de nuevo en unos segundos.",
   invalid_config: "La configuración de la sala no es válida.",
@@ -15,6 +15,15 @@ const MENSAJES = {
   not_room_member: "No formás parte de esta sala.",
   room_not_full: "Todavía faltan jugadores para poder empezar.",
   not_enough_cards: "No hay suficientes cartas para esta configuración.",
+  // submit-bid (edge function; pieza 5d)
+  not_bidding_phase: "Ya no se puede pedir en esta mano.",
+  not_your_teams_turn: "Todavía no es el turno de tu equipo para pedir.",
+  not_captain: "Solo el capitán de tu equipo puede pedir.",
+  already_bid: "Tu equipo ya pidió en esta mano.",
+  invalid_bid: "Ese pedido no es válido.",
+  kamikaze_only_for_mano: "El kamikaze solo lo puede declarar el equipo mano.",
+  kamikaze_not_available: "No se puede declarar kamikaze con tan pocas bases.",
+  no_kamikazes_left: "No quedan kamikazes disponibles.",
 };
 
 // Dos formas de error posibles acá, con dos formas distintas de sacarles

@@ -4,10 +4,20 @@ import { opcionesValidas } from "../engine/bidding";
 // ══════════════════════════════════════════════
 // PANEL LATERAL DE PEDIR (no tapa la mesa)
 // ══════════════════════════════════════════════
-export function PanelPedir({ totalBases, nombresMano, nombresEq, esManoEq0, onConfirmar, clock, modoLento, nombreCapMano, nombreCapPie, kamikazesDisp, onKamikaze, kamikazeActivo, onCancelarKamikaze }) {
-  const [pedidoMano, setPedidoMano] = useState(null);
+// `pedidoManoInicial` y `modoUnEquipo` son solo para la sala online (pieza
+// 5d): ahí el pedido de mano y el de pie los confirman dos capitanes en dos
+// sesiones distintas (a diferencia del hotseat, donde ambos pasan por esta
+// misma instancia). `pedidoManoInicial` arranca directo en la subfase "pie"
+// con el pedido de mano ya conocido, en vez de forzar a elegir "mano" de
+// nuevo. `modoUnEquipo` hace que confirmar la subfase visible llame a
+// onConfirmar YA, con un solo valor (el de esa subfase) — nunca transiciona
+// internamente de "mano" a "pie", porque esa transición implicaría pedirle
+// el pedido al OTRO equipo dentro de la misma sesión, y ese es exactamente
+// el capitán que no está sentado frente a esta pantalla.
+export function PanelPedir({ totalBases, nombresMano, nombresEq, esManoEq0, onConfirmar, clock, modoLento, nombreCapMano, nombreCapPie, kamikazesDisp, onKamikaze, kamikazeActivo, onCancelarKamikaze, pedidoManoInicial=null, modoUnEquipo=false }) {
+  const [pedidoMano, setPedidoMano] = useState(pedidoManoInicial);
   const [pedidoPie, setPedidoPie] = useState(null);
-  const [subFase, setSubFase] = useState("mano");
+  const [subFase, setSubFase] = useState(pedidoManoInicial!==null ? "pie" : "mano");
   // Countdown de 10s modo deportivo
   const [countdown, setCountdown] = useState(null);
   const countRef = useRef(null);
@@ -24,25 +34,33 @@ export function PanelPedir({ totalBases, nombresMano, nombresEq, esManoEq0, onCo
           // Auto-confirmar con 0 si no eligieron nada
           if(subFase==="mano"){
             const val = pedidoMano ?? 0;
-            const ops = opcionesValidas(val, totalBases);
-            if(ops.length===1){
-              // Auto-confirmar pie también
-              const pedN = esManoEq0 ? val : ops[0];
-              const pedE = esManoEq0 ? ops[0] : val;
-              onConfirmar(pedN, pedE);
+            if (modoUnEquipo) {
+              onConfirmar(val);
             } else {
-              setPedidoMano(val);
-              const eqPie = esManoEq0 ? 1 : 0;
-              clock.iniciarPara(eqPie);
-              setSubFase("pie");
+              const ops = opcionesValidas(val, totalBases);
+              if(ops.length===1){
+                // Auto-confirmar pie también
+                const pedN = esManoEq0 ? val : ops[0];
+                const pedE = esManoEq0 ? ops[0] : val;
+                onConfirmar(pedN, pedE);
+              } else {
+                setPedidoMano(val);
+                const eqPie = esManoEq0 ? 1 : 0;
+                clock.iniciarPara(eqPie);
+                setSubFase("pie");
+              }
             }
           } else {
             const opsPie = opcionesValidas(pedidoMano??0, totalBases);
             const val = (pedidoPie!==null && opsPie.includes(pedidoPie)) ? pedidoPie : opsPie[0]??0;
             clock.detener();
-            const pedN = esManoEq0 ? (pedidoMano??0) : val;
-            const pedE = esManoEq0 ? val : (pedidoMano??0);
-            onConfirmar(pedN, pedE);
+            if (modoUnEquipo) {
+              onConfirmar(val);
+            } else {
+              const pedN = esManoEq0 ? (pedidoMano??0) : val;
+              const pedE = esManoEq0 ? val : (pedidoMano??0);
+              onConfirmar(pedN, pedE);
+            }
           }
           return 0;
         }
@@ -55,6 +73,10 @@ export function PanelPedir({ totalBases, nombresMano, nombresEq, esManoEq0, onCo
   const confirmarMano = () => {
     if (pedidoMano === null) return;
     clearInterval(countRef.current);
+    if (modoUnEquipo) {
+      onConfirmar(pedidoMano);
+      return;
+    }
     const ops = opcionesValidas(pedidoMano, totalBases);
     if (ops.length === 1) {
       // Pie no tiene elección — auto-confirmar sin correr reloj
@@ -72,6 +94,10 @@ export function PanelPedir({ totalBases, nombresMano, nombresEq, esManoEq0, onCo
     if (pedidoPie === null) return;
     clearInterval(countRef.current);
     clock.detener();
+    if (modoUnEquipo) {
+      onConfirmar(pedidoPie);
+      return;
+    }
     const pedN = esManoEq0 ? pedidoMano : pedidoPie;
     const pedE = esManoEq0 ? pedidoPie : pedidoMano;
     onConfirmar(pedN, pedE);

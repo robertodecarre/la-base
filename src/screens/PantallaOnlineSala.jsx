@@ -3,6 +3,7 @@ import { useSala } from "../hooks/useSala";
 import { Btn } from "../components/Btn";
 import { repartirMano } from "../lib/game";
 import { mensajeDeError } from "../lib/erroresSala";
+import { PantallaPartidaOnline } from "./PantallaPartidaOnline";
 
 // Fila de un asiento: nombre si está ocupado, placeholder si no, insignia
 // de capitán (seat 0 y 1, auto-asignados por join_room). Sub-componente
@@ -34,7 +35,7 @@ function FilaAsiento({ seat, jugador, mySeat, color }) {
 // rooms.status en 'playing'), así que las 4 sesiones pasan de pantalla a
 // la vez, no solo la que llamó a repartirMano.
 export function PantallaOnlineSala({ roomId, onSalir }) {
-  const { room, players, gameState, mySeat, ready, error } = useSala(roomId);
+  const { room, players, gameState, mySeat, myTeam, isCaptain, ready, error, fetchMyHand } = useSala(roomId);
   const [iniciando, setIniciando] = useState(false);
   const [errorInicio, setErrorInicio] = useState(null);
 
@@ -74,23 +75,22 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
     );
   }
 
-  // Ya se repartió la primera mano: pantalla stub hasta que exista la mesa
-  // de juego online real (pieza 5d). Mismo patrón placeholder que la 5b
-  // usó para esta misma pantalla antes de tener el lobby.
+  // Ya se repartió la primera mano: la mesa de juego real (pieza 5d cubre
+  // dealing/bidding; jugar cartas y lo demás llega en 5e/5f), montada sobre
+  // esta misma instancia de useSala — sin segunda suscripción.
   if (gameState) {
     return (
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
-        <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>PARTIDA EN CURSO</div>
-        <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:12,padding:20,width:"100%",maxWidth:420,display:"flex",flexDirection:"column",gap:10,alignItems:"center"}}>
-          <div style={{fontSize:11,color:"rgba(201,168,76,0.45)",letterSpacing:2}}>SALA {room.code}</div>
-          <div style={{fontSize:14,color:"#f0d080"}}>Fase: {gameState.phase}</div>
-          <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>Mano {gameState.hand_number+1} · reparte asiento {gameState.dealer_seat}</div>
-          <div style={{fontSize:10,color:"rgba(201,168,76,0.35)",fontStyle:"italic",textAlign:"center",marginTop:6}}>
-            El reparto funcionó. La mesa de juego online llega en la próxima pieza.
-          </div>
-        </div>
-        <Btn onClick={onSalir}>Salir de la sala</Btn>
-      </div>
+      <PantallaPartidaOnline
+        roomId={roomId}
+        room={room}
+        players={players}
+        gameState={gameState}
+        mySeat={mySeat}
+        myTeam={myTeam}
+        isCaptain={isCaptain}
+        fetchMyHand={fetchMyHand}
+        onSalir={onSalir}
+      />
     );
   }
 
