@@ -10,6 +10,10 @@ export const NOMBRES_POR_CANT = {
 // para no depender de qué cartas caen en el reparto (no hay seed de random).
 export async function iniciarPartida(page, { nJug = 6 } = {}) {
   await page.goto("/");
+  // "/" ahora aterriza en PantallaModo (piece 5b) en vez de ir directo al
+  // setup hotseat — hay que elegir "este dispositivo" antes de que existan
+  // los botones de cantidad de jugadores / COMENZAR SORTEO.
+  await page.getByRole("button", { name: /Jugar en este dispositivo/ }).click();
   if (nJug !== 6) {
     await page.getByRole("button", { name: String(nJug), exact: true }).click();
   }
@@ -77,8 +81,17 @@ export async function jugarCartaDelTurnoActual(page) {
   // el hit-testing de SVG solo pinta ciertas zonas (huecos en los palos
   // decorativos, cartas superpuestas por el gap ajustado), lo que hacía que
   // el actionability check de Playwright reintentara indefinidamente.
-  const ultimaCarta = grupo.locator(":scope > g").last();
-  await ultimaCarta.dispatchEvent("click");
+  const cartas = grupo.locator(":scope > g");
+  // Con dos tablas separadas suscriptas a Realtime por separado (game_state
+  // para turn_seat, played_cards para la mano jugada), una sesión online
+  // puede quedar momentáneamente desincronizada: todavía cree que es el
+  // turno de alguien cuya mano ya está vacía en su propio render (0 <g>
+  // hijos, CartasManoSVG no dibuja nada). dispatchEvent espera a que el
+  // locator resuelva y ahí se cuelga indefinidamente si nunca aparece —
+  // chequear la cuenta primero deja que el caller reintente en la próxima
+  // iteración en vez de bloquear el test entero.
+  if ((await cartas.count()) === 0) return false;
+  await cartas.last().dispatchEvent("click");
   return true;
 }
 
