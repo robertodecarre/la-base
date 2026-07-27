@@ -7,9 +7,10 @@
 // referencia) y PantallaOnlineSala.jsx (primer uso real).
 //
 // Ojo: esto NO toca las cartas españolas (src/components/cards/*), que se
-// quedan en su estilo clásico actual, ni el resto de las pantallas
-// (hotseat, menús) — esas siguen con la estética sobria vieja hasta que se
-// haga el rollout pieza por pieza.
+// quedan en su estilo clásico actual, ni las pantallas hotseat o
+// PantallaOnlineCrear (formulario grande, con su propia pieza pendiente)
+// — esas siguen con la estética sobria vieja hasta que se haga el rollout
+// pieza por pieza.
 
 export const FONTS_URL =
   "https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&family=Barlow+Semi+Condensed:wght@500;600&display=swap";
@@ -186,11 +187,12 @@ export function ctaStyle({ disabled } = {}) {
   };
 }
 
-// Botón secundario/neutro (p.ej. "salir") — misma forma de píldora, sin el
-// gradiente de acción.
-export function secondaryBtnStyle({ disabled } = {}) {
+// Botón secundario/neutro (p.ej. "salir", o la opción no-destacada de un
+// par de acciones) — misma forma de píldora, sin el gradiente de acción.
+export function secondaryBtnStyle({ disabled, full } = {}) {
   return {
     display: "block",
+    width: full ? "100%" : undefined,
     textAlign: "center",
     fontFamily: fonts.display,
     fontWeight: 700,
@@ -207,6 +209,42 @@ export function secondaryBtnStyle({ disabled } = {}) {
     opacity: disabled ? 0.55 : 1,
   };
 }
+
+// Campo de texto en píldora — mismo lenguaje visual que las filas de
+// asiento (bisel, borde tenue), sin matiz de equipo.
+export function inputStyle({ big } = {}) {
+  return {
+    fontFamily: big ? fonts.display : fonts.body,
+    fontWeight: big ? 800 : 600,
+    fontStyle: big ? "italic" : "normal",
+    fontSize: big ? 22 : 14,
+    letterSpacing: big ? 6 : 0.5,
+    textAlign: "center",
+    width: "100%",
+    padding: big ? "10px 16px" : "9px 16px",
+    borderRadius: 999,
+    border: `1px solid ${colors.panel.border}`,
+    background: "rgba(0,0,0,0.35)",
+    color: colors.text.primary,
+    boxShadow: bevel,
+    outline: "none",
+  };
+}
+
+// Link fantasma para navegación secundaria ("← volver") — liviano, no es
+// un botón/píldora.
+export const linkStyle = {
+  fontFamily: fonts.body,
+  fontWeight: 600,
+  fontSize: 12,
+  padding: "4px 12px",
+  border: "none",
+  background: "transparent",
+  color: colors.text.secondary,
+  opacity: 0.7,
+  cursor: "pointer",
+  letterSpacing: 1,
+};
 
 export const WORDMARK = "LA BASE";
 

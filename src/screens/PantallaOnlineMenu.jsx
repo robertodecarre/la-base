@@ -1,22 +1,38 @@
-import { Btn } from "../components/Btn";
+import { useEffect } from "react";
+import {
+  FONTS_URL, colors, fonts, panelStyle, badgeStyle, tituloStyle,
+  ctaStyle, secondaryBtnStyle, linkStyle, diagonalWordmarkStyle, WORDMARK,
+} from "../theme";
 
 // ══════════════════════════════════════════════
 // PANTALLA ONLINE MENU — crear vs. unirse
 // ══════════════════════════════════════════════
 export function PantallaOnlineMenu({ onCrear, onUnirse, onVolver }) {
-  return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
-      <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>JUGAR ONLINE</div>
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = FONTS_URL;
+    document.head.appendChild(link);
+    return () => document.head.removeChild(link);
+  }, []);
 
-      <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:12,padding:24,width:"100%",maxWidth:420,display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
-        <Btn verde onClick={onCrear}>Crear sala</Btn>
-        <Btn onClick={onUnirse}>Unirse a sala</Btn>
+  return (
+    <div style={{
+      background: colors.bg, minHeight: "100vh", fontFamily: fonts.body,
+      display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+      padding: "30px 14px",
+    }}>
+      <div style={{ ...panelStyle, width: "100%", maxWidth: 420, padding: "24px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+        <div style={diagonalWordmarkStyle}>{Array(6).fill(WORDMARK).join(" · ")}</div>
+
+        <div style={badgeStyle}>LB</div>
+        <div style={tituloStyle}>JUGAR ONLINE</div>
+
+        <button onClick={onCrear} style={ctaStyle()}>Crear sala</button>
+        <button onClick={onUnirse} style={secondaryBtnStyle({ full: true })}>Unirse a sala</button>
       </div>
 
-      <button onClick={onVolver} style={{
-        fontFamily:"Crimson Text, Georgia, serif",fontSize:11,padding:"4px 12px",
-        border:"none",background:"transparent",color:"rgba(201,168,76,0.4)",cursor:"pointer",letterSpacing:1,
-      }}>← volver</button>
+      <button onClick={onVolver} style={linkStyle}>← volver</button>
     </div>
   );
 }
