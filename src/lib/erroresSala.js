@@ -1,9 +1,11 @@
 // Traduce los errores que puede tirar create-room/join-room/submit-bid (edge
 // functions) y deal_hand/play_card/resolve_resolving/resolve_copas_menu/
-// resolve_oros_menu/close_hand/claim_timeout (RPC directa) a mensajes en
-// español para mostrar en pantalla. Cubre todos los códigos que esas
-// llamadas pueden emitir realmente — ver supabase/functions/_shared/
-// errors.ts para la lista completa de STATUS_POR_ERROR.
+// resolve_oros_menu/close_hand/claim_timeout/set_ready (RPC directa) a
+// mensajes en español para mostrar en pantalla. Cubre todos los códigos que
+// esas llamadas pueden emitir realmente — ver supabase/functions/_shared/
+// errors.ts para la lista completa de STATUS_POR_ERROR. set_ready no suma
+// ningún código nuevo: solo puede tirar not_authenticated/not_room_member,
+// ambos ya cubiertos más abajo.
 const MENSAJES = {
   not_authenticated: "No se pudo verificar tu sesión. Probá de nuevo en unos segundos.",
   invalid_config: "La configuración de la sala no es válida.",

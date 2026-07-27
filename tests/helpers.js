@@ -174,3 +174,60 @@ export async function jugarPartidaCompleta(page, { maxPasos = 4000, onCopas } = 
   }
   throw new Error(`jugarPartidaCompleta: no terminó en ${maxPasos} pasos`);
 }
+
+// ══════════════════════════════════════════════
+// ONLINE — crear/unirse a una sala real (contra Supabase), compartido
+// entre online-hand-refresh.spec.js y online-ready-up.spec.js.
+// ══════════════════════════════════════════════
+
+// pages[0] crea la sala y el resto se une con el código, hasta dejar las N
+// páginas en el lobby (PantallaOnlineSala, sala completa). No marca a
+// nadie "listo" — desde piece 5h el arranque depende de eso, y es un paso
+// aparte a propósito para que los tests puedan inspeccionar el lobby
+// antes de arrancar.
+export async function crearYUnirseSalaOnline(pages, nombres, { nJug = 4, estructuraCustom = null, sinAses = false } = {}) {
+  const host = pages[0];
+  await host.goto("/");
+  await host.getByRole("button", { name: /Jugar online/ }).click();
+  await host.getByRole("button", { name: /Crear sala/ }).click();
+  await host.getByPlaceholder("Ej: Tincho").fill(nombres[0]);
+  if (nJug !== 6) {
+    await host.getByRole("button", { name: String(nJug), exact: true }).click();
+  }
+  if (estructuraCustom) {
+    await host.locator("select").first().selectOption("custom");
+    await host.getByPlaceholder(/máx/).fill(estructuraCustom);
+  }
+  if (sinAses) {
+    // Apagar los 3 superpoderes de ases para no tener que lidiar con menús
+    // de copas/oros en el medio.
+    const asesCheckboxes = host.locator('input[type="checkbox"]');
+    for (let i = 0; i < 3; i++) await asesCheckboxes.nth(i).uncheck();
+  }
+  await host.getByRole("button", { name: "Crear sala", exact: true }).click();
+
+  const codigoDiv = host.getByText("CÓDIGO PARA COMPARTIR").locator("xpath=following-sibling::div[1]");
+  await expect(codigoDiv).toBeVisible({ timeout: 20000 });
+  const code = (await codigoDiv.textContent()).trim();
+
+  for (let i = 1; i < pages.length; i++) {
+    const p = pages[i];
+    await p.goto("/");
+    await p.getByRole("button", { name: /Jugar online/ }).click();
+    await p.getByRole("button", { name: /Unirse a sala/ }).click();
+    await p.getByPlaceholder("ABCDE").fill(code);
+    await p.getByPlaceholder("Ej: Tincho").fill(nombres[i]);
+    await p.getByRole("button", { name: "Unirse", exact: true }).click();
+    await expect(p.getByText("CÓDIGO PARA COMPARTIR")).toBeVisible({ timeout: 15000 });
+  }
+
+  return code;
+}
+
+// Toggle de "listo" en el lobby online (piece 5h) — mismo botón sirve para
+// marcar y desmarcar, el texto cambia solo.
+export async function alternarListoEnPantalla(page) {
+  await page
+    .getByRole("button", { name: /^(Estoy listo|✓ Listo)/ })
+    .click();
+}

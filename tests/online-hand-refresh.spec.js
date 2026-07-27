@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { jugarCartaDelTurnoActual } from "./helpers.js";
+import { jugarCartaDelTurnoActual, crearYUnirseSalaOnline, alternarListoEnPantalla } from "./helpers.js";
 
 // Regresión para el bug de producción: a partir de la mano 2, la pantalla de
 // "pedir bases" (bidding) online aparecía con la mano vacía en vez de
@@ -42,14 +42,23 @@ async function paginaConConfirma(pages, timeout = 30000) {
 // sigue visible después (RPC lenta/perdida contra el proyecto real no es
 // motivo para que el test sea flaky).
 async function confirmarPedidoEnQuienCorresponda(pages) {
-  for (let intento = 1; intento <= 3; intento++) {
+  for (let intento = 1; intento <= 5; intento++) {
     const p = await paginaConConfirma(pages);
     await p.getByRole("button", { name: /^\d+$/ }).first().click();
-    await panelConfirma(p).click();
+    const confirmBtn = panelConfirma(p);
+    // El botón CONFIRMA queda disabled hasta que el click de arriba haya
+    // seteado el número elegido — si por lo que sea no prendió, un
+    // confirmBtn.click() de posta se quedaría esperando a que se habilite
+    // para siempre (este proyecto no configura actionTimeout, el default
+    // de Playwright es "sin límite"), colgando el test entero en vez de
+    // dejar que este for reintente. isEnabled() con timeout acotado deja
+    // detectar ese caso y reintentar clickeando el número de nuevo.
+    if (!(await confirmBtn.isEnabled({ timeout: 3000 }).catch(() => false))) continue;
+    await confirmBtn.click();
     await new Promise((r) => setTimeout(r, 1500));
     if (!(await panelConfirma(p).isVisible().catch(() => false))) return;
   }
-  throw new Error("el pedido no se confirmó tras 3 intentos");
+  throw new Error("el pedido no se confirmó tras varios intentos");
 }
 
 async function esperaBotonVisible(pages, regex, timeout = 30000) {
@@ -98,43 +107,16 @@ test("online: la mano 2 en bidding muestra la mano repartida, no vacía", async 
     // Host crea la sala: 4 jugadores, manos de 1 carta (2 manos), sin ases
     // ni reloj — el mínimo necesario para llegar rápido a "cerrar mano" y
     // ver la mano 2.
-    const host = pages[0];
-    await host.goto("/");
-    await host.getByRole("button", { name: /Jugar online/ }).click();
-    await host.getByRole("button", { name: /Crear sala/ }).click();
-    await host.getByPlaceholder("Ej: Tincho").fill(NOMBRES[0]);
-    await host.getByRole("button", { name: "4", exact: true }).click();
-    await host.locator("select").first().selectOption("custom");
-    const customInput = host.getByPlaceholder(/máx/);
-    await customInput.fill("1,1");
-    // Apagar los 3 superpoderes de ases para no tener que lidiar con menús
-    // de copas/oros en el medio.
-    const asesCheckboxes = host.locator('input[type="checkbox"]');
-    for (let i = 0; i < 3; i++) await asesCheckboxes.nth(i).uncheck();
-    await host.getByRole("button", { name: "Crear sala", exact: true }).click();
+    await crearYUnirseSalaOnline(pages, NOMBRES, { nJug: 4, estructuraCustom: "1,1", sinAses: true });
 
-    const codigoLabel = host.getByText("CÓDIGO PARA COMPARTIR");
-    const codigoDiv = codigoLabel.locator("xpath=following-sibling::div[1]");
-    await expect(codigoDiv).toBeVisible({ timeout: 20000 });
-    const code = (await codigoDiv.textContent()).trim();
-    expect(code).toMatch(/^[A-Z2-9]{4,6}$/);
-
-    // Los otros 3 se unen con el código.
-    for (let i = 1; i < 4; i++) {
-      const p = pages[i];
-      await p.goto("/");
-      await p.getByRole("button", { name: /Jugar online/ }).click();
-      await p.getByRole("button", { name: /Unirse a sala/ }).click();
-      await p.getByPlaceholder("ABCDE").fill(code);
-      await p.getByPlaceholder("Ej: Tincho").fill(NOMBRES[i]);
-      await p.getByRole("button", { name: "Unirse", exact: true }).click();
-      await expect(p.getByText("CÓDIGO PARA COMPARTIR")).toBeVisible({ timeout: 15000 });
+    // Empezar la partida (piece 5h: "listo" por jugador, no un botón
+    // único) — deal_hand crea game_state directo en 'bidding' para la
+    // mano 0 (no hay fase 'dealing' separada para la primera mano) apenas
+    // las 4 sesiones quedan listas, sin que nadie tenga que clickear un
+    // "arrancar" aparte.
+    for (const p of pages) {
+      await alternarListoEnPantalla(p);
     }
-
-    // Empezar la partida: deal_hand crea game_state directo en 'bidding'
-    // para la mano 0 (no hay fase 'dealing' separada para la primera mano).
-    await expect(host.getByRole("button", { name: "Empezar partida", exact: true })).toBeVisible({ timeout: 30000 });
-    await host.getByRole("button", { name: "Empezar partida", exact: true }).click();
 
     for (const p of pages) {
       await expect(p.getByText("CONFIRMA")).toBeVisible({ timeout: 30000 }).catch(() => {});
