@@ -35,7 +35,7 @@ function FilaAsiento({ seat, jugador, mySeat, color }) {
 // rooms.status en 'playing'), así que las 4 sesiones pasan de pantalla a
 // la vez, no solo la que llamó a repartirMano.
 export function PantallaOnlineSala({ roomId, onSalir }) {
-  const { room, players, gameState, playedCards, mySeat, myTeam, isCaptain, ready, error, fetchMyHand } = useSala(roomId);
+  const { room, players, gameState, playedCards, handResults, mySeat, myTeam, isCaptain, ready, error, fetchMyHand } = useSala(roomId);
   const [iniciando, setIniciando] = useState(false);
   const [errorInicio, setErrorInicio] = useState(null);
 
@@ -76,9 +76,9 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
   }
 
   // Ya se repartió la primera mano: la mesa de juego real (pieza 5d cubre
-  // dealing/bidding, 5e suma jugar cartas y resolución; copas/oros y
-  // cierre/reloj/fin llegan en 5f/5g), montada sobre esta misma instancia de
-  // useSala — sin segunda suscripción.
+  // dealing/bidding, 5e suma jugar cartas y resolución, 5f suma copas/oros;
+  // cierre/reloj/fin de partida es la 5g), montada sobre esta misma
+  // instancia de useSala — sin segunda suscripción.
   if (gameState) {
     return (
       <PantallaPartidaOnline
@@ -87,6 +87,7 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
         players={players}
         gameState={gameState}
         playedCards={playedCards}
+        handResults={handResults}
         mySeat={mySeat}
         myTeam={myTeam}
         isCaptain={isCaptain}

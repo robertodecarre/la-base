@@ -1,18 +1,25 @@
 import { useEffect, useState } from "react";
 import { PanelPedir } from "../components/PanelPedir";
 import { MesaCircular } from "../components/MesaCircular";
+import { DisplayReloj } from "../components/DisplayReloj";
 import { CartaSVG } from "../components/cards/CartaSVG";
 import { Btn } from "../components/Btn";
-import { enviarPedido, jugarCarta, siguienteBase, resolverCopas, resolverOros } from "../lib/game";
+import {
+  enviarPedido, jugarCarta, siguienteBase, resolverCopas, resolverOros,
+  repartirMano, cerrarMano, reclamarTiempo,
+} from "../lib/game";
 import { mensajeDeError } from "../lib/erroresSala";
 import { ganadorParcial } from "../engine/trick";
 
-// El reloj de ajedrez online (arranque/parada real ligado a game_state.clock,
-// reclamo de tiempo agotado vía claim_timeout) es pieza 5f. PanelPedir igual
-// exige un objeto `clock` con iniciarPara/detener y un `modoLento` — acá van
-// inertes (modoLento en false apaga su countdown de 10s por completo) para
-// no fingir una función que todavía no existe.
-const RELOJ_INERTE = { iniciarPara: () => {}, detener: () => {} };
+// El reloj de ajedrez online (pieza 5g) es server-authoritative: el
+// descuento real de tiempo ya lo hace submit_bid al recibir cada pedido, y
+// el conteo visible más abajo se deriva directo de game_state.clock por
+// Realtime (ver `restante`/`agotado` en el cuerpo del componente) — no de
+// este objeto. PanelPedir igual exige un `clock` con iniciarPara/detener
+// por su interfaz compartida con el hotseat, pero con modoUnEquipo nunca
+// llega a invocar iniciarPara, y el detener() que sí dispara confirmarPie
+// no necesita hacer nada acá.
+const CLOCK_ADAPTER_PANEL = { iniciarPara: () => {}, detener: () => {} };
 
 function MiMano({ cartas, error }) {
   if (error) {
@@ -83,13 +90,14 @@ function BaseResuelta({ cartas, nombreGanador, seatGanador }) {
 }
 
 // ══════════════════════════════════════════════
-// PANTALLA PARTIDA ONLINE — mesa real (piezas 5d/5e/5f)
+// PANTALLA PARTIDA ONLINE — mesa real (piezas 5d/5e/5f/5g)
 // ══════════════════════════════════════════════
 // Se monta desde PantallaOnlineSala una vez que gameState existe, reusando
 // la misma instancia de useSala (sin segunda suscripción). Cubre 'dealing'/
-// 'bidding' (5d), 'playing'/'resolving' (5e) y ahora 'copas_menu'/'oros_menu'
-// (5f) — cierre/reloj/fin de partida es la 5g.
-export function PantallaPartidaOnline({ roomId, room, players, gameState, playedCards, mySeat, myTeam, isCaptain, fetchMyHand, onSalir }) {
+// 'bidding' (5d), 'playing'/'resolving' (5e), 'copas_menu'/'oros_menu' (5f)
+// y ahora 'closing'/'finished' + el reloj real de 'bidding' (5g) — con esto
+// la pantalla cubre todas las fases del juego.
+export function PantallaPartidaOnline({ roomId, room, players, gameState, playedCards, handResults, mySeat, myTeam, isCaptain, fetchMyHand, onSalir }) {
   const [misCartas, setMisCartas] = useState(null);
   const [errorMano, setErrorMano] = useState(null);
   const [kamikazeLocal, setKamikazeLocal] = useState(false);
@@ -105,6 +113,12 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   const [errorCopas, setErrorCopas] = useState(null);
   const [enviandoOros, setEnviandoOros] = useState(false);
   const [errorOros, setErrorOros] = useState(null);
+  const [enviandoCierre, setEnviandoCierre] = useState(false);
+  const [errorCierre, setErrorCierre] = useState(null);
+  const [enviandoReparto, setEnviandoReparto] = useState(false);
+  const [errorReparto, setErrorReparto] = useState(null);
+  const [ahora, setAhora] = useState(() => Date.now());
+  const [reclamandoTiempo, setReclamandoTiempo] = useState(false);
 
   // La propia mano nunca viaja por Realtime (ver useSala) — hay que pedirla
   // explícitamente cada vez que cambia el número de mano (deal_hand ya dejó
@@ -141,14 +155,62 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     setErrorResolucion(null);
     setErrorCopas(null);
     setErrorOros(null);
+    setErrorCierre(null);
+    setErrorReparto(null);
     setExpandidos({});
     setCartasLevantadas({});
   }, [gameState.hand_number]);
+
+  // Reloj online: solo corre visualmente durante 'bidding' (el único momento
+  // que game_state.clock representa — ver claim_timeout.sql). El tiempo
+  // restante en sí se deriva de clockState.running_since + `ahora` más
+  // abajo; este intervalo solo fuerza el re-render cada segundo.
+  useEffect(() => {
+    if (gameState.phase !== "bidding") return;
+    const id = setInterval(() => setAhora(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [gameState.phase]);
 
   const totalBases = room.config?.estructura?.[gameState.hand_number] ?? 0;
   const nJug = room.config?.nJug ?? players.length;
   const seatOfPlayerId = (playerId) => players.find((p) => p.id === playerId)?.seat;
   const jugadorEnAsiento = (seat) => players.find((p) => p.seat === seat);
+
+  // room.config.clock es ausente/null (sin reloj) o { minutos, modo }. Solo
+  // 'muerte' tiene una consecuencia server-side (claim_timeout) — 'deportivo'
+  // no tiene flujo de reclamo acá, se muestra el conteo nomás.
+  const clockConfig = room.config?.clock;
+  const hayReloj = !!clockConfig && typeof clockConfig === "object";
+  const esMuerte = clockConfig?.modo === "muerte";
+  const clockState = gameState.clock;
+  const restante = (team) => {
+    if (!clockState) return 0;
+    const base = clockState.teamTime?.[team] ?? 0;
+    if (clockState.running === team && clockState.running_since) {
+      const transcurrido = Math.floor((ahora - new Date(clockState.running_since).getTime()) / 1000);
+      return Math.max(0, base - transcurrido);
+    }
+    return base;
+  };
+  const tiempoTeam0 = restante(0);
+  const tiempoTeam1 = restante(1);
+  const agotadoTeam0 = !!clockState?.expired?.[0] || (clockState?.running === 0 && tiempoTeam0 <= 0);
+  const agotadoTeam1 = !!clockState?.expired?.[1] || (clockState?.running === 1 && tiempoTeam1 <= 0);
+
+  // Reclamo automático: en cuanto el reloj del equipo que corre llega a
+  // cero en modo muerte, cualquier sesión puede — y acá, lo intenta —
+  // llamar claim_timeout. El servidor vuelve a chequear el deadline real
+  // (not_expired_yet si un tick local se adelantó), así que reintentar cada
+  // segundo hasta que pase o la fase cambie es seguro, no hace falta
+  // coordinar quién llama.
+  useEffect(() => {
+    if (!hayReloj || !esMuerte || gameState.phase !== "bidding") return;
+    if (!clockState || clockState.running == null || !clockState.running_since) return;
+    if (reclamandoTiempo) return;
+    if (restante(clockState.running) > 0) return;
+    setReclamandoTiempo(true);
+    reclamarTiempo(roomId).catch(() => {}).finally(() => setReclamandoTiempo(false));
+  }, [ahora, hayReloj, esMuerte, gameState.phase, clockState?.running, clockState?.running_since, reclamandoTiempo]);
 
   const teamMano = gameState.mano_seat % 2;
   const teamPie = 1 - teamMano;
@@ -240,11 +302,51 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     }
   };
 
+  // Sin restricción de capitán/ganador/portador — igual que el botón
+  // "CERRAR MANO" offline, close_hand acepta a cualquier miembro de la sala.
+  const onCerrarMano = async () => {
+    setEnviandoCierre(true);
+    setErrorCierre(null);
+    try {
+      await cerrarMano(roomId);
+    } catch (err) {
+      setErrorCierre(await mensajeDeError(err));
+    } finally {
+      setEnviandoCierre(false);
+    }
+  };
+
+  // Igual de ungated: deal_hand ya distingue sola la primera mano (requiere
+  // rooms.status='waiting') de las siguientes (requiere phase='dealing'),
+  // así que no hace falta tratar hand_number===0 distinto acá.
+  const onRepartir = async () => {
+    setEnviandoReparto(true);
+    setErrorReparto(null);
+    try {
+      await repartirMano(roomId);
+    } catch (err) {
+      setErrorReparto(await mensajeDeError(err));
+    } finally {
+      setEnviandoReparto(false);
+    }
+  };
+
   if (gameState.phase === "dealing") {
     return (
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
-        <div style={{fontSize:12,color:"rgba(201,168,76,0.5)"}}>Repartiendo…</div>
+        <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
+          Mano {gameState.hand_number+1} de {room.config?.estructura?.length ?? "?"}
+        </div>
+        {errorReparto && (
+          <div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",textAlign:"center",maxWidth:340}}>
+            {errorReparto}
+          </div>
+        )}
+        <Btn verde onClick={onRepartir} disabled={enviandoReparto}>
+          {enviandoReparto ? "Repartiendo…" : "Repartir mano"}
+        </Btn>
+        <Btn onClick={onSalir}>Salir de la sala</Btn>
       </div>
     );
   }
@@ -486,6 +588,109 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     );
   }
 
+  if (gameState.phase === "closing") {
+    // Sin capitán/ganador de por medio: cualquiera ve el mismo resumen y
+    // puede cerrar. bids/tricks_won todavía son los de la mano que se
+    // acaba de terminar (close_hand recién los resetea al repartir la
+    // siguiente).
+    const hechoTeam0 = players.filter((p) => p.team === 0).reduce((s, p) => s + (p.tricks_won ?? 0), 0);
+    const hechoTeam1 = players.filter((p) => p.team === 1).reduce((s, p) => s + (p.tricks_won ?? 0), 0);
+    const mio = myTeam === 0 ? { bid: bids.team0, hecho: hechoTeam0 } : { bid: bids.team1, hecho: hechoTeam1 };
+    const rival = myTeam === 0 ? { bid: bids.team1, hecho: hechoTeam1 } : { bid: bids.team0, hecho: hechoTeam0 };
+
+    return (
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+        <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
+        <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>Mano {gameState.hand_number+1} terminada</div>
+
+        <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:340,display:"flex",gap:20,justifyContent:"center"}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:10,color:"#5b9bd5",letterSpacing:1}}>NOSOTROS</div>
+            <div style={{fontSize:12,color:"rgba(201,168,76,0.6)"}}>pidió {mio.bid} · hizo {mio.hecho}</div>
+          </div>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:10,color:"#e07b54",letterSpacing:1}}>ELLOS</div>
+            <div style={{fontSize:12,color:"rgba(201,168,76,0.6)"}}>pidió {rival.bid} · hizo {rival.hecho}</div>
+          </div>
+        </div>
+
+        {errorCierre && (
+          <div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",textAlign:"center",maxWidth:340}}>
+            {errorCierre}
+          </div>
+        )}
+
+        <Btn verde onClick={onCerrarMano} disabled={enviandoCierre}>
+          {enviandoCierre ? "Cerrando…" : "Cerrar mano"}
+        </Btn>
+        <Btn onClick={onSalir}>Salir de la sala</Btn>
+      </div>
+    );
+  }
+
+  if (gameState.phase === "finished") {
+    const manosOrdenadas = [...handResults].sort((a, b) => a.hand_number - b.hand_number);
+    const totalTeam0 = manosOrdenadas.reduce((s, h) => s + h.delta_team0, 0);
+    const totalTeam1 = manosOrdenadas.reduce((s, h) => s + h.delta_team1, 0);
+    const miTotal = myTeam === 0 ? totalTeam0 : totalTeam1;
+    const rivalTotal = myTeam === 0 ? totalTeam1 : totalTeam0;
+    const resultado = miTotal === rivalTotal ? "¡EMPATE!" : miTotal > rivalTotal ? "¡GANAMOS!" : "¡GANARON ELLOS!";
+    const causaTexto = {
+      kamikaze: "El equipo mano perdió la partida por no declarar kamikaze y quedar 2 o más abajo de lo pedido.",
+      clock_expired: "Un equipo se quedó sin tiempo.",
+    }[gameState.end_cause] ?? null;
+
+    return (
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+        <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>FIN DE LA PARTIDA</div>
+        {causaTexto && <div style={{fontSize:11,color:"rgba(201,168,76,0.5)",fontStyle:"italic",textAlign:"center",maxWidth:340}}>{causaTexto}</div>}
+        <div style={{fontSize:22,color:miTotal>rivalTotal?"#7ecf9e":miTotal<rivalTotal?"#e05555":"#f0d080",fontFamily:"Cinzel, Georgia, serif"}}>{resultado}</div>
+        <div style={{fontSize:14,color:"rgba(201,168,76,0.7)"}}>Nosotros: {miTotal} · Ellos: {rivalTotal}</div>
+
+        <div style={{overflowX:"auto",width:"100%",maxWidth:480}}>
+          <table style={{borderCollapse:"collapse",width:"100%",fontSize:11,fontFamily:"Crimson Text, Georgia, serif",color:"rgba(201,168,76,0.7)"}}>
+            <thead>
+              <tr style={{borderBottom:"1px solid rgba(201,168,76,0.22)"}}>
+                <th style={{padding:"4px 6px",textAlign:"center"}}>Mano</th>
+                <th style={{padding:"4px 6px",textAlign:"center"}}>Cartas</th>
+                <th style={{padding:"4px 6px",textAlign:"center",color:"#5b9bd5"}}>Ped.</th>
+                <th style={{padding:"4px 6px",textAlign:"center",color:"#5b9bd5"}}>Hecho</th>
+                <th style={{padding:"4px 6px",textAlign:"center",color:"#5b9bd5"}}>Δ</th>
+                <th style={{padding:"4px 6px",textAlign:"center",color:"#e07b54"}}>Ped.</th>
+                <th style={{padding:"4px 6px",textAlign:"center",color:"#e07b54"}}>Hecho</th>
+                <th style={{padding:"4px 6px",textAlign:"center",color:"#e07b54"}}>Δ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {manosOrdenadas.map((h) => {
+                const mio = myTeam === 0
+                  ? { bid: h.bid_team0, hecho: h.tricks_team0, delta: h.delta_team0 }
+                  : { bid: h.bid_team1, hecho: h.tricks_team1, delta: h.delta_team1 };
+                const rival = myTeam === 0
+                  ? { bid: h.bid_team1, hecho: h.tricks_team1, delta: h.delta_team1 }
+                  : { bid: h.bid_team0, hecho: h.tricks_team0, delta: h.delta_team0 };
+                return (
+                  <tr key={h.hand_number}>
+                    <td style={{padding:"4px 6px",textAlign:"center"}}>{h.hand_number+1}</td>
+                    <td style={{padding:"4px 6px",textAlign:"center"}}>{h.cards_dealt}</td>
+                    <td style={{padding:"4px 6px",textAlign:"center"}}>{mio.bid}</td>
+                    <td style={{padding:"4px 6px",textAlign:"center"}}>{mio.hecho}</td>
+                    <td style={{padding:"4px 6px",textAlign:"center",color:mio.delta<0?"#e05555":"#f0d080"}}>{mio.delta}</td>
+                    <td style={{padding:"4px 6px",textAlign:"center"}}>{rival.bid}</td>
+                    <td style={{padding:"4px 6px",textAlign:"center"}}>{rival.hecho}</td>
+                    <td style={{padding:"4px 6px",textAlign:"center",color:rival.delta<0?"#e05555":"#f0d080"}}>{rival.delta}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <Btn onClick={onSalir}>Salir de la sala</Btn>
+      </div>
+    );
+  }
+
   if (gameState.phase !== "bidding") {
     return (
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
@@ -505,6 +710,13 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
         Mano {gameState.hand_number+1} · {totalBases} carta{totalBases!==1?"s":""}
       </div>
+
+      <DisplayReloj
+        tiempoN={tiempoTeam0} tiempoE={tiempoTeam1}
+        corriendo={clockState?.running ?? null}
+        agotadoN={agotadoTeam0} agotadoE={agotadoTeam1}
+        modoLento={false} modoTiempo={clockConfig?.modo} hayTiempo={hayReloj}
+      />
 
       <MiMano cartas={misCartas} error={errorMano}/>
 
@@ -527,7 +739,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               nombresEq={nombresPie}
               esManoEq0={teamMano===0}
               onConfirmar={onConfirmar}
-              clock={RELOJ_INERTE}
+              clock={CLOCK_ADAPTER_PANEL}
               modoLento={false}
               nombreCapMano={capitanMano?.name}
               nombreCapPie={capitanPie?.name}

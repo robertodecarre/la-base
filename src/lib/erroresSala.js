@@ -1,9 +1,9 @@
 // Traduce los errores que puede tirar create-room/join-room/submit-bid (edge
 // functions) y deal_hand/play_card/resolve_resolving/resolve_copas_menu/
-// resolve_oros_menu (RPC directa) a mensajes en español para mostrar en
-// pantalla. Solo cubre los códigos que esas llamadas pueden emitir
-// realmente — el resto de STATUS_POR_ERROR (supabase/functions/_shared/
-// errors.ts) es de RPCs de juego que todavía no tienen UI (pieza 5g).
+// resolve_oros_menu/close_hand/claim_timeout (RPC directa) a mensajes en
+// español para mostrar en pantalla. Cubre todos los códigos que esas
+// llamadas pueden emitir realmente — ver supabase/functions/_shared/
+// errors.ts para la lista completa de STATUS_POR_ERROR.
 const MENSAJES = {
   not_authenticated: "No se pudo verificar tu sesión. Probá de nuevo en unos segundos.",
   invalid_config: "La configuración de la sala no es válida.",
@@ -40,6 +40,12 @@ const MENSAJES = {
   not_oros_carrier: "Solo quien tiró el As de Oros puede elegir quién abre.",
   invalid_seat: "Ese asiento no existe.",
   seat_not_on_winning_team: "Tiene que ser alguien del equipo que ganó la base.",
+  // close_hand / claim_timeout (RPC directa; pieza 5g)
+  not_closing_phase: "Esta mano ya no está esperando el cierre.",
+  clock_not_enabled: "Esta sala no tiene reloj activado.",
+  clock_not_muerte_mode: "El reclamo de tiempo solo aplica en modo muerte súbita.",
+  no_clock_running: "No hay ningún reloj corriendo ahora mismo.",
+  not_expired_yet: "Ese equipo todavía no se quedó sin tiempo.",
 };
 
 // Dos formas de error posibles acá, con dos formas distintas de sacarles
