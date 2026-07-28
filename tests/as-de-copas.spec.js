@@ -16,7 +16,13 @@ const NJUG = 6;
 const MAX_INTENTOS = 20;
 const PASOS_POR_INTENTO = 300; // ~3 manos de clasica2004
 
-test("As de Copas: portador correcto y sentido se invierte bien", async ({ page }) => {
+// Saltado (piece 5m): hotseat dejó de ser un punto de entrada alcanzable
+// desde la UI (PantallaModo fusionó "Jugar online"/"Jugar en este
+// dispositivo" en una sola pantalla de solo crear/unirse sala), así que
+// iniciarPartida() ya no encuentra el botón "Jugar en este dispositivo".
+// El flujo hotseat en sí sigue intacto (PantallaInicio.jsx, etc.), esto
+// solo refleja que no hay forma de llegar ahí desde "/" todavía.
+test.skip("As de Copas: portador correcto y sentido se invierte bien", async ({ page }) => {
   let observado = false;
 
   for (let intento = 0; intento < MAX_INTENTOS && !observado; intento++) {

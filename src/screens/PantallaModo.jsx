@@ -1,13 +1,17 @@
 import { useEffect } from "react";
 import {
-  FONTS_URL, colors, fonts, panelStyle, badgeStyle, tituloStyle, codigoStyle,
+  FONTS_URL, colors, fonts, panelStyle, badgeStyle, codigoStyle,
   ctaStyle, secondaryBtnStyle, diagonalWordmarkStyle, WORDMARK,
 } from "../theme";
 
 // ══════════════════════════════════════════════
-// PANTALLA MODO — hotseat vs. online
+// PANTALLA MODO — primera pantalla de la app: crear o unirse a una sala
+// online. Hotseat dejó de ser un punto de entrada alcanzable desde la UI
+// (PantallaInicio.jsx y el resto del flujo hotseat siguen existiendo,
+// simplemente no hay ningún botón que lleve ahí) y el paso intermedio
+// "Jugar online" (antes PantallaOnlineMenu.jsx) se fusionó acá mismo.
 // ══════════════════════════════════════════════
-export function PantallaModo({ onHotseat, onOnline }) {
+export function PantallaModo({ onCrear, onUnirse }) {
   useEffect(() => {
     const link = document.createElement("link");
     link.rel = "stylesheet";
@@ -26,22 +30,10 @@ export function PantallaModo({ onHotseat, onOnline }) {
         <div style={diagonalWordmarkStyle}>{Array(6).fill(WORDMARK).join(" · ")}</div>
 
         <div style={badgeStyle}>LB</div>
-        <div style={codigoStyle}>LA BASE</div>
-        <div style={tituloStyle}>NAIPES ESPAÑOLES</div>
+        <div style={codigoStyle}>LA BASE ONLINE</div>
 
-        <div style={{ fontSize: 11, color: colors.text.secondary, letterSpacing: 2, textAlign: "center", marginTop: 8, fontFamily: fonts.body, fontWeight: 600 }}>
-          ¿CÓMO QUERÉS JUGAR?
-        </div>
-
-        <button onClick={onHotseat} style={ctaStyle()}>📱 Jugar en este dispositivo</button>
-        <div style={{ fontSize: 10, color: "rgba(200,210,255,0.4)", fontStyle: "italic", textAlign: "center", fontFamily: fonts.body }}>
-          Todos los jugadores comparten esta pantalla, por turnos.
-        </div>
-
-        <button onClick={onOnline} style={secondaryBtnStyle({ full: true })}>🌐 Jugar online</button>
-        <div style={{ fontSize: 10, color: "rgba(200,210,255,0.4)", fontStyle: "italic", textAlign: "center", fontFamily: fonts.body }}>
-          Cada jugador entra desde su propio dispositivo.
-        </div>
+        <button onClick={onCrear} style={ctaStyle()}>Crear sala</button>
+        <button onClick={onUnirse} style={secondaryBtnStyle({ full: true })}>Unirse a sala</button>
       </div>
     </div>
   );

@@ -188,7 +188,8 @@ export async function jugarPartidaCompleta(page, { maxPasos = 4000, onCopas } = 
 export async function crearYUnirseSalaOnline(pages, nombres, { nJug = 4, estructuraCustom = null, sinAses = false } = {}) {
   const host = pages[0];
   await host.goto("/");
-  await host.getByRole("button", { name: /Jugar online/ }).click();
+  // "/" ahora aterriza directo en la pantalla fusionada "crear/unirse"
+  // (piece 5m) — ya no hay un paso intermedio "Jugar online" que clickear.
   await host.getByRole("button", { name: /Crear sala/ }).click();
   await host.getByPlaceholder("Ej: Tincho").fill(nombres[0]);
   if (nJug !== 6) {
@@ -213,7 +214,6 @@ export async function crearYUnirseSalaOnline(pages, nombres, { nJug = 4, estruct
   for (let i = 1; i < pages.length; i++) {
     const p = pages[i];
     await p.goto("/");
-    await p.getByRole("button", { name: /Jugar online/ }).click();
     await p.getByRole("button", { name: /Unirse a sala/ }).click();
     await p.getByPlaceholder("ABCDE").fill(code);
     await p.getByPlaceholder("Ej: Tincho").fill(nombres[i]);

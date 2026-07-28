@@ -3,7 +3,6 @@ import { PantallaInicio } from "./screens/PantallaInicio";
 import { PantallaSorteo } from "./screens/PantallaSorteo";
 import { PantallaPartida } from "./screens/PantallaPartida";
 import { PantallaModo } from "./screens/PantallaModo";
-import { PantallaOnlineMenu } from "./screens/PantallaOnlineMenu";
 import { PantallaOnlineCrear } from "./screens/PantallaOnlineCrear";
 import { PantallaOnlineUnirse } from "./screens/PantallaOnlineUnirse";
 import { PantallaOnlineSala } from "./screens/PantallaOnlineSala";
@@ -58,20 +57,13 @@ export default function App() {
   return (
     <div style={{background:"radial-gradient(ellipse at center, #0d2b1a 0%, #050f08 100%)",minHeight:"100vh",fontFamily:"Crimson Text, Georgia, serif",color:"#f0d080"}}>
       {pantalla==="modo"&&(
-        <PantallaModo onHotseat={()=>setPantalla("inicio")} onOnline={()=>setPantalla("online-menu")}/>
-      )}
-      {pantalla==="online-menu"&&(
-        <PantallaOnlineMenu
-          onCrear={()=>setPantalla("online-crear")}
-          onUnirse={()=>setPantalla("online-unirse")}
-          onVolver={()=>setPantalla("modo")}
-        />
+        <PantallaModo onCrear={()=>setPantalla("online-crear")} onUnirse={()=>setPantalla("online-unirse")}/>
       )}
       {pantalla==="online-crear"&&(
-        <PantallaOnlineCrear onCreada={(room)=>irAOnlineSala(room.id)} onVolver={()=>setPantalla("online-menu")}/>
+        <PantallaOnlineCrear onCreada={(room)=>irAOnlineSala(room.id)} onVolver={()=>setPantalla("modo")}/>
       )}
       {pantalla==="online-unirse"&&(
-        <PantallaOnlineUnirse onUnida={(player)=>irAOnlineSala(player.room_id)} onVolver={()=>setPantalla("online-menu")}/>
+        <PantallaOnlineUnirse onUnida={(player)=>irAOnlineSala(player.room_id)} onVolver={()=>setPantalla("modo")}/>
       )}
       {pantalla==="online-sala"&&onlineRoomId&&(
         <PantallaOnlineSala roomId={onlineRoomId} onSalir={salirDeOnline}/>
