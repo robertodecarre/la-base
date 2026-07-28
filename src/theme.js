@@ -7,10 +7,9 @@
 // referencia) y PantallaOnlineSala.jsx (primer uso real).
 //
 // Ojo: esto NO toca las cartas españolas (src/components/cards/*), que se
-// quedan en su estilo clásico actual, ni las pantallas hotseat o
-// PantallaOnlineCrear (formulario grande, con su propia pieza pendiente)
-// — esas siguen con la estética sobria vieja hasta que se haga el rollout
-// pieza por pieza.
+// quedan en su estilo clásico actual, ni las pantallas hotseat — esas
+// siguen con la estética sobria vieja hasta que se haga el rollout pieza
+// por pieza.
 
 export const FONTS_URL =
   "https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&family=Barlow+Semi+Condensed:wght@500;600&display=swap";
@@ -230,6 +229,91 @@ export function inputStyle({ big } = {}) {
     outline: "none",
   };
 }
+
+// Select en píldora — mismo lenguaje que inputStyle, alineado a la
+// izquierda porque suele llevar texto descriptivo largo (opciones de
+// estructura de manos).
+export function selectStyle() {
+  return {
+    fontFamily: fonts.body,
+    fontWeight: 600,
+    fontSize: 13,
+    textAlign: "left",
+    width: "100%",
+    padding: "9px 14px",
+    borderRadius: 999,
+    border: `1px solid ${colors.panel.border}`,
+    background: "rgba(0,0,0,0.35)",
+    color: colors.text.primary,
+    boxShadow: bevel,
+    outline: "none",
+    cursor: "pointer",
+  };
+}
+
+// Opción de un grupo tipo "segmented control" (cantidad de jugadores,
+// modo de tiempo) — no está ligada a un equipo, así que usa el naranja de
+// acción (colors.cta) como único acento neutro de la app. Igual que
+// filaStyle, el pill de base no cambia de color entre estados: seleccionado
+// solo sube brillo/borde/glow.
+export function segmentedOptionStyle(selected) {
+  return {
+    fontFamily: fonts.display,
+    fontWeight: 700,
+    fontStyle: "italic",
+    fontSize: 14,
+    letterSpacing: 1,
+    textAlign: "center",
+    borderRadius: 999,
+    padding: "9px 16px",
+    border: `1px solid ${selected ? colors.cta.border : colors.panel.border}`,
+    background: selected ? "rgba(255,130,80,0.16)" : "rgba(255,255,255,0.03)",
+    color: selected ? "#ffd7c2" : colors.text.secondary,
+    boxShadow: selected ? `${bevel}, 0 0 12px ${colors.cta.glow}` : bevel,
+    cursor: "pointer",
+  };
+}
+
+// Fila-tarjeta para un checkbox (dos mazos, ases, reloj) — mismo criterio
+// que segmentedOptionStyle: el naranja de acción marca "activo" con más
+// brillo, sin cambiar de matiz de base.
+export function checkRowStyle(active) {
+  return {
+    display: "flex",
+    gap: 10,
+    alignItems: "flex-start",
+    padding: "9px 12px",
+    borderRadius: 12,
+    border: `1px solid ${active ? colors.cta.border : colors.panel.border}`,
+    background: active ? "rgba(255,130,80,0.08)" : "rgba(255,255,255,0.02)",
+    boxShadow: active ? `${bevel}, 0 0 10px ${colors.cta.glow}` : bevel,
+  };
+}
+
+// El checkbox nativo en sí — no vale la pena un toggle dibujado a mano
+// para esto, pero al menos que el tilde/fondo respete la paleta en vez de
+// quedar con el azul/gris por default del navegador.
+export const checkboxStyle = {
+  accentColor: colors.cta.border,
+  width: 15,
+  height: 15,
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+// Chip chico decorativo — usado por los badges numéricos de estructura de
+// manos ("1 2 3 2 1").
+export const chipStyle = {
+  fontFamily: fonts.body,
+  fontWeight: 600,
+  fontSize: 11,
+  padding: "3px 10px",
+  borderRadius: 999,
+  border: `1px solid ${colors.panel.border}`,
+  background: "rgba(255,255,255,0.04)",
+  color: colors.text.secondary,
+  boxShadow: bevel,
+};
 
 // Link fantasma para navegación secundaria ("← volver") — liviano, no es
 // un botón/píldora.

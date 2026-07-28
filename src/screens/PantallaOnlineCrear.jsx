@@ -1,8 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ESTRUCTURAS, maxCartas } from "../engine/structures";
-import { Btn } from "../components/Btn";
 import { crearSala, unirseASala } from "../lib/rooms";
 import { mensajeDeError } from "../lib/erroresSala";
+import {
+  FONTS_URL, colors, fonts, panelStyle, badgeStyle, tituloStyle,
+  ctaStyle, linkStyle, inputStyle, selectStyle, segmentedOptionStyle,
+  checkRowStyle, checkboxStyle, chipStyle, diagonalWordmarkStyle, WORDMARK,
+} from "../theme";
+
+const labelCenter = { fontSize: 11, color: colors.text.secondary, letterSpacing: 2, textAlign: "center", fontFamily: fonts.body, fontWeight: 600 };
+const labelLeft = { fontSize: 11, color: colors.text.secondary, letterSpacing: 2, fontFamily: fonts.body, fontWeight: 600 };
+const helpText = { fontSize: 10, color: "rgba(200,210,255,0.4)", fontStyle: "italic", fontFamily: fonts.body, lineHeight: 1.4 };
+const divider = { borderTop: "1px solid rgba(74,90,168,0.35)", paddingTop: 14, marginBottom: 14 };
+const errorBox = { fontSize: 11, color: "#ffb3a8", background: "rgba(160,50,30,0.18)", border: "1px solid rgba(255,140,100,0.4)", borderRadius: 10, padding: "8px 12px", textAlign: "center", fontFamily: fonts.body };
 
 // ══════════════════════════════════════════════
 // PANTALLA ONLINE CREAR — arma la config de la sala
@@ -33,6 +43,14 @@ export function PantallaOnlineCrear({ onCreada, onVolver }) {
   const [creando,setCreando]=useState(false);
   const [error,setError]=useState(null);
 
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = FONTS_URL;
+    document.head.appendChild(link);
+    return () => document.head.removeChild(link);
+  }, []);
+
   const cambiarNJug = (n) => {
     setNJug(n);
     if (n !== 8) setDosMazos(false);
@@ -43,8 +61,6 @@ export function PantallaOnlineCrear({ onCreada, onVolver }) {
     ? customStr.split(",").map(x=>parseInt(x.trim())).filter(x=>!isNaN(x)&&x>0)
     : ESTRUCTURAS[estructuraSel]
   ).map(x=>Math.min(x,maxC));
-
-  const inp={fontFamily:"Crimson Text, Georgia, serif",fontSize:12,padding:"5px 8px",borderRadius:5,border:"1.5px solid rgba(201,168,76,0.4)",background:"rgba(0,0,0,0.4)",color:"#f0d080",width:"100%"};
 
   const puedeCrear = nombre.trim().length>0 && !creando;
 
@@ -66,117 +82,120 @@ export function PantallaOnlineCrear({ onCreada, onVolver }) {
   };
 
   return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
-      <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>CREAR SALA</div>
+    <div style={{
+      background: colors.bg, minHeight: "100vh", fontFamily: fonts.body,
+      display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+      padding: "30px 14px",
+    }}>
+      <div style={{ ...panelStyle, width: "100%", maxWidth: 520, padding: "22px 20px 24px" }}>
+        <div style={diagonalWordmarkStyle}>{Array(6).fill(WORDMARK).join(" · ")}</div>
 
-      <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:12,padding:20,width:"100%",maxWidth:520}}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 18 }}>
+          <div style={badgeStyle}>LB</div>
+          <div style={tituloStyle}>CREAR SALA</div>
+        </div>
 
         {/* TU NOMBRE — quien crea la sala también entra como jugador */}
         <div style={{marginBottom:16}}>
-          <div style={{fontSize:11,color:"rgba(201,168,76,0.45)",letterSpacing:2,marginBottom:6,textAlign:"center"}}>TU NOMBRE</div>
-          <input value={nombre} onChange={e=>setNombre(e.target.value.slice(0,20))} placeholder="Ej: Tincho" style={{...inp,textAlign:"center"}}/>
+          <div style={{...labelCenter, marginBottom:6}}>TU NOMBRE</div>
+          <input value={nombre} onChange={e=>setNombre(e.target.value.slice(0,20))} placeholder="Ej: Tincho" style={inputStyle()}/>
         </div>
 
         {/* CANTIDAD DE JUGADORES */}
-        <div style={{fontSize:11,color:"rgba(201,168,76,0.45)",letterSpacing:2,marginBottom:8,textAlign:"center"}}>CANTIDAD DE JUGADORES</div>
-        <div style={{display:"flex",gap:8,marginBottom:16,justifyContent:"center"}}>
+        <div style={{...labelCenter, marginBottom:8}}>CANTIDAD DE JUGADORES</div>
+        <div style={{display:"flex",gap:10,marginBottom:16,justifyContent:"center"}}>
           {[4,6,8].map(n=>(
             <button key={n} onClick={()=>cambiarNJug(n)} style={{
-              fontFamily:"Cinzel, Georgia, serif",fontSize:14,fontWeight:"bold",
-              width:52,height:52,borderRadius:8,
-              border:`2px solid ${nJug===n?"#c9a84c":"rgba(201,168,76,0.25)"}`,
-              background:nJug===n?"rgba(201,168,76,0.2)":"rgba(0,0,0,0.3)",
-              color:nJug===n?"#f0d080":"rgba(201,168,76,0.45)",cursor:"pointer",
+              ...segmentedOptionStyle(nJug===n),
+              width:52, height:52, padding:0, fontSize:16,
+              display:"flex", alignItems:"center", justifyContent:"center",
             }}>{n}</button>
           ))}
         </div>
 
         {/* DOS MAZOS — solo para 8 jugadores */}
         {nJug===8&&(
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,padding:"8px 12px",background:"rgba(201,168,76,0.08)",borderRadius:8,border:"1px solid rgba(201,168,76,0.2)"}}>
-            <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"rgba(201,168,76,0.7)"}}>
-              <input type="checkbox" checked={dosMazos} onChange={e=>setDosMazos(e.target.checked)} style={{accentColor:"#c9a84c"}}/>
+          <div style={{...checkRowStyle(dosMazos), alignItems:"center", marginBottom:14}}>
+            <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12,color:colors.text.secondary}}>
+              <input type="checkbox" checked={dosMazos} onChange={e=>setDosMazos(e.target.checked)} style={checkboxStyle}/>
               Jugar con dos mazos (sin ases del 2do mazo · máx {maxC} cartas)
             </label>
           </div>
         )}
 
-        <div style={{fontSize:11,color:"rgba(201,168,76,0.45)",letterSpacing:2,marginBottom:8}}>ESTRUCTURA DE MANOS</div>
-        <select value={estructuraSel} onChange={e=>setEstructuraSel(e.target.value)} style={{...inp,marginBottom:8}}>
+        <div style={{...labelLeft, marginBottom:8}}>ESTRUCTURA DE MANOS</div>
+        <select value={estructuraSel} onChange={e=>setEstructuraSel(e.target.value)} style={{...selectStyle(),marginBottom:8}}>
           <option value="clasica2004">2004 Clásica (1,3,5,5,3,1,1,3,5,5,3,1)</option>
           <option value="alt2004">2004 Alternativa (1,3,5,6,6,5,3,1,1,3,5,6,6,5,3,1)</option>
           <option value="postpandemia">Postpandemia (1,2,3,4,5,6,6,5,4,3,2,1)</option>
           <option value="custom">Personalizada</option>
         </select>
         {estructuraSel==="custom"&&(
-          <input style={{...inp,marginBottom:8}} value={customStr} onChange={e=>setCustomStr(e.target.value)} placeholder={`ej: 1,2,3,2,1 (máx ${maxC})`}/>
+          <input style={{...inputStyle(),textAlign:"left",marginBottom:8}} value={customStr} onChange={e=>setCustomStr(e.target.value)} placeholder={`ej: 1,2,3,2,1 (máx ${maxC})`}/>
         )}
-        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:16}}>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>
           {estructura.map((c,i)=>(
-            <div key={i} style={{fontSize:10,padding:"2px 7px",borderRadius:10,background:"rgba(201,168,76,0.08)",border:"1px solid rgba(201,168,76,0.18)",color:"rgba(201,168,76,0.55)"}}>{c}</div>
+            <div key={i} style={chipStyle}>{c}</div>
           ))}
         </div>
 
         {/* SUPERPODERES DE ASES */}
-        <div style={{borderTop:"1px solid rgba(201,168,76,0.15)",paddingTop:14,marginBottom:14}}>
-          <div style={{fontSize:11,color:"rgba(201,168,76,0.45)",letterSpacing:2,marginBottom:10}}>SUPERPODERES DE ASES</div>
+        <div style={divider}>
+          <div style={{...labelLeft, marginBottom:10}}>SUPERPODERES DE ASES</div>
           {[
             {key:"espadas", label:"As de Espadas", desc:"Si cae después del Ancho de Bastos en la misma base, lo mata y gana la base.", emoji:"⚔️"},
             {key:"copas",   label:"As de Copas",   desc:"Al caer, quien lo tiró elige si el sentido de juego se invierte o continúa.", emoji:"🏆"},
             {key:"oros",    label:"As de Oros",     desc:"Si su equipo gana la base, quien lo tiró elige quién abre la siguiente.", emoji:"🟡"},
           ].map(({key,label,desc,emoji})=>(
-            <div key={key} style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:10,padding:"8px 10px",borderRadius:8,border:`1px solid ${ases[key]?"rgba(201,168,76,0.35)":"rgba(201,168,76,0.12)"}`,background:ases[key]?"rgba(201,168,76,0.07)":"rgba(0,0,0,0.2)"}}>
+            <div key={key} style={{...checkRowStyle(ases[key]), marginBottom:10}}>
               <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",flexShrink:0}}>
-                <input type="checkbox" checked={ases[key]} onChange={e=>setAses(a=>({...a,[key]:e.target.checked}))} style={{accentColor:"#c9a84c",width:14,height:14}}/>
+                <input type="checkbox" checked={ases[key]} onChange={e=>setAses(a=>({...a,[key]:e.target.checked}))} style={checkboxStyle}/>
                 <span style={{fontSize:13}}>{emoji}</span>
               </label>
               <div>
-                <div style={{fontSize:11,color:ases[key]?"#f0d080":"rgba(201,168,76,0.4)",fontWeight:"bold",marginBottom:2}}>{label}</div>
-                <div style={{fontSize:10,color:"rgba(201,168,76,0.4)",fontStyle:"italic",lineHeight:1.4}}>{desc}</div>
+                <div style={{fontSize:11,color:ases[key]?colors.text.primary:colors.text.secondary,fontFamily:fonts.body,fontWeight:700,marginBottom:2}}>{label}</div>
+                <div style={helpText}>{desc}</div>
               </div>
             </div>
           ))}
         </div>
 
         {/* KAMIKAZES */}
-        <div style={{borderTop:"1px solid rgba(201,168,76,0.15)",paddingTop:14,marginBottom:14}}>
+        <div style={divider}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-            <label style={{fontSize:11,color:"rgba(201,168,76,0.7)",whiteSpace:"nowrap"}}>Kamikazes por equipo mano:</label>
-            <select value={kamikazes} onChange={e=>setKamikazes(parseInt(e.target.value))} style={{...inp,width:60}}>
+            <label style={{fontSize:11,color:colors.text.secondary,whiteSpace:"nowrap",fontFamily:fonts.body}}>Kamikazes por equipo mano:</label>
+            <select value={kamikazes} onChange={e=>setKamikazes(parseInt(e.target.value))} style={{...selectStyle(),width:70,textAlign:"center"}}>
               {[0,1,2,3].map(n=><option key={n} value={n}>{n}</option>)}
             </select>
           </div>
-          <div style={{fontSize:10,color:"rgba(201,168,76,0.35)",fontStyle:"italic",marginBottom:10}}>Pedir 0 o el maximo sin declarar kamikaze y perder por 2+ = perder la partida.</div>
+          <div style={helpText}>Pedir 0 o el maximo sin declarar kamikaze y perder por 2+ = perder la partida.</div>
         </div>
 
         {/* TIEMPO */}
-        <div style={{borderTop:"1px solid rgba(201,168,76,0.15)",paddingTop:14,marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-            <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"rgba(201,168,76,0.7)"}}>
-              <input type="checkbox" checked={usarTiempo} onChange={e=>setUsarTiempo(e.target.checked)} style={{accentColor:"#c9a84c"}}/>
+        <div style={{...divider, marginBottom:0}}>
+          <div style={{...checkRowStyle(usarTiempo), alignItems:"center", marginBottom:10}}>
+            <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12,color:colors.text.secondary}}>
+              <input type="checkbox" checked={usarTiempo} onChange={e=>setUsarTiempo(e.target.checked)} style={checkboxStyle}/>
               Jugar con reloj
             </label>
           </div>
           {usarTiempo&&(
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <label style={{fontSize:11,color:"rgba(201,168,76,0.5)",whiteSpace:"nowrap"}}>Minutos por equipo:</label>
+                <label style={{fontSize:11,color:colors.text.secondary,whiteSpace:"nowrap",fontFamily:fonts.body}}>Minutos por equipo:</label>
                 <input type="number" min={1} max={60} value={minutos} onChange={e=>setMinutos(parseInt(e.target.value)||5)}
-                  style={{...inp,width:60,textAlign:"center"}}/>
+                  style={{...inputStyle(),width:70}}/>
               </div>
               <div style={{display:"flex",gap:8}}>
                 {["muerte","deportivo"].map(modo=>(
                   <button key={modo} onClick={()=>setModoTiempo(modo)} style={{
-                    flex:1,padding:"8px",fontFamily:"Crimson Text, Georgia, serif",fontSize:11,letterSpacing:1,
-                    border:`2px solid ${modoTiempo===modo?"#c9a84c":"rgba(201,168,76,0.25)"}`,
-                    borderRadius:7,background:modoTiempo===modo?"rgba(201,168,76,0.15)":"rgba(0,0,0,0.3)",
-                    color:modoTiempo===modo?"#f0d080":"rgba(201,168,76,0.45)",cursor:"pointer",
+                    ...segmentedOptionStyle(modoTiempo===modo), flex:1, fontSize:12, padding:"9px 8px",
                   }}>
                     {modo==="muerte"?"⚡ Muerte súbita":"🏃 Modo deportivo"}
                   </button>
                 ))}
               </div>
-              <div style={{fontSize:10,color:"rgba(201,168,76,0.35)",fontStyle:"italic"}}>
+              <div style={helpText}>
                 {modoTiempo==="muerte"
                   ?"Al agotar el tiempo, el equipo pierde la partida."
                   :"Al agotar el tiempo, ese equipo tendrá solo 10 segundos por mano para decidir."}
@@ -185,17 +204,14 @@ export function PantallaOnlineCrear({ onCreada, onVolver }) {
           )}
         </div>
 
-        {error&&<div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",marginBottom:14,textAlign:"center"}}>{error}</div>}
+        {error&&<div style={{...errorBox, marginTop:14}}>{error}</div>}
 
-        <div style={{display:"flex",justifyContent:"center"}}>
-          <Btn verde onClick={crear} disabled={!puedeCrear}>{creando?"Creando…":"Crear sala"}</Btn>
-        </div>
+        <button onClick={crear} disabled={!puedeCrear} style={{...ctaStyle({disabled:!puedeCrear}), marginTop:16}}>
+          {creando?"Creando…":"Crear sala"}
+        </button>
       </div>
 
-      <button onClick={onVolver} style={{
-        fontFamily:"Crimson Text, Georgia, serif",fontSize:11,padding:"4px 12px",
-        border:"none",background:"transparent",color:"rgba(201,168,76,0.4)",cursor:"pointer",letterSpacing:1,
-      }}>← volver</button>
+      <button onClick={onVolver} style={linkStyle}>← volver</button>
     </div>
   );
 }
