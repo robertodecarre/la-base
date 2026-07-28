@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { PanelPedir } from "../components/PanelPedir";
 import { MesaCircular } from "../components/MesaCircular";
 import { DisplayReloj } from "../components/DisplayReloj";
+import { Tablero } from "../components/Tablero";
+import { EstrellasPedido } from "../components/EstrellasPedido";
 import { CartaSVG } from "../components/cards/CartaSVG";
 import { Btn } from "../components/Btn";
 import {
@@ -10,6 +12,48 @@ import {
 } from "../lib/game";
 import { mensajeDeError } from "../lib/erroresSala";
 import { ganadorParcial } from "../engine/trick";
+import { colors, fonts, panelStyle } from "../theme";
+
+// Resumen fusionado arriba de MesaCircular (piece 5n, ver direccion-integrada.html):
+// puntaje acumulado por equipo (color de equipo, rojo/glow si va en contra),
+// estrellas pedidas-vs-hechas de la mano EN CURSO (EstrellasPedido tal cual,
+// con datos en vivo — no confundir con las estrellas históricas de Tablero,
+// que son por mano ya cerrada) y meta de mano/cartas a la derecha.
+function ResumenMarcador({ scoreN, scoreE, pedN, hechoN, pedE, hechoE, handNumber, totalHands, totalBases }) {
+  const eqScore = (score) => ({
+    fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 24,
+    color: score < 0 ? colors.negative : colors.team.nosotros.readyBorder,
+  });
+  return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:26,padding:"9px 18px",position:"relative",borderBottom:"1px solid rgba(140,160,240,0.18)"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:10,letterSpacing:2,marginBottom:2,color:colors.team.nosotros.accent,fontFamily:fonts.body,fontWeight:600}}>NOSOTROS</div>
+        <div style={{...eqScore(scoreN), color: scoreN<0?colors.negative:colors.team.nosotros.readyBorder, textShadow:`0 0 12px ${scoreN<0?"rgba(255,90,90,0.5)":colors.team.nosotros.readyGlow}`}}>{scoreN}</div>
+        <EstrellasPedido pedidas={pedN} hechas={hechoN} color={colors.team.nosotros.readyBorder}/>
+      </div>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:10,letterSpacing:2,marginBottom:2,color:colors.team.ellos.accent,fontFamily:fonts.body,fontWeight:600}}>ELLOS</div>
+        <div style={{...eqScore(scoreE), color: scoreE<0?colors.negative:colors.team.ellos.readyBorder, textShadow:`0 0 12px ${scoreE<0?"rgba(255,90,90,0.5)":colors.team.ellos.readyGlow}`}}>{scoreE}</div>
+        <EstrellasPedido pedidas={pedE} hechas={hechoE} color={colors.team.ellos.readyBorder}/>
+      </div>
+      <div style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",textAlign:"right",fontSize:9,color:"rgba(200,210,255,0.5)",letterSpacing:0.5,lineHeight:1.4,fontFamily:fonts.body}}>
+        MANO {handNumber+1}/{totalHands}<br/>{totalBases} CARTA{totalBases!==1?"S":""}
+      </div>
+    </div>
+  );
+}
+
+// Bloque fusionado resumen+mesa, mismo marco compartido — se repite en
+// bidding/playing/resolving/copas_menu/oros_menu/closing (piece 5n: antes
+// la mesa/marcador no se veían fuera de 'playing').
+function BloqueMesa({ resumen, children }) {
+  return (
+    <div style={{...panelStyle, borderRadius:16, width:"100%", maxWidth:640}}>
+      <ResumenMarcador {...resumen}/>
+      {children}
+    </div>
+  );
+}
 
 // El reloj de ajedrez online (pieza 5g) es server-authoritative: el
 // descuento real de tiempo ya lo hace submit_bid al recibir cada pedido, y
@@ -176,6 +220,74 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   const nJug = room.config?.nJug ?? players.length;
   const seatOfPlayerId = (playerId) => players.find((p) => p.id === playerId)?.seat;
   const jugadorEnAsiento = (seat) => players.find((p) => p.seat === seat);
+
+  // ── Datos compartidos por el resumen+mesa+tablero (piece 5n) — antes solo
+  // existían dentro del branch 'playing'; se hoistean para que las demás
+  // fases (bidding/resolving/menus/closing) puedan mostrar la misma mesa. ──
+  const capN = players.find((p) => p.team === 0 && p.is_captain)?.seat ?? 0;
+  const capE = players.find((p) => p.team === 1 && p.is_captain)?.seat ?? 1;
+
+  // Cartas ya jugadas en ESTA mano (cualquier base) — pública, sirve para
+  // cualquier fase que necesite mostrar la mesa, no solo 'playing'.
+  const jugadasEstaMano = playedCards.filter((pc) => pc.hand_number === gameState.hand_number);
+
+  // Cartas de una base puntual, en orden de tirada, listas para MesaCircular.
+  const cartasDeTrick = (trickNumber) => jugadasEstaMano
+    .filter((pc) => pc.trick_number === trickNumber)
+    .sort((a, b) => a.seq_in_trick - b.seq_in_trick)
+    .map((pc) => ({ carta: pc.card, jugadorIdx: seatOfPlayerId(pc.player_id) }));
+
+  // Bases hechas por equipo EN ESTA mano (deal_hand resetea tricks_won por
+  // mano) — para el resumen en vivo.
+  const hechoTeam0 = players.filter((p) => p.team === 0).reduce((s, p) => s + (p.tricks_won ?? 0), 0);
+  const hechoTeam1 = players.filter((p) => p.team === 1).reduce((s, p) => s + (p.tricks_won ?? 0), 0);
+  const bidsActuales = gameState.bids ?? {};
+  const pedN = myTeam === 0 ? bidsActuales.team0 : bidsActuales.team1;
+  const pedE = myTeam === 0 ? bidsActuales.team1 : bidsActuales.team0;
+  const hechoN = myTeam === 0 ? hechoTeam0 : hechoTeam1;
+  const hechoE = myTeam === 0 ? hechoTeam1 : hechoTeam0;
+
+  // Puntaje ACUMULADO (manos ya cerradas, hand_results) para el resumen.
+  const totalTeam0Acum = handResults.reduce((s, h) => s + h.delta_team0, 0);
+  const totalTeam1Acum = handResults.reduce((s, h) => s + h.delta_team1, 0);
+  const scoreN = myTeam === 0 ? totalTeam0Acum : totalTeam1Acum;
+  const scoreE = myTeam === 0 ? totalTeam1Acum : totalTeam0Acum;
+
+  // Historial para Tablero: una fila por hand_results ya cerrada, mapeada a
+  // la perspectiva de quien mira (NOSOTROS=mi equipo) — mismo shape que ya
+  // usa el hotseat ({deltaN,deltaE,pedN,pedE,hechoN,hechoE}).
+  const estructuraCompleta = room.config?.estructura ?? [];
+  const historialTablero = estructuraCompleta.map((_, i) => {
+    const h = handResults.find((r) => r.hand_number === i);
+    if (!h) return undefined;
+    const mio = myTeam === 0
+      ? { delta: h.delta_team0, ped: h.bid_team0, hecho: h.tricks_team0 }
+      : { delta: h.delta_team1, ped: h.bid_team1, hecho: h.tricks_team1 };
+    const rival = myTeam === 0
+      ? { delta: h.delta_team1, ped: h.bid_team1, hecho: h.tricks_team1 }
+      : { delta: h.delta_team0, ped: h.bid_team0, hecho: h.tricks_team0 };
+    return { deltaN: mio.delta, deltaE: rival.delta, pedN: mio.ped, hechoN: mio.hecho, pedE: rival.ped, hechoE: rival.hecho };
+  });
+
+  // Jugadores para MesaCircular — la única mano real es la propia
+  // (fetchMyHand); el resto solo se sabe cuántas cartas le quedan (dealt -
+  // jugadas esta mano), nunca cuáles. Sirve para cualquier fase de la mano
+  // en curso, no solo 'playing' como antes.
+  const jugadoresMesa = Array.from({ length: nJug }, (_, seat) => {
+    const jugador = jugadorEnAsiento(seat);
+    const mano = seat === mySeat
+      ? (misCartas ?? [])
+      : Array.from(
+          { length: Math.max(totalBases - jugadasEstaMano.filter((pc) => pc.player_id === jugador?.id).length, 0) },
+          (_, i) => ({ uid: `back-${seat}-${i}` }),
+        );
+    return { nombre: jugador?.name ?? `Asiento ${seat}`, eq: jugador?.team ?? (seat % 2), mano, bases: jugador?.tricks_won ?? 0 };
+  });
+
+  const resumenProps = {
+    scoreN, scoreE, pedN, hechoN, pedE, hechoE,
+    handNumber: gameState.hand_number, totalHands: estructuraCompleta.length, totalBases,
+  };
 
   // room.config.clock es ausente/null (sin reloj) o { minutos, modo }. Solo
   // 'muerte' tiene una consecuencia server-side (claim_timeout) — 'deportivo'
@@ -369,8 +481,8 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     // Cartas de la base en curso (trick_number === base_num — se resetea
     // solo cuando una base termina y base_num avanza; ver play_card_trick_
     // resolution.sql). played_cards es pública, así que esto vale para las
-    // cuatro sesiones por igual.
-    const jugadasEstaMano = playedCards.filter((pc) => pc.hand_number === gameState.hand_number);
+    // cuatro sesiones por igual. `orden` (no lo trae cartasDeTrick) hace
+    // falta acá para ganadorParcial (desempate/As de Espadas).
     const cartasEstaBase = jugadasEstaMano
       .filter((pc) => pc.trick_number === gameState.base_num)
       .sort((a, b) => a.seq_in_trick - b.seq_in_trick);
@@ -384,23 +496,6 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     const ganaActual = cartasMesa.length > 0 && cartasMesa.length < nJug
       ? ganadorParcial(cartasMesa, room.config?.ases)
       : null;
-
-    const capN = players.find((p) => p.team === 0 && p.is_captain)?.seat ?? 0;
-    const capE = players.find((p) => p.team === 1 && p.is_captain)?.seat ?? 1;
-
-    // La única mano real es la propia (fetchMyHand) — el resto de los
-    // asientos solo se sabe cuántas cartas les quedan (dealt - jugadas esta
-    // mano), nunca cuáles: MesaCircular las pinta boca abajo vía mySeat.
-    const jugadoresMesa = Array.from({ length: nJug }, (_, seat) => {
-      const jugador = jugadorEnAsiento(seat);
-      const mano = seat === mySeat
-        ? (misCartas ?? [])
-        : Array.from(
-            { length: Math.max(totalBases - jugadasEstaMano.filter((pc) => pc.player_id === jugador?.id).length, 0) },
-            (_, i) => ({ uid: `back-${seat}-${i}` }),
-          );
-      return { nombre: jugador?.name ?? `Asiento ${seat}`, eq: jugador?.team ?? (seat % 2), mano, bases: jugador?.tricks_won ?? 0 };
-    });
 
     const turnoNombre = jugadorEnAsiento(gameState.turn_seat)?.name;
 
@@ -422,26 +517,31 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
             afuera mientras la RPC está en vuelo, para que un doble tap no
             dispare un segundo play_card. */}
         <div style={{width:"100%",maxWidth:640,pointerEvents:enviandoJugada?"none":"auto",opacity:enviandoJugada?0.6:1}}>
-          <MesaCircular
-            jugadores={jugadoresMesa}
-            cartasMesa={cartasMesa}
-            turnoIdx={gameState.turn_seat}
-            pieIdx={gameState.dealer_seat}
-            manoIdx={liderSeat}
-            onTirar={onTirar}
-            fase="jugar"
-            ganadorBase={null}
-            pedidos={[gameState.bids?.team0, gameState.bids?.team1]}
-            capN={capN}
-            capE={capE}
-            ganaActual={ganaActual}
-            expandidos={expandidos}
-            onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
-            cartasLevantadas={cartasLevantadas}
-            onLevantarCarta={(idx,ci)=>setCartasLevantadas((cl)=>({...cl,[idx]:cl[idx]===ci?-1:ci}))}
-            mySeat={mySeat}
-          />
+          <BloqueMesa resumen={resumenProps}>
+            <MesaCircular
+              jugadores={jugadoresMesa}
+              cartasMesa={cartasMesa}
+              turnoIdx={gameState.turn_seat}
+              pieIdx={gameState.dealer_seat}
+              manoIdx={liderSeat}
+              onTirar={onTirar}
+              fase="jugar"
+              ganadorBase={null}
+              pedidos={[gameState.bids?.team0, gameState.bids?.team1]}
+              capN={capN}
+              capE={capE}
+              ganaActual={ganaActual}
+              expandidos={expandidos}
+              onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
+              cartasLevantadas={cartasLevantadas}
+              onLevantarCarta={(idx,ci)=>setCartasLevantadas((cl)=>({...cl,[idx]:cl[idx]===ci?-1:ci}))}
+              mySeat={mySeat}
+              totalBases={totalBases}
+            />
+          </BloqueMesa>
         </div>
+
+        <Tablero estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number}/>
 
         <Btn onClick={onSalir}>Salir de la sala</Btn>
       </div>
@@ -470,6 +570,20 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
           Mano {gameState.hand_number+1} · base {trickNumber+1}/{totalBases}
         </div>
+
+        <div style={{width:"100%",maxWidth:640}}>
+          <BloqueMesa resumen={resumenProps}>
+            <MesaCircular
+              jugadores={jugadoresMesa} cartasMesa={cartasDeTrick(trickNumber)}
+              turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
+              onTirar={()=>{}} fase="resolviendo" ganadorBase={seatGanador}
+              pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capN={capN} capE={capE}
+              ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
+              cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
+            />
+          </BloqueMesa>
+        </div>
+        <Tablero estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number}/>
 
         <BaseResuelta cartas={cartasUltimaBase} nombreGanador={nombreGanador} seatGanador={seatGanador}/>
 
@@ -521,6 +635,20 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           Mano {gameState.hand_number+1} · base {gameState.base_num+1}/{totalBases}
         </div>
 
+        <div style={{width:"100%",maxWidth:640}}>
+          <BloqueMesa resumen={resumenProps}>
+            <MesaCircular
+              jugadores={jugadoresMesa} cartasMesa={cartasDeTrick(gameState.base_num)}
+              turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
+              onTirar={()=>{}} fase="copas" ganadorBase={null}
+              pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capN={capN} capE={capE}
+              ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
+              cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
+            />
+          </BloqueMesa>
+        </div>
+        <Tablero estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number}/>
+
         <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(192,57,43,0.35)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:420,display:"flex",flexDirection:"column",gap:8,alignItems:"center"}}>
           <div style={{fontSize:10,color:"rgba(192,57,43,0.6)",letterSpacing:3}}>AS DE COPAS</div>
           <FilaCartasJugadas cartas={cartasEstaBase} seatDestacado={carrierSeat}/>
@@ -566,6 +694,20 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           Mano {gameState.hand_number+1} · base {gameState.base_num+1}/{totalBases}
         </div>
 
+        <div style={{width:"100%",maxWidth:640}}>
+          <BloqueMesa resumen={resumenProps}>
+            <MesaCircular
+              jugadores={jugadoresMesa} cartasMesa={cartasDeTrick(gameState.base_num - 1)}
+              turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
+              onTirar={()=>{}} fase="oros" ganadorBase={gameState.last_trick_winner_seat}
+              pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capN={capN} capE={capE}
+              ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
+              cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
+            />
+          </BloqueMesa>
+        </div>
+        <Tablero estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number}/>
+
         <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:420,display:"flex",flexDirection:"column",gap:4,alignItems:"center"}}>
           <div style={{fontSize:10,color:"rgba(201,168,76,0.4)",letterSpacing:3}}>AS DE OROS</div>
           <div style={{fontSize:12,color:"#f0d080"}}>🟡 <b>{carrier?.name}</b> elige quién abre la siguiente base</div>
@@ -606,9 +748,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     // Sin capitán/ganador de por medio: cualquiera ve el mismo resumen y
     // puede cerrar. bids/tricks_won todavía son los de la mano que se
     // acaba de terminar (close_hand recién los resetea al repartir la
-    // siguiente).
-    const hechoTeam0 = players.filter((p) => p.team === 0).reduce((s, p) => s + (p.tricks_won ?? 0), 0);
-    const hechoTeam1 = players.filter((p) => p.team === 1).reduce((s, p) => s + (p.tricks_won ?? 0), 0);
+    // siguiente). hechoTeam0/1 vienen hoisteados arriba.
     const mio = myTeam === 0 ? { bid: bids.team0, hecho: hechoTeam0 } : { bid: bids.team1, hecho: hechoTeam1 };
     const rival = myTeam === 0 ? { bid: bids.team1, hecho: hechoTeam1 } : { bid: bids.team0, hecho: hechoTeam0 };
 
@@ -616,6 +756,20 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>Mano {gameState.hand_number+1} terminada</div>
+
+        <div style={{width:"100%",maxWidth:640}}>
+          <BloqueMesa resumen={resumenProps}>
+            <MesaCircular
+              jugadores={jugadoresMesa} cartasMesa={[]}
+              turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
+              onTirar={()=>{}} fase="cerrada" ganadorBase={null}
+              pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capN={capN} capE={capE}
+              ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
+              cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
+            />
+          </BloqueMesa>
+        </div>
+        <Tablero estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number}/>
 
         <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:340,display:"flex",gap:20,justifyContent:"center"}}>
           <div style={{textAlign:"center"}}>
@@ -733,6 +887,20 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       />
 
       <MiMano cartas={misCartas} error={errorMano}/>
+
+      <div style={{width:"100%",maxWidth:640}}>
+        <BloqueMesa resumen={resumenProps}>
+          <MesaCircular
+            jugadores={jugadoresMesa} cartasMesa={cartasDeTrick(gameState.base_num)}
+            turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
+            onTirar={()=>{}} fase="bidding" ganadorBase={null}
+            pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capN={capN} capE={capE}
+            ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
+            cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
+          />
+        </BloqueMesa>
+      </div>
+      <Tablero estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number}/>
 
       {requiredTeam===null ? (
         <div style={{fontSize:11,color:"rgba(201,168,76,0.4)",fontStyle:"italic"}}>Cerrando el pedido…</div>

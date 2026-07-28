@@ -234,7 +234,7 @@ export function PantallaPartida({ jugadoresInit, estructura, tiempoInicial, modo
 
       {/* TABLERO */}
       <div style={{width:"100%",maxWidth:640}}>
-        <Tablero estructura={estructura} historial={historial}/>
+        <Tablero estructura={estructura} historial={historial} manoActual={manoActual}/>
       </div>
 
       {/* LAYOUT: mesa + panel pedir lateral */}

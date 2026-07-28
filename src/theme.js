@@ -46,6 +46,14 @@ export const colors = {
     border: "#ffab8a",
     glow: "rgba(255,90,50,0.45)",
   },
+  // Turno: universal, no ligado a equipo — se usa en vez de una versión
+  // más brillante del matiz de equipo para que se lea igual sin importar
+  // qué equipo tiene el turno.
+  turn: {
+    color: "#d4ff00",
+    glow: "rgba(212,255,0,0.55)",
+  },
+  negative: "#ff6a6a",
 };
 
 // Bisel de luz: más claro arriba, más oscuro abajo — reemplaza el "óvalo

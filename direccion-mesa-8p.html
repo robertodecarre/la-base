@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>La Base — mesa 8 jugadores</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&family=Barlow+Semi+Condensed:wght@500;600&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #060814; padding: 20px; }
+  svg { display: block; max-width: 620px; margin: 0 auto; }
+  text { font-family: 'Barlow Semi Condensed', sans-serif; }
+  .display { font-family: 'Saira Condensed', sans-serif; font-weight: 800; font-style: italic; }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 680 680">
+  <defs>
+    <radialGradient id="mesaFondo" cx="50%" cy="42%" r="65%">
+      <stop offset="0%" stop-color="#24306e"/><stop offset="55%" stop-color="#0d1230"/><stop offset="100%" stop-color="#060814"/>
+    </radialGradient>
+    <linearGradient id="panelFondo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#171f4a"/><stop offset="100%" stop-color="#0a0e26"/>
+    </linearGradient>
+    <linearGradient id="nosotrosG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4a6ac0"/><stop offset="45%" stop-color="#253a80"/><stop offset="100%" stop-color="#16234f"/>
+    </linearGradient>
+    <linearGradient id="ellosG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d8703f"/><stop offset="45%" stop-color="#8a3c1c"/><stop offset="100%" stop-color="#4f1f0e"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <ellipse cx="340" cy="340" rx="335" ry="315" fill="url(#mesaFondo)" stroke="#4a5aa8" stroke-width="2"/>
+  <ellipse cx="340" cy="340" rx="331" ry="311" fill="none" stroke="rgba(140,160,240,0.15)" stroke-width="1"/>
+
+  <g stroke="rgba(140,160,240,0.06)" stroke-width="1" stroke-dasharray="3,7">
+    <line x1="340" y1="340" x2="340" y2="90"/>
+    <line x1="340" y1="340" x2="516.75" y2="163.25"/>
+    <line x1="340" y1="340" x2="590" y2="340"/>
+    <line x1="340" y1="340" x2="516.75" y2="516.75"/>
+    <line x1="340" y1="340" x2="340" y2="590"/>
+    <line x1="340" y1="340" x2="163.25" y2="516.75"/>
+    <line x1="340" y1="340" x2="90" y2="340"/>
+    <line x1="340" y1="340" x2="163.25" y2="163.25"/>
+  </g>
+
+  <!-- mesa central -->
+  <ellipse cx="340" cy="340" rx="165" ry="145" fill="url(#panelFondo)" stroke="#4a5aa8" stroke-width="2"/>
+  <ellipse cx="340" cy="340" rx="160" ry="140" fill="none" stroke="rgba(140,160,240,0.12)" stroke-width="1"/>
+
+  <!-- 8 cartas jugadas, un anillo parejo hacia cada asiento -->
+  <rect x="322.5" y="220.25" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/><!-- TINCHO -->
+  <rect x="393.3" y="243.7" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/><!-- VALE -->
+  <rect x="429.75" y="314.5" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/><!-- DANI -->
+  <rect x="393.3" y="385.3" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/><!-- NAZA -->
+  <rect x="322.5" y="408.75" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/><!-- ROBERTO -->
+  <rect x="251.7" y="385.3" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/><!-- FLOR -->
+  <rect x="215.25" y="314.5" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/><!-- PIPA -->
+  <rect x="251.7" y="243.7" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/><!-- CACHO -->
+
+  <text x="340" y="336" text-anchor="middle" fill="rgba(170,182,242,0.55)" font-size="9" letter-spacing="2" class="display">LA ESTÁ HACIENDO</text>
+  <text x="340" y="354" text-anchor="middle" fill="#8fb0ff" font-size="15" class="display" filter="url(#glow)">TINCHO</text>
+
+  <!-- 8 cajas de jugador, cada 45°, alternando equipo (compañeros quedan enfrentados) -->
+  <g filter="url(#glow)"><rect x="286" y="42" width="108" height="96" rx="16" fill="url(#nosotrosG)" stroke="#8fb0ff" stroke-width="2"/></g>
+  <text x="340" y="65" text-anchor="middle" fill="#dce6ff" font-size="12" class="display">TINCHO</text>
+  <text x="340" y="77" text-anchor="middle" fill="rgba(220,230,255,0.7)" font-size="7" letter-spacing="1">MANO · ▶ SU TURNO</text>
+  <rect x="322.5" y="81" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/>
+
+  <rect x="462.75" y="115.25" width="108" height="96" rx="16" fill="url(#ellosG)" stroke="#f0966a" stroke-width="1.5"/>
+  <text x="516.75" y="138.25" text-anchor="middle" fill="#ffe6d6" font-size="12" class="display">VALE ★CAP</text>
+  <rect x="499.25" y="154.25" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/>
+
+  <rect x="536" y="292" width="108" height="96" rx="16" fill="url(#nosotrosG)" stroke="#6f8fe0" stroke-width="1.5"/>
+  <text x="590" y="315" text-anchor="middle" fill="#dce6ff" font-size="12" class="display">DANI</text>
+  <rect x="572.5" y="331" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/>
+
+  <rect x="462.75" y="468.75" width="108" height="96" rx="16" fill="url(#ellosG)" stroke="#f0966a" stroke-width="1.5"/>
+  <text x="516.75" y="491.75" text-anchor="middle" fill="#ffe6d6" font-size="12" class="display">NAZA</text>
+  <rect x="499.25" y="507.75" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/>
+
+  <rect x="286" y="542" width="108" height="96" rx="16" fill="url(#nosotrosG)" stroke="#6f8fe0" stroke-width="1.5"/>
+  <text x="340" y="565" text-anchor="middle" fill="#dce6ff" font-size="12" class="display">ROBERTO</text>
+  <text x="340" y="577" text-anchor="middle" fill="rgba(220,230,255,0.65)" font-size="7" letter-spacing="1">VOS</text>
+  <rect x="322.5" y="581" width="35" height="51" rx="4" fill="#2a2f55" stroke="#4a5aa8" stroke-width="1"/>
+
+  <rect x="109.25" y="468.75" width="108" height="96" rx="16" fill="url(#ellosG)" stroke="#f0966a" stroke-width="1.5"/>
+  <text x="163.25" y="491.75" text-anchor="middle" fill="#ffe6d6" font-size="12" class="display">FLOR</text>
+  <rect x="145.75" y="507.75" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/>
+
+  <rect x="36" y="292" width="108" height="96" rx="16" fill="url(#nosotrosG)" stroke="#6f8fe0" stroke-width="1.5"/>
+  <text x="90" y="315" text-anchor="middle" fill="#dce6ff" font-size="12" class="display">PIPA</text>
+  <rect x="72.5" y="331" width="35" height="51" rx="4" fill="#2a2f55" stroke="#4a5aa8" stroke-width="1"/>
+
+  <rect x="109.25" y="115.25" width="108" height="96" rx="16" fill="url(#ellosG)" stroke="#f0966a" stroke-width="1.5"/>
+  <text x="163.25" y="138.25" text-anchor="middle" fill="#ffe6d6" font-size="12" class="display">CACHO</text>
+  <rect x="145.75" y="154.25" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/>
+</svg>
+</body>
+</html>

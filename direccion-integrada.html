@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>La Base — mesa + marcador integrados</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&family=Barlow+Semi+Condensed:wght@500;600&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #060814; padding: 20px; font-family: 'Barlow Semi Condensed', sans-serif; }
+  .wrap { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+  .display { font-family: 'Saira Condensed', sans-serif; font-weight: 800; font-style: italic; }
+
+  /* ═══ marco fusionado: resumen + mesa en un solo bloque ═══ */
+  .bloqueMesa {
+    background: linear-gradient(180deg, #171f4a 0%, #0a0e26 55%, #0a0e26 100%);
+    border: 1px solid #4a5aa8; border-radius: 16px; overflow: hidden;
+  }
+  .resumen {
+    display: flex; align-items: center; justify-content: center; gap: 26px;
+    padding: 9px 18px; position: relative;
+    border-bottom: 1px solid rgba(140,160,240,0.18);
+  }
+  .eqBloque { text-align: center; }
+  .eqLabel { font-size: 10px; letter-spacing: 2px; margin-bottom: 2px; }
+  .eqLabel.n { color: #6fa3ff; } .eqLabel.e { color: #ff7a52; }
+  .eqScore { font-size: 24px; }
+  .eqScore.n { color: #8fb0ff; text-shadow: 0 0 12px rgba(90,140,255,0.55); }
+  .eqScore.e { color: #ffb385; text-shadow: 0 0 12px rgba(255,140,80,0.55); }
+  .eqScore.neg { color: #ff6a6a; text-shadow: 0 0 12px rgba(255,90,90,0.5); }
+  .estrellas { display: flex; gap: 2px; justify-content: center; margin-top: 2px; font-size: 10px; }
+  .estrellas.n { color: #8fb0ff; } .estrellas.e { color: #ffb385; }
+  .estrellas .vacia { color: transparent; -webkit-text-stroke: 0.8px currentColor; }
+  .meta { position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    text-align: right; font-size: 9px; color: rgba(200,210,255,0.5); letter-spacing: 0.5px; line-height: 1.4; }
+
+  svg { display: block; width: 100%; }
+
+  /* ═══ tabla histórica ═══ */
+  .tabla {
+    background: linear-gradient(180deg, #171f4a 0%, #0a0e26 100%);
+    border: 1px solid #4a5aa8; border-radius: 14px; padding: 10px 12px;
+    overflow-x: auto;
+  }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { text-align: center; padding: 3px 7px; white-space: nowrap; }
+  th.label, td.label { text-align: right; padding-right: 10px; font-weight: 600; letter-spacing: 1px; font-size: 10px; }
+  th.label.cartas { color: rgba(200,210,255,0.4); }
+  td.label.n { color: #8fb0ff; } td.label.e { color: #ffb385; }
+  .chip { display: inline-block; min-width: 18px; padding: 2px 6px; border-radius: 999px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(140,160,240,0.25);
+    color: rgba(200,210,255,0.55); font-size: 10px; }
+  .celda { line-height: 1.1; }
+  .pts { font-size: 12px; }
+  .pts.n { color: #cfe0ff; } .pts.e { color: #ffe0cc; } .pts.neg { color: #ff8a8a; }
+  .pedidas { font-size: 8px; display: flex; align-items: center; justify-content: center; gap: 1px; margin-top: 1px; }
+  .pedidas.n { color: rgba(143,176,255,0.65); } .pedidas.e { color: rgba(255,179,133,0.65); }
+  .col-actual-top::after { content: ""; position: absolute; inset: -3px 1px 0 1px; border-top: 1px solid #ffab8a; border-left: 1px solid #ffab8a; border-right: 1px solid #ffab8a; border-radius: 8px 8px 0 0; box-shadow: 0 -2px 8px rgba(255,90,50,0.4); pointer-events: none; }
+  .col-actual-mid::after { content: ""; position: absolute; inset: 0 1px; border-left: 1px solid #ffab8a; border-right: 1px solid #ffab8a; box-shadow: 0 0 6px rgba(255,90,50,0.3); pointer-events: none; }
+  .col-actual-bottom::after { content: ""; position: absolute; inset: 0 1px -3px 1px; border-bottom: 1px solid #ffab8a; border-left: 1px solid #ffab8a; border-right: 1px solid #ffab8a; border-radius: 0 0 8px 8px; box-shadow: 0 2px 8px rgba(255,90,50,0.4); pointer-events: none; }
+  td.col-actual-top, td.col-actual-mid, td.col-actual-bottom { position: relative; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="bloqueMesa">
+    <div class="resumen">
+      <div class="eqBloque">
+        <div class="eqLabel n">NOSOTROS</div>
+        <div class="eqScore neg display">-1</div>
+        <div class="estrellas n">★<span class="vacia">★</span></div>
+      </div>
+      <div class="eqBloque">
+        <div class="eqLabel e">ELLOS</div>
+        <div class="eqScore e display">11</div>
+        <div class="estrellas e">★★★</div>
+      </div>
+      <div class="meta">MANO 3/12<br>3 CARTAS</div>
+    </div>
+
+    <svg viewBox="0 0 600 560">
+      <defs>
+        <radialGradient id="mesaFondo" cx="50%" cy="42%" r="65%">
+          <stop offset="0%" stop-color="#24306e"/><stop offset="55%" stop-color="#0d1230"/><stop offset="100%" stop-color="#060814"/>
+        </radialGradient>
+        <linearGradient id="panelFondo" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#171f4a"/><stop offset="100%" stop-color="#0a0e26"/>
+        </linearGradient>
+        <linearGradient id="nosotrosG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#4a6ac0"/><stop offset="45%" stop-color="#253a80"/><stop offset="100%" stop-color="#16234f"/>
+        </linearGradient>
+        <linearGradient id="ellosG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#d8703f"/><stop offset="45%" stop-color="#8a3c1c"/><stop offset="100%" stop-color="#4f1f0e"/>
+        </linearGradient>
+        <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <ellipse cx="300" cy="280" rx="280" ry="255" fill="url(#mesaFondo)"/>
+
+      <g stroke="rgba(140,160,240,0.06)" stroke-width="1" stroke-dasharray="3,7">
+        <line x1="300" y1="280" x2="300" y2="60"/>
+        <line x1="300" y1="280" x2="490" y2="155"/>
+        <line x1="300" y1="280" x2="490" y2="405"/>
+        <line x1="300" y1="280" x2="300" y2="500"/>
+        <line x1="300" y1="280" x2="110" y2="405"/>
+        <line x1="300" y1="280" x2="110" y2="155"/>
+      </g>
+
+      <ellipse cx="300" cy="280" rx="150" ry="112" fill="url(#panelFondo)" stroke="#4a5aa8" stroke-width="2"/>
+      <ellipse cx="300" cy="280" rx="145" ry="107" fill="none" stroke="rgba(140,160,240,0.12)" stroke-width="1"/>
+
+      <!-- las 6 cartas jugadas, una por jugador, en anillo parejo hacia cada asiento -->
+      <rect x="282.5" y="178.5" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/><!-- RATA (arriba) -->
+      <rect x="361.1" y="206" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/><!-- VALE (derecha-arriba) -->
+      <rect x="359" y="304.9" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/><!-- NAZA (derecha-abajo) -->
+      <rect x="282.5" y="330.7" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/><!-- ROBERTO (abajo) -->
+      <rect x="208.1" y="306.6" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/><!-- PIPA (izquierda-abajo) -->
+      <rect x="205.9" y="204.1" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/><!-- CACHO (izquierda-arriba) -->
+
+      <text x="300" y="276" text-anchor="middle" fill="rgba(170,182,242,0.55)" font-size="9" letter-spacing="2" class="display">LA ESTÁ HACIENDO</text>
+      <text x="300" y="294" text-anchor="middle" fill="#8fb0ff" font-size="15" class="display" filter="url(#glow)">TINCHO</text>
+
+      <g filter="url(#glow)"><rect x="244" y="40" width="112" height="98" rx="16" fill="url(#nosotrosG)" stroke="#8fb0ff" stroke-width="2"/></g>
+      <text x="300" y="62" text-anchor="middle" fill="#dce6ff" font-size="12" class="display">RATA</text>
+      <text x="300" y="74" text-anchor="middle" fill="rgba(220,230,255,0.7)" font-size="7" letter-spacing="1">MANO · ▶ SU TURNO</text>
+      <rect x="282.5" y="77.5" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/>
+
+      <rect x="440" y="110" width="112" height="98" rx="16" fill="url(#ellosG)" stroke="#f0966a" stroke-width="1.5"/>
+      <text x="496" y="132" text-anchor="middle" fill="#ffe6d6" font-size="12" class="display">VALE ★CAP</text>
+      <text x="496" y="144" text-anchor="middle" fill="rgba(255,225,204,0.65)" font-size="7" letter-spacing="1">PIE</text>
+      <rect x="478.5" y="147.5" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/>
+
+      <rect x="440" y="360" width="112" height="98" rx="16" fill="url(#ellosG)" stroke="#f0966a" stroke-width="1.5"/>
+      <text x="496" y="382" text-anchor="middle" fill="#ffe6d6" font-size="12" class="display">NAZA</text>
+      <rect x="478.5" y="397.5" width="35" height="51" rx="4" fill="#f4ecd8" stroke="#8B6914" stroke-width="1"/>
+
+      <rect x="244" y="430" width="112" height="98" rx="16" fill="url(#nosotrosG)" stroke="#6f8fe0" stroke-width="1.5"/>
+      <text x="300" y="452" text-anchor="middle" fill="#dce6ff" font-size="12" class="display">ROBERTO</text>
+      <text x="300" y="464" text-anchor="middle" fill="rgba(220,230,255,0.65)" font-size="7" letter-spacing="1">VOS</text>
+      <rect x="282.5" y="467.5" width="35" height="51" rx="4" fill="#2a2f55" stroke="#4a5aa8" stroke-width="1"/>
+
+      <rect x="60" y="360" width="112" height="98" rx="16" fill="url(#nosotrosG)" stroke="#6f8fe0" stroke-width="1.5"/>
+      <text x="116" y="382" text-anchor="middle" fill="#dce6ff" font-size="12" class="display">PIPA</text>
+      <rect x="98.5" y="397.5" width="35" height="51" rx="4" fill="#2a2f55" stroke="#4a5aa8" stroke-width="1"/>
+
+      <rect x="60" y="110" width="112" height="98" rx="16" fill="url(#ellosG)" stroke="#f0966a" stroke-width="1.5"/>
+      <text x="116" y="132" text-anchor="middle" fill="#ffe6d6" font-size="12" class="display">CACHO</text>
+      <rect x="98.5" y="147.5" width="35" height="51" rx="4" fill="#2a2f55" stroke="#4a5aa8" stroke-width="1"/>
+    </svg>
+  </div>
+
+  <div class="tabla">
+    <table>
+      <tr>
+        <th class="label cartas">CARTAS</th>
+        <td><span class="chip">1</span></td>
+        <td><span class="chip">3</span></td>
+        <td class="col-actual-top"><span class="chip">3</span></td>
+        <td><span class="chip">5</span></td>
+        <td><span class="chip">3</span></td>
+        <td><span class="chip">1</span></td>
+      </tr>
+      <tr>
+        <td class="label n display">NOSOTROS</td>
+        <td class="celda"><div class="pts n">2</div><div class="pedidas n">★★</div></td>
+        <td class="celda"><div class="pts neg">-1</div><div class="pedidas n">★★★</div></td>
+        <td class="celda col-actual-mid"><div class="pts n">-1</div><div class="pedidas n">★</div></td>
+        <td class="celda"><div class="pts n">·</div><div class="pedidas n">·</div></td>
+        <td class="celda"><div class="pts n">·</div><div class="pedidas n">·</div></td>
+        <td class="celda"><div class="pts n">·</div><div class="pedidas n">·</div></td>
+      </tr>
+      <tr>
+        <td class="label e display">ELLOS</td>
+        <td class="celda"><div class="pts e">-2</div><div class="pedidas e">★</div></td>
+        <td class="celda"><div class="pts e">9</div><div class="pedidas e">★★</div></td>
+        <td class="celda col-actual-bottom"><div class="pts e">11</div><div class="pedidas e">★★</div></td>
+        <td class="celda"><div class="pts e">·</div><div class="pedidas e">·</div></td>
+        <td class="celda"><div class="pts e">·</div><div class="pedidas e">·</div></td>
+        <td class="celda"><div class="pts e">·</div><div class="pedidas e">·</div></td>
+      </tr>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>
