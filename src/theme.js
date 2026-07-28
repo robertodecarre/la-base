@@ -54,6 +54,21 @@ export const colors = {
     glow: "rgba(212,255,0,0.55)",
   },
   negative: "#ff6a6a",
+  // Acento "positivo/continuar" para Btn verde — un verde esmeralda, a
+  // propósito bien distinto del lima neón de `turn` y del azul/naranja de
+  // equipo, para que ninguno de los tres se confunda con otro.
+  positive: {
+    gradient: "linear-gradient(180deg, #4ae08a 0%, #1e9c5a 55%, #0e5c34 100%)",
+    border: "#7ef0ae",
+    glow: "rgba(60,220,140,0.5)",
+  },
+  // Acento de alerta/peligro para Btn danger y para todo lo relacionado a
+  // kamikaze en PanelPedir — mismo lenguaje de gradiente que cta/positive.
+  danger: {
+    gradient: "linear-gradient(180deg, #ff6b6b 0%, #d83a3a 55%, #8a1e1e 100%)",
+    border: "#ff9a9a",
+    glow: "rgba(255,90,90,0.5)",
+  },
 };
 
 // Bisel de luz: más claro arriba, más oscuro abajo — reemplaza el "óvalo

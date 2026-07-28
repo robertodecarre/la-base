@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { opcionesValidas } from "../engine/bidding";
+import { colors, fonts, bevel, filaStyle, segmentedOptionStyle, secondaryBtnStyle } from "../theme";
 
 // ══════════════════════════════════════════════
 // PANEL LATERAL DE PEDIR (no tapa la mesa)
@@ -106,111 +107,121 @@ export function PanelPedir({ totalBases, nombresMano, nombresEq, esManoEq0, onCo
   const opsPie = pedidoMano !== null ? opcionesValidas(pedidoMano, totalBases) : [];
   const numProhibido = pedidoMano !== null ? totalBases - pedidoMano : null;
 
+  // Reusa segmentedOptionStyle (mismo picker que cantidad de jugadores en
+  // PantallaOnlineCrear) para normal/seleccionado; "prohibido" (kamikaze
+  // exige 0 o el total) se superpone encima con el acento de peligro.
   const btnNum = (n, seleccionado, onSelect, prohibido) => (
     <button key={n} onClick={() => !prohibido && onSelect(n)} style={{
-      fontFamily:"Georgia", fontSize:16, fontWeight:"bold",
-      width:40, height:40, borderRadius:7,
-      border:`2px solid ${prohibido?"rgba(200,50,50,0.4)":seleccionado===n?"#c9a84c":"rgba(201,168,76,0.25)"}`,
-      background: prohibido?"rgba(200,50,50,0.08)":seleccionado===n?"rgba(201,168,76,0.22)":"rgba(0,0,0,0.3)",
-      color: prohibido?"rgba(200,50,50,0.4)":seleccionado===n?"#f0d080":"rgba(201,168,76,0.45)",
-      cursor: prohibido?"not-allowed":"pointer", transition:"all 0.15s",
-      textDecoration: prohibido?"line-through":"none",
+      ...segmentedOptionStyle(seleccionado===n),
+      width: 40, height: 40, padding: 0, fontSize: 15,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      ...(prohibido ? {
+        border: `1px solid ${colors.danger.border}`,
+        background: "rgba(255,90,90,0.08)",
+        color: "rgba(255,154,154,0.5)",
+        boxShadow: bevel,
+        cursor: "not-allowed",
+        textDecoration: "line-through",
+      } : {}),
     }}>{n}</button>
   );
 
-  const eqManoColor = esManoEq0 ? "#5b9bd5" : "#e07b54";
-  const eqPieColor = esManoEq0 ? "#e07b54" : "#5b9bd5";
+  const teamMano = esManoEq0 ? "nosotros" : "ellos";
+  const teamPie = esManoEq0 ? "ellos" : "nosotros";
+  const eqManoColor = colors.team[teamMano].accent;
+  const eqPieColor = colors.team[teamPie].accent;
+  const teamActual = subFase==="mano" ? teamMano : teamPie;
+
+  const labelStyle = { fontFamily: fonts.body, fontWeight: 600 };
+  const confirmBtnStyle = (habilitado, team) => ({
+    ...filaStyle(team, { listo: habilitado }),
+    width: "100%", textAlign: "center", justifyContent: "center",
+    fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 13, letterSpacing: 1,
+    color: colors.text.primary,
+    opacity: habilitado ? 1 : 0.5,
+    cursor: habilitado ? "pointer" : "not-allowed",
+  });
 
   return (
     <div style={{
-      background:"rgba(5,15,10,0.97)",
-      border:`2px solid ${subFase==="mano" ? eqManoColor : eqPieColor}`,
-      borderRadius:12, padding:"14px 16px", width:"100%",
-      boxShadow:"0 0 24px rgba(0,0,0,0.8)",
+      background: colors.panel.bg,
+      border: `2px solid ${colors.team[teamActual].border}`,
+      borderRadius: 16, padding: "14px 16px", width: "100%",
+      boxShadow: `${bevel}, 0 0 24px rgba(0,0,0,0.5)`,
     }}>
-      <div style={{ fontSize:10, color:"rgba(201,168,76,0.4)", letterSpacing:2, marginBottom:8, textAlign:"center" }}>
+      <div style={{ ...labelStyle, fontSize:10, color:colors.text.secondary, letterSpacing:2, marginBottom:8, textAlign:"center" }}>
         {totalBases} BASE{totalBases!==1?"S":""} EN JUEGO
-        {modoLento && <span style={{ color:"#e05555", marginLeft:8 }}>⚡ MODO RÁPIDO</span>}
+        {modoLento && <span style={{ color:colors.negative, marginLeft:8 }}>⚡ MODO RÁPIDO</span>}
       </div>
 
       {/* Countdown modo deportivo */}
       {modoLento && countdown!==null && (
         <div style={{textAlign:"center",marginBottom:6}}>
           <span style={{
-            fontSize:28,fontWeight:"bold",fontFamily:"monospace",
-            color:countdown<=3?"#e05555":countdown<=6?"#e07b54":"#f0d080",
+            fontSize:28,fontFamily:fonts.display,fontWeight:800,fontStyle:"italic",
+            color:countdown<=3?colors.negative:countdown<=6?colors.cta.border:colors.text.primary,
           }}>{countdown}</span>
-          <span style={{fontSize:10,color:"rgba(201,168,76,0.5)",marginLeft:4}}>seg</span>
+          <span style={{ ...labelStyle, fontSize:10,color:colors.text.secondary,marginLeft:4}}>seg</span>
         </div>
       )}
 
       {subFase === "mano" ? (
         <>
-          <div style={{ fontSize:12, color:eqManoColor, fontWeight:"bold", marginBottom:2, textAlign:"center", letterSpacing:1 }}>
+          <div style={{ fontFamily:fonts.display, fontWeight:800, fontStyle:"italic", fontSize:12, color:eqManoColor, marginBottom:2, textAlign:"center", letterSpacing:1 }}>
             MANO — ¿CUÁNTAS PEDÍS?
           </div>
-          <div style={{ fontSize:10, color:"rgba(201,168,76,0.4)", marginBottom:4, textAlign:"center" }}>
+          <div style={{ ...labelStyle, fontSize:10, color:colors.text.secondary, marginBottom:4, textAlign:"center" }}>
             {nombresMano.join(" · ")}
           </div>
-          <div style={{ fontSize:9, color:"#c9a84c", marginBottom:8, textAlign:"center", letterSpacing:1 }}>
+          <div style={{ ...labelStyle, fontSize:9, color:eqManoColor, marginBottom:8, textAlign:"center", letterSpacing:1 }}>
             ★ Confirma: {nombreCapMano}
           </div>
           {kamikazesDisp>0&&!kamikazeActivo&&totalBases>2&&(
             <button onClick={onKamikaze} style={{
-              width:"100%",padding:"6px",fontFamily:"Cinzel, Georgia, serif",fontSize:13,letterSpacing:1,
-              border:"2px solid rgba(200,80,80,0.5)",borderRadius:6,
-              background:"rgba(200,50,50,0.1)",color:"#e07070",
-              cursor:"pointer",marginBottom:6,transition:"all 0.15s",
+              width:"100%",padding:"7px",fontFamily:fonts.display,fontWeight:700,fontStyle:"italic",fontSize:13,letterSpacing:1,
+              borderRadius:999,
+              border:`1px solid ${colors.danger.border}`,
+              background:"rgba(255,90,90,0.1)",color:"#ff9a9a",
+              cursor:"pointer",marginBottom:6,transition:"all 0.15s",boxShadow:bevel,
             }}>✈️ {kamikazesDisp}</button>
           )}
           {kamikazeActivo&&(
             <div style={{marginBottom:6}}>
-              <div style={{textAlign:"center",fontSize:10,color:"#e05555",letterSpacing:1,padding:"4px 8px",border:"1px solid rgba(200,50,50,0.4)",borderRadius:6,background:"rgba(200,50,50,0.08)",marginBottom:4}}>
+              <div style={{textAlign:"center",fontSize:10,color:colors.text.primary,letterSpacing:1,padding:"5px 8px",borderRadius:999,border:`1px solid ${colors.danger.border}`,background:"rgba(255,90,90,0.14)",marginBottom:4,fontFamily:fonts.body,fontWeight:600,boxShadow:bevel}}>
                 ✈️ KAMIKAZE — elegí 0 o {totalBases}
               </div>
               <button onClick={()=>{setPedidoMano(null);onCancelarKamikaze();}} style={{
-                width:"100%",padding:"4px",fontFamily:"Crimson Text, Georgia, serif",fontSize:10,letterSpacing:1,
-                border:"1px solid rgba(201,168,76,0.3)",borderRadius:6,
-                background:"rgba(0,0,0,0.3)",color:"rgba(201,168,76,0.5)",
-                cursor:"pointer",transition:"all 0.15s",
+                ...secondaryBtnStyle({ full: true }), padding:"4px", fontSize:10, letterSpacing:1,
               }}>✕ cancelar kamikaze</button>
             </div>
           )}
           <div style={{ display:"flex", gap:5, flexWrap:"wrap", justifyContent:"center", marginBottom:10 }}>
             {(kamikazeActivo?[0,totalBases]:Array.from({length:totalBases+1},(_,i)=>i)).map(n => btnNum(n, pedidoMano, setPedidoMano, false))}
           </div>
-          <button onClick={confirmarMano} disabled={pedidoMano===null} style={{
-            width:"100%", padding:"8px", fontFamily:"Georgia", fontSize:12, letterSpacing:1,
-            border:`2px solid ${pedidoMano!==null?eqManoColor:"rgba(201,168,76,0.2)"}`,
-            borderRadius:6, background:pedidoMano!==null?"rgba(201,168,76,0.15)":"rgba(0,0,0,0.3)",
-            color:pedidoMano!==null?eqManoColor:"rgba(201,168,76,0.3)",
-            cursor:pedidoMano!==null?"pointer":"not-allowed", transition:"all 0.15s",
-          }}>★ {nombreCapMano} CONFIRMA →</button>
+          <button onClick={confirmarMano} disabled={pedidoMano===null} style={confirmBtnStyle(pedidoMano!==null, teamMano)}>
+            ★ {nombreCapMano} CONFIRMA →
+          </button>
         </>
       ) : (
         <>
-          <div style={{ fontSize:11, color:"rgba(201,168,76,0.5)", marginBottom:4, textAlign:"center" }}>
-            Mano pidió <b style={{color:"#f0d080",fontSize:15}}>{pedidoMano}</b>
+          <div style={{ ...labelStyle, fontSize:11, color:colors.text.secondary, marginBottom:4, textAlign:"center" }}>
+            Mano pidió <b style={{color:colors.text.primary,fontSize:15}}>{pedidoMano}</b>
           </div>
-          <div style={{ fontSize:12, color:eqPieColor, fontWeight:"bold", marginBottom:2, textAlign:"center", letterSpacing:1 }}>
+          <div style={{ fontFamily:fonts.display, fontWeight:800, fontStyle:"italic", fontSize:12, color:eqPieColor, marginBottom:2, textAlign:"center", letterSpacing:1 }}>
             PIE — ¿CUÁNTAS PEDÍS?
           </div>
-          <div style={{ fontSize:10, color:"rgba(201,168,76,0.4)", marginBottom:4, textAlign:"center" }}>
+          <div style={{ ...labelStyle, fontSize:10, color:colors.text.secondary, marginBottom:4, textAlign:"center" }}>
             {nombresEq.join(" · ")}
           </div>
-          <div style={{ fontSize:9, color:"#c9a84c", marginBottom:8, textAlign:"center", letterSpacing:1 }}>
+          <div style={{ ...labelStyle, fontSize:9, color:eqPieColor, marginBottom:8, textAlign:"center", letterSpacing:1 }}>
             ★ Confirma: {nombreCapPie}
           </div>
           <div style={{ display:"flex", gap:5, flexWrap:"wrap", justifyContent:"center", marginBottom:10 }}>
             {opsPie.map(n => btnNum(n, pedidoPie, setPedidoPie, false))}
           </div>
-          <button onClick={confirmarPie} disabled={pedidoPie===null} style={{
-            width:"100%", padding:"8px", fontFamily:"Georgia", fontSize:12, letterSpacing:1,
-            border:`2px solid ${pedidoPie!==null?eqPieColor:"rgba(201,168,76,0.2)"}`,
-            borderRadius:6, background:pedidoPie!==null?"rgba(201,168,76,0.15)":"rgba(0,0,0,0.3)",
-            color:pedidoPie!==null?eqPieColor:"rgba(201,168,76,0.3)",
-            cursor:pedidoPie!==null?"pointer":"not-allowed", transition:"all 0.15s",
-          }}>★ {nombreCapPie} CONFIRMA →</button>
+          <button onClick={confirmarPie} disabled={pedidoPie===null} style={confirmBtnStyle(pedidoPie!==null, teamPie)}>
+            ★ {nombreCapPie} CONFIRMA →
+          </button>
         </>
       )}
     </div>
