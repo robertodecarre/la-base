@@ -65,6 +65,11 @@ function BloqueMesa({ resumen, children }) {
 // no necesita hacer nada acá.
 const CLOCK_ADAPTER_PANEL = { iniciarPara: () => {}, detener: () => {} };
 
+// Fondo compartido por TODAS las pantallas de fase de esta partida — sin
+// esto, esta era la única pantalla reskineada que no tapaba el body (ver
+// index.html), dejando ver el verde viejo alrededor/detrás de la mesa.
+const fondoStyle = { background: colors.bg, minHeight: "100vh", fontFamily: fonts.body };
+
 function MiMano({ cartas, error }) {
   if (error) {
     return <div style={{fontSize:11,color:"#e88"}}>No se pudo cargar tu mano: {error.message}</div>;
@@ -459,7 +464,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
   if (gameState.phase === "dealing") {
     return (
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
           Mano {gameState.hand_number+1} de {room.config?.estructura?.length ?? "?"}
@@ -500,7 +505,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     const turnoNombre = jugadorEnAsiento(gameState.turn_seat)?.name;
 
     return (
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"12px 8px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"12px 8px"}}>
         <div style={{fontSize:16,color:"#f0d080",letterSpacing:2}}>SALA {room.code}</div>
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
           Mano {gameState.hand_number+1} · base {gameState.base_num+1}/{totalBases}
@@ -565,7 +570,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     const esGanador = mySeat === seatGanador;
 
     return (
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
           Mano {gameState.hand_number+1} · base {trickNumber+1}/{totalBases}
@@ -629,7 +634,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       });
 
     return (
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
           Mano {gameState.hand_number+1} · base {gameState.base_num+1}/{totalBases}
@@ -688,7 +693,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     const jugadoresDelEquipo = players.filter((p) => p.team === team);
 
     return (
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
           Mano {gameState.hand_number+1} · base {gameState.base_num+1}/{totalBases}
@@ -753,7 +758,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     const rival = myTeam === 0 ? { bid: bids.team1, hecho: hechoTeam1 } : { bid: bids.team0, hecho: hechoTeam0 };
 
     return (
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>Mano {gameState.hand_number+1} terminada</div>
 
@@ -809,7 +814,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     }[gameState.end_cause] ?? null;
 
     return (
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>FIN DE LA PARTIDA</div>
         {causaTexto && <div style={{fontSize:11,color:"rgba(201,168,76,0.5)",fontStyle:"italic",textAlign:"center",maxWidth:340}}>{causaTexto}</div>}
         <div style={{fontSize:22,color:miTotal>rivalTotal?"#7ecf9e":miTotal<rivalTotal?"#e05555":"#f0d080",fontFamily:"Cinzel, Georgia, serif"}}>{resultado}</div>
@@ -861,7 +866,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
   if (gameState.phase !== "bidding") {
     return (
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:14,color:"#f0d080"}}>Fase: {gameState.phase}</div>
         <div style={{fontSize:10,color:"rgba(201,168,76,0.35)",fontStyle:"italic",textAlign:"center"}}>
@@ -873,7 +878,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   }
 
   return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+    <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
       <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
       <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
         Mano {gameState.hand_number+1} · {totalBases} carta{totalBases!==1?"s":""}

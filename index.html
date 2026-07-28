@@ -6,7 +6,11 @@
     <title>La Base</title>
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-      body { background: #050f08; min-height: 100vh; }
+      /* Mismo valor que colors.bg en src/theme.js (este archivo no puede
+         importar JS, así que se copia a mano) — cada pantalla reskineada
+         ya tapa el body con su propio wrapper, esto es solo el fallback
+         visible antes de que React monte o si alguna pantalla no lo hace. */
+      body { background: radial-gradient(ellipse at 50% 20%, #24306e 0%, #0d1230 55%, #060814 100%); min-height: 100vh; }
     </style>
   </head>
   <body>
