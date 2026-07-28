@@ -1,5 +1,18 @@
 import { supabase, asegurarSesion } from "./supabase";
 
+// Sortea quién reparte primero (una carta al azar por asiento, gana la
+// jerarquía más alta — mismo criterio que src/engine/hierarchy.js). First-
+// call-wins igual que deal_hand/set_ready: si rooms.sorteo_inicial ya
+// estaba seteado, esta llamada es un no-op que devuelve la fila tal cual
+// (no pisa un sorteo ya hecho), así que no hace falta coordinar entre las
+// sesiones que lo disparan a la vez.
+export async function sortearRepartoInicial(roomId) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("sortear_reparto_inicial", { p_room_id: roomId });
+  if (error) throw error;
+  return data; // fila de rooms
+}
+
 // Reparte la mano actual: la primera vez que se llama arranca la partida
 // (rooms.status "waiting" -> "playing", elige quién reparte al azar);
 // las siguientes veces reutiliza el hand_number/dealer_seat que haya

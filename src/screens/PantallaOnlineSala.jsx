@@ -1,14 +1,70 @@
 import { useEffect, useState } from "react";
 import { useSala } from "../hooks/useSala";
-import { repartirMano } from "../lib/game";
+import { sortearRepartoInicial, repartirMano } from "../lib/game";
 import { marcarListo } from "../lib/rooms";
 import { mensajeDeError } from "../lib/erroresSala";
+import { posEnCirculo } from "../engine/structures";
+import { CartaSVG } from "../components/cards/CartaSVG";
 import { PantallaPartidaOnline } from "./PantallaPartidaOnline";
 import {
   FONTS_URL, colors, fonts, panelStyle, badgeStyle, tituloStyle, codigoStyle,
   equipoLabelStyle, filaStyle, filaVaciaStyle, puntoStyle, nombreStyle,
   ctaStyle, secondaryBtnStyle, WORDMARK, diagonalWordmarkStyle,
 } from "../theme";
+
+// Sorteo de quién reparte primero — alimentado por rooms.sorteo_inicial
+// (piece 5l) en vez de un sorteo local como PantallaSorteo.jsx (hotseat).
+// A propósito en el look viejo (Cinzel/dorado) todavía, NO en el tema
+// "chrome" de theme.js: el rediseño visual de esta pantalla es una pieza
+// aparte pendiente, esto solo pone el mecanismo a funcionar. Adaptado
+// directo del SVG de PantallaSorteo.jsx, sin el paso "tocar para revelar"
+// (el sorteo ya viene resuelto del servidor) ni botón de continuar (se
+// encadena solo a repartirMano() por timer, ver el useEffect más abajo).
+function SorteoOnline({ nJug, players, sorteo }) {
+  const cartaPorSeat = {};
+  for (const { seat, carta } of sorteo.cartas) cartaPorSeat[seat] = carta;
+  const ganador = players.find((p) => p.seat === sorteo.ganador_seat);
+
+  const SIZE=500,CX=250,CY=250;
+  const RX = nJug===8?200:190;
+  const RY = nJug===8?180:170;
+  return (
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12,padding:16}}>
+      <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SORTEO</div>
+      <div style={{fontSize:11,color:"rgba(201,168,76,0.45)",letterSpacing:2}}>¿QUIÉN REPARTE PRIMERO?</div>
+      <svg viewBox={`0 0 ${SIZE} ${SIZE}`} style={{width:"100%",maxWidth:500}}>
+        <ellipse cx={CX} cy={CY} rx={RX+40} ry={RY+35} fill="#1a3d2b" stroke="#c9a84c" strokeWidth={2}/>
+        {Array.from({length:nJug},(_,seat)=>{
+          const pos=posEnCirculo(seat,RX,RY,CX,CY,nJug);
+          const eqColor=seat%2===0?"#5b9bd5":"#e07b54";
+          const jugador=players.find(p=>p.seat===seat);
+          const carta=cartaPorSeat[seat];
+          const esG=seat===sorteo.ganador_seat;
+          const cw=36,ch=52;
+          return (
+            <g key={seat}>
+              <rect x={pos.x-45} y={pos.y-48} width={90} height={90} rx={8}
+                fill={esG?"rgba(201,168,76,0.2)":"rgba(0,0,0,0.5)"}
+                stroke={esG?"#c9a84c":"rgba(201,168,76,0.2)"} strokeWidth={esG?2:1}/>
+              <text x={pos.x} y={pos.y-32} textAnchor="middle" fill={eqColor} fontSize={11} fontFamily="Cinzel, Georgia, serif" fontWeight="bold">{jugador?.name ?? `#${seat}`}</text>
+              {carta
+                ?<g transform={`translate(${pos.x-cw/2},${pos.y-18})`}><CartaSVG carta={carta} w={cw} h={ch}/></g>
+                :<g transform={`translate(${pos.x-cw/2},${pos.y-18})`}>
+                  <rect width={cw} height={ch} rx={4} fill="#3d0808" stroke="#5a0f0a" strokeWidth={2}/>
+                </g>
+              }
+            </g>
+          );
+        })}
+        <g>
+          <text x={CX} y={CY-4} textAnchor="middle" fill="rgba(201,168,76,0.45)" fontSize={8} fontFamily="Cinzel, Georgia, serif" letterSpacing={1}>DA</text>
+          <text x={CX} y={CY+10} textAnchor="middle" fill="#f0d080" fontSize={13} fontFamily="Cinzel, Georgia, serif" fontWeight="bold">{ganador?.name ?? "—"}</text>
+        </g>
+      </svg>
+      <div style={{fontSize:10,color:"rgba(201,168,76,0.35)",fontStyle:"italic",textAlign:"center"}}>Repartiendo la primera mano…</div>
+    </div>
+  );
+}
 
 // Fila de un asiento: nombre si está ocupado, placeholder si no, insignia
 // de capitán (seat 0 y 1, auto-asignados por join_room) y un indicador de
@@ -52,14 +108,19 @@ function FilaAsiento({ seat, jugador, mySeat, team }) {
 // rooms.status en 'playing'), así que las 4 sesiones pasan de pantalla a
 // la vez.
 //
-// Arranque automático: cada jugador marca su propio `ready` (set_ready
-// nunca toca el de otro). Cuando la sala está completa y todos quedan
-// listos, CADA sesión intenta repartirMano() por su cuenta, sin
-// coordinarse entre sí — a propósito: deal_hand ya está guardado por
-// rooms.status<>'waiting' (el mismo chequeo que usa para la primera
-// mano), así que solo el primer intento que llega tiene efecto real y el
-// resto recibe 'room_not_open' sin romper nada — mismo patrón "ungated"
-// que ya usa el botón "Repartir mano" para la mano 2 en adelante.
+// Arranque automático, en dos pasos (piece 5l): cada jugador marca su
+// propio `ready` (set_ready nunca toca el de otro). Cuando la sala está
+// completa y todos quedan listos, CADA sesión intenta
+// sortearRepartoInicial() por su cuenta, sin coordinarse entre sí — a
+// propósito: sortear_reparto_inicial solo escribe rooms.sorteo_inicial si
+// todavía es null, así que solo el primer intento que llega tiene efecto
+// real y el resto ve el mismo resultado ya calculado (mismo patrón
+// "ungated" que deal_hand). Una vez que rooms.sorteo_inicial llega por
+// Realtime a las 4 sesiones, cada una arranca su propio timer de ~3s y
+// recién ahí llama a repartirMano() — mismo no-coordination-needed: solo
+// el primer intento reparte de verdad (deal_hand sigue gateado por
+// rooms.status<>'waiting'), el resto recibe 'room_not_open' sin romper
+// nada.
 export function PantallaOnlineSala({ roomId, onSalir }) {
   const { room, players, gameState, playedCards, handResults, userId, mySeat, myTeam, isCaptain, ready, error, fetchMyHand } = useSala(roomId);
   const [enviandoListo, setEnviandoListo] = useState(false);
@@ -82,11 +143,18 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
   const nJug = room?.config?.nJug ?? players.length;
   const salaCompleta = players.length === nJug;
   const todosListos = salaCompleta && players.length > 0 && players.every((p) => p.ready);
+  const tieneSorteo = !!room?.sorteo_inicial;
 
   useEffect(() => {
-    if (!todosListos || gameState) return;
-    repartirMano(roomId).catch(() => {});
-  }, [todosListos, gameState, roomId]);
+    if (!todosListos || gameState || tieneSorteo) return;
+    sortearRepartoInicial(roomId).catch(() => {});
+  }, [todosListos, gameState, tieneSorteo, roomId]);
+
+  useEffect(() => {
+    if (!tieneSorteo || gameState) return;
+    const t = setTimeout(() => { repartirMano(roomId).catch(() => {}); }, 3000);
+    return () => clearTimeout(t);
+  }, [tieneSorteo, gameState, roomId]);
 
   const alternarListo = async () => {
     setErrorListo(null);
@@ -149,6 +217,14 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
         onSalir={onSalir}
       />
     );
+  }
+
+  // Sorteo ya resuelto server-side, todavía no se repartió la mano 0 (el
+  // timer de arriba lo hace solo en unos segundos) — reemplaza el lobby de
+  // "listo" por la vista del sorteo, misma lógica que el flujo hotseat pero
+  // sin click: acá nadie decide nada, solo se muestra el resultado.
+  if (room.sorteo_inicial) {
+    return <SorteoOnline nJug={nJug} players={players} sorteo={room.sorteo_inicial} />;
   }
 
   // LOBBY
