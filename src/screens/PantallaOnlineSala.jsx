@@ -144,17 +144,40 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
   const salaCompleta = players.length === nJug;
   const todosListos = salaCompleta && players.length > 0 && players.every((p) => p.ready);
   const tieneSorteo = !!room?.sorteo_inicial;
+  // hand_number===0 (o gameState todavía ni existe) es la ventana en la
+  // que el sorteo sigue siendo relevante — a partir de la mano 1 es
+  // historia vieja, un reconnect ahí no debe revivirlo.
+  const enHandCero = !gameState || gameState.hand_number === 0;
 
   useEffect(() => {
     if (!todosListos || gameState || tieneSorteo) return;
     sortearRepartoInicial(roomId).catch(() => {});
   }, [todosListos, gameState, tieneSorteo, roomId]);
 
+  // Dispara deal_hand server-side — independiente de cuánto falta para que
+  // ESTA sesión termine de "mostrar" el sorteo (abajo). Si gameState ya
+  // existe (otra sesión ya lo hizo), no hace falta reintentar.
   useEffect(() => {
     if (!tieneSorteo || gameState) return;
     const t = setTimeout(() => { repartirMano(roomId).catch(() => {}); }, 3000);
     return () => clearTimeout(t);
   }, [tieneSorteo, gameState, roomId]);
+
+  // Tiempo mínimo de "ya vi el sorteo" — LOCAL a esta sesión, arranca en
+  // cuanto ESTA sesión observa tieneSorteo, sin importar si gameState YA
+  // existía en ese mismo momento (sesión que monta/reconecta tarde,
+  // después de que otra sesión ya completó todo el ciclo sorteo→deal_hand
+  // en un puñado de segundos). Sin este gate, el render de abajo
+  // (`if (gameState) return <PantallaPartidaOnline>` antes que el chequeo
+  // de sorteo) dejaba a esa sesión saltar derecho a la mesa sin haber
+  // visto nunca el sorteo — bug real reportado en producción, reproducido
+  // con un reload a mitad del reparto en online-sorteo-inicial.spec.js.
+  const [sorteoCumplido, setSorteoCumplido] = useState(false);
+  useEffect(() => {
+    if (!tieneSorteo || sorteoCumplido || !enHandCero) return;
+    const t = setTimeout(() => setSorteoCumplido(true), 3000);
+    return () => clearTimeout(t);
+  }, [tieneSorteo, sorteoCumplido, enHandCero]);
 
   const alternarListo = async () => {
     setErrorListo(null);
@@ -200,8 +223,13 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
   // Ya se repartió la primera mano: la mesa de juego real (pieza 5d cubre
   // dealing/bidding, 5e suma jugar cartas y resolución, 5f suma copas/oros;
   // cierre/reloj/fin de partida es la 5g), montada sobre esta misma
-  // instancia de useSala — sin segunda suscripción.
-  if (gameState) {
+  // instancia de useSala — sin segunda suscripción. Para la mano 0
+  // específicamente, además exige sorteoCumplido — si no, una sesión que
+  // monta/reconecta después de que deal_hand ya corrió (gameState llega
+  // de entrada, no por Realtime) saltaría derecho para acá sin haber
+  // visto nunca el sorteo (ver el comentario largo junto a sorteoCumplido
+  // más arriba).
+  if (gameState && (gameState.hand_number > 0 || sorteoCumplido)) {
     return (
       <PantallaPartidaOnline
         roomId={roomId}
@@ -219,10 +247,11 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
     );
   }
 
-  // Sorteo ya resuelto server-side, todavía no se repartió la mano 0 (el
-  // timer de arriba lo hace solo en unos segundos) — reemplaza el lobby de
-  // "listo" por la vista del sorteo, misma lógica que el flujo hotseat pero
-  // sin click: acá nadie decide nada, solo se muestra el resultado.
+  // Sorteo ya resuelto server-side — todavía no se repartió la mano 0, o sí
+  // se repartió pero esta sesión recién lo está viendo ahora (sorteoCumplido
+  // en camino, ver arriba). Reemplaza el lobby de "listo" por la vista del
+  // sorteo, misma lógica que el flujo hotseat pero sin click: acá nadie
+  // decide nada, solo se muestra el resultado.
   if (room.sorteo_inicial) {
     return <SorteoOnline nJug={nJug} players={players} sorteo={room.sorteo_inicial} />;
   }
