@@ -118,6 +118,40 @@ function LibretaIcon({ x, y, abierta, onToggle }) {
   );
 }
 
+// "Siguiente base" (piece G, batch overnight post-5r) — antes vivía como
+// <Btn> HTML debajo de la mesa, en PantallaPartidaOnline.jsx; ahora se
+// planta en la esquina inferior derecha de "la habitación": el canvas
+// CUADRADO de este SVG (SIZE×SIZE) es más grande que la elipse redonda de
+// la mesa que contiene (outerRX/outerRY), así que las esquinas quedan con
+// espacio de sobra sin usar — ahí es "la habitación", fuera del círculo.
+// Mismo verde que el <Btn verde> que reemplaza (colors.positive, ver
+// #positivoG en <defs>). Mismo componente cubre las dos audiencias: quien
+// ganó la base ve el botón real, el resto ve el mismo cartel pero como
+// texto de espera con el nombre de quien tiene que confirmar.
+function SiguienteBaseHabitacion({ x, y, esGanador, nombreGanador, enviando, onConfirmar }) {
+  if (esGanador) {
+    const w = 118, h = 30;
+    return (
+      <g transform={`translate(${x - w},${y - h})`} style={{ cursor: enviando ? "default" : "pointer" }}
+         role="button" aria-label={enviando ? "Confirmando siguiente base" : "Siguiente base"}
+         onClick={(e) => { e.stopPropagation(); if (!enviando) onConfirmar(); }}>
+        <rect x={0} y={0} width={w} height={h} rx={999}
+          fill={enviando ? "rgba(30,40,80,0.6)" : "url(#positivoG)"}
+          stroke={enviando ? colors.panel.border : "#7ef0ae"} strokeWidth={1.4}/>
+        <text x={w / 2} y={h / 2 + 4} textAnchor="middle" fill={colors.text.primary} fontSize={10.5} fontFamily={fonts.display} fontWeight={800} fontStyle="italic" letterSpacing={0.5}>
+          {enviando ? "CONFIRMANDO…" : "SIGUIENTE BASE →"}
+        </text>
+      </g>
+    );
+  }
+  return (
+    <g transform={`translate(${x},${y})`} textAnchor="end">
+      <text y={-16} fill="rgba(200,210,255,0.4)" fontSize={8.5} fontFamily={fonts.body} fontStyle="italic">Esperando a que</text>
+      <text y={-4} fill="rgba(220,230,255,0.6)" fontSize={9.5} fontFamily={fonts.body} fontWeight={700}>{nombreGanador} confirme…</text>
+    </g>
+  );
+}
+
 // Config geométrica por cantidad de jugadores. RX/RY (radio del anillo de
 // asientos) se mantienen igual que antes del reskin — no es parte de este
 // pase, solo el tamaño de la mesa central, el anillo de cartas jugadas y
@@ -158,7 +192,7 @@ const MYSEAT_SCALE = 1.4;
 // no tiene nada que ocultar). Online, la única mano real es la propia; el
 // resto llega ya boca abajo desde el caller (ver PantallaPartidaOnline.jsx),
 // y acá alcanza con no dejar tirar cartas ajenas aunque sea su turno.
-export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, ganaActual, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases, tableroAbierto, onToggleTablero }) {
+export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases, tableroAbierto, onToggleTablero, onSiguienteBase, enviandoResolucion }) {
   const nJug = jugadores.length || 6;
   const G = GEOM[nJug] || GEOM.default;
   const { RX, RY, canvasSize: SIZE, cx: CX, cy: CY, outerRX, outerRY, mesaRX, mesaRY, cartaMesaRX, cartaMesaRY, boxW, boxH } = G;
@@ -182,6 +216,9 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
         </linearGradient>
         <linearGradient id="visitanteG" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#d8703f"/><stop offset="45%" stopColor="#8a3c1c"/><stop offset="100%" stopColor="#4f1f0e"/>
+        </linearGradient>
+        <linearGradient id="positivoG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#4ae08a"/><stop offset="55%" stopColor="#1e9c5a"/><stop offset="100%" stopColor="#0e5c34"/>
         </linearGradient>
         <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
           <feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
@@ -210,14 +247,6 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
         <g>
           <text x={CX} y={CY-2} textAnchor="middle" fill="rgba(170,182,242,0.55)" fontSize={9} letterSpacing={2} fontFamily={fonts.display} fontWeight={800} fontStyle="italic">LA HIZO</text>
           <text x={CX} y={CY+10} textAnchor="middle" fill={colors.team[ganadorBase%2===0?"local":"visitante"].readyBorder} fontSize={15} fontFamily={fonts.display} fontWeight={800} fontStyle="italic" filter="url(#glow)">{jugadores[ganadorBase]?.nombre}</text>
-        </g>
-      ) : fase==="jugar" && cartasMesa.length % (jugadores.length||6) > 0 && ganaActual!==null ? (
-        // Quién va ganando la base en curso — coloreado por SU equipo.
-        <g>
-          <text x={CX} y={CY-2} textAnchor="middle" fill="rgba(170,182,242,0.55)" fontSize={9} letterSpacing={2} fontFamily={fonts.display} fontWeight={800} fontStyle="italic">LA ESTÁ HACIENDO</text>
-          <text x={CX} y={CY+10} textAnchor="middle" fill={colors.team[ganaActual%2===0?"local":"visitante"].readyBorder} fontSize={15} fontFamily={fonts.display} fontWeight={800} fontStyle="italic" filter="url(#glow)">
-            {jugadores[ganaActual]?.nombre}
-          </text>
         </g>
       ) : null}
 
@@ -276,6 +305,16 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
 
       {onToggleTablero && (
         <LibretaIcon x={libretaPos.x} y={libretaPos.y} abierta={!!tableroAbierto} onToggle={onToggleTablero}/>
+      )}
+
+      {fase==="resolviendo" && ganadorBase!=null && onSiguienteBase && (
+        <SiguienteBaseHabitacion
+          x={SIZE-24} y={SIZE-24}
+          esGanador={mySeat===ganadorBase}
+          nombreGanador={jugadores[ganadorBase]?.nombre}
+          enviando={!!enviandoResolucion}
+          onConfirmar={onSiguienteBase}
+        />
       )}
     </svg>
   );

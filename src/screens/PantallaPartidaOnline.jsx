@@ -11,7 +11,6 @@ import {
   repartirMano, cerrarMano, reclamarTiempo,
 } from "../lib/game";
 import { mensajeDeError } from "../lib/erroresSala";
-import { ganadorParcial } from "../engine/trick";
 import { colors, fonts, panelStyle } from "../theme";
 
 // Resumen fusionado arriba de MesaCircular (piece 5n, ver direccion-integrada.html):
@@ -538,21 +537,17 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     // Cartas de la base en curso (trick_number === base_num — se resetea
     // solo cuando una base termina y base_num avanza; ver play_card_trick_
     // resolution.sql). played_cards es pública, así que esto vale para las
-    // cuatro sesiones por igual. `orden` (no lo trae cartasDeTrick) hace
-    // falta acá para ganadorParcial (desempate/As de Espadas).
+    // cuatro sesiones por igual.
     const cartasEstaBase = jugadasEstaMano
       .filter((pc) => pc.trick_number === gameState.base_num)
       .sort((a, b) => a.seq_in_trick - b.seq_in_trick);
 
     const cartasMesa = cartasEstaBase.map((pc) => ({
-      carta: pc.card, jugadorIdx: seatOfPlayerId(pc.player_id), orden: pc.seq_in_trick,
+      carta: pc.card, jugadorIdx: seatOfPlayerId(pc.player_id),
     }));
     // Quién abrió esta base: el primero en jugar, o si nadie jugó todavía,
     // quien tiene el turno ahora mismo (todavía no se movió de ahí).
     const liderSeat = cartasEstaBase.length > 0 ? seatOfPlayerId(cartasEstaBase[0].player_id) : gameState.turn_seat;
-    const ganaActual = cartasMesa.length > 0 && cartasMesa.length < nJug
-      ? ganadorParcial(cartasMesa, room.config?.ases)
-      : null;
 
     const turnoNombre = jugadorEnAsiento(gameState.turn_seat)?.name;
 
@@ -587,7 +582,6 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]}
               capLocal={capLocal}
               capVisitante={capVisitante}
-              ganaActual={ganaActual}
               expandidos={expandidos}
               onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas}
@@ -620,7 +614,6 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       });
     const seatGanador = gameState.last_trick_winner_seat;
     const nombreGanador = jugadorEnAsiento(seatGanador)?.name;
-    const esGanador = mySeat === seatGanador;
 
     return (
       <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
@@ -636,9 +629,10 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
               onTirar={()=>{}} fase="resolviendo" ganadorBase={seatGanador}
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
-              ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
+              expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
               tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
+              onSiguienteBase={onSiguienteBase} enviandoResolucion={enviandoResolucion}
             />
           </BloqueMesa>
         </div>
@@ -648,16 +642,6 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         {errorResolucion && (
           <div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",textAlign:"center",maxWidth:340}}>
             {errorResolucion}
-          </div>
-        )}
-
-        {esGanador ? (
-          <Btn verde onClick={onSiguienteBase} disabled={enviandoResolucion}>
-            {enviandoResolucion ? "Confirmando…" : "Siguiente base →"}
-          </Btn>
-        ) : (
-          <div style={{fontSize:12,color:"rgba(201,168,76,0.5)"}}>
-            Esperando a que <b style={{color:"#f0d080"}}>{nombreGanador}</b> confirme la siguiente base…
           </div>
         )}
 
@@ -701,7 +685,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
               onTirar={()=>{}} fase="copas" ganadorBase={null}
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
-              ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
+              expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
               tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
             />
@@ -761,7 +745,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
               onTirar={()=>{}} fase="oros" ganadorBase={gameState.last_trick_winner_seat}
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
-              ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
+              expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
               tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
             />
@@ -826,7 +810,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
               onTirar={()=>{}} fase="cerrada" ganadorBase={null}
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
-              ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
+              expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
               tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
             />
@@ -951,7 +935,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
             turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
             onTirar={()=>{}} fase="bidding" ganadorBase={null}
             pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
-            ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
+            expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
             cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
             tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
           />
