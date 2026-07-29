@@ -51,12 +51,17 @@ async function paginaConConfirma(pages, timeout = 30000) {
 // hay una opción válida real para el pie, así que "primer número
 // disponible" alcanza para las dos subfases (mano y pie) sin calcular nada.
 async function confirmarPedidoEnQuienCorresponda(pages) {
-  for (let intento = 1; intento <= 5; intento++) {
+  for (let intento = 1; intento <= 10; intento++) {
     const p = await paginaConConfirma(pages);
-    await p.getByRole("button", { name: /^\d+$/ }).first().click();
+    // timeout acotado: el tick de 1s del reloj de bidding puede desmontar
+    // y volver a montar este botón a mitad de un click sin timeout,
+    // colgando el test entero en vez de dejar que este for reintente
+    // (visto en la práctica contra el proyecto real).
+    const ok = await p.getByRole("button", { name: /^\d+$/ }).first().click({ timeout: 5000 }).then(() => true).catch(() => false);
+    if (!ok) continue;
     const confirmBtn = panelConfirma(p);
     if (!(await confirmBtn.isEnabled({ timeout: 3000 }).catch(() => false))) continue;
-    await confirmBtn.click();
+    await confirmBtn.click({ timeout: 5000 }).catch(() => {});
     await new Promise((r) => setTimeout(r, 1500));
     if (!(await panelConfirma(p).isVisible().catch(() => false))) return;
   }

@@ -139,6 +139,19 @@ function BaseResuelta({ cartas, nombreGanador, seatGanador }) {
   );
 }
 
+// "Salir de la sala" (piece E, batch overnight post-5r): aislado del resto
+// de las acciones de cada pantalla — chico, rojo (colors.danger via Btn
+// danger+small), con margen propio arriba para separarlo visualmente de
+// la acción principal en vez de sentarse pegado a "Cerrar mano"/"Repartir
+// mano" como antes.
+function BotonSalir({ onSalir }) {
+  return (
+    <div style={{ marginTop: 18 }}>
+      <Btn danger small onClick={onSalir}>Salir de la sala</Btn>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════
 // PANTALLA PARTIDA ONLINE — mesa real (piezas 5d/5e/5f/5g)
 // ══════════════════════════════════════════════
@@ -456,6 +469,12 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   };
 
   if (gameState.phase === "dealing") {
+    // Solo quien va a repartir esta mano (el asiento que la mesa etiqueta
+    // "PIE", pieIdx=dealer_seat en MesaCircular.jsx) puede tocar "Repartir
+    // mano" — piece E. deal_hand ya lo exige server-side (deal_hand_dealer_
+    // only); esto solo evita mostrarle el botón a quien igual lo rebotaría.
+    const esProximoRepartidor = mySeat === gameState.dealer_seat;
+    const nombreProximoRepartidor = jugadorEnAsiento(gameState.dealer_seat)?.name;
     return (
       <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
@@ -467,10 +486,16 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
             {errorReparto}
           </div>
         )}
-        <Btn verde onClick={onRepartir} disabled={enviandoReparto}>
-          {enviandoReparto ? "Repartiendo…" : "Repartir mano"}
-        </Btn>
-        <Btn onClick={onSalir}>Salir de la sala</Btn>
+        {esProximoRepartidor ? (
+          <Btn verde onClick={onRepartir} disabled={enviandoReparto}>
+            {enviandoReparto ? "Repartiendo…" : "Repartir mano"}
+          </Btn>
+        ) : (
+          <div style={{fontSize:12,color:"rgba(201,168,76,0.5)"}}>
+            Esperando a que <b style={{color:"#f0d080"}}>{nombreProximoRepartidor}</b> reparta la mano…
+          </div>
+        )}
+        <BotonSalir onSalir={onSalir}/>
       </div>
     );
   }
@@ -541,7 +566,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
         <Tablero estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number}/>
 
-        <Btn onClick={onSalir}>Salir de la sala</Btn>
+        <BotonSalir onSalir={onSalir}/>
       </div>
     );
   }
@@ -601,7 +626,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           </div>
         )}
 
-        <Btn onClick={onSalir}>Salir de la sala</Btn>
+        <BotonSalir onSalir={onSalir}/>
       </div>
     );
   }
@@ -672,7 +697,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           </div>
         )}
 
-        <Btn onClick={onSalir}>Salir de la sala</Btn>
+        <BotonSalir onSalir={onSalir}/>
       </div>
     );
   }
@@ -737,17 +762,19 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           </div>
         )}
 
-        <Btn onClick={onSalir}>Salir de la sala</Btn>
+        <BotonSalir onSalir={onSalir}/>
       </div>
     );
   }
 
   if (gameState.phase === "closing") {
-    // Sin capitán/ganador de por medio: cualquiera ve el mismo resumen y
-    // puede cerrar. bids/tricks_won todavía son los de la mano que se
-    // acaba de terminar (close_hand recién los resetea al repartir la
-    // siguiente). hechoTeam0/1 vienen hoisteados arriba. LOCAL/VISITANTE
-    // fijos, sin mirar myTeam (piece 5r).
+    // Todos ven el mismo resumen, pero solo un capitán (de cualquiera de
+    // los dos equipos) puede cerrar la mano — piece E. close_hand ya lo
+    // exige server-side (close_hand_captain_only); esto solo evita
+    // mostrarle el botón a quien igual lo rebotaría. bids/tricks_won
+    // todavía son los de la mano que se acaba de terminar (close_hand
+    // recién los resetea al repartir la siguiente). hechoTeam0/1 vienen
+    // hoisteados arriba. LOCAL/VISITANTE fijos, sin mirar myTeam (piece 5r).
     const local = { bid: bids.team0, hecho: hechoTeam0 };
     const visitante = { bid: bids.team1, hecho: hechoTeam1 };
 
@@ -787,10 +814,16 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           </div>
         )}
 
-        <Btn verde onClick={onCerrarMano} disabled={enviandoCierre}>
-          {enviandoCierre ? "Cerrando…" : "Cerrar mano"}
-        </Btn>
-        <Btn onClick={onSalir}>Salir de la sala</Btn>
+        {isCaptain ? (
+          <Btn verde onClick={onCerrarMano} disabled={enviandoCierre}>
+            {enviandoCierre ? "Cerrando…" : "Cerrar mano"}
+          </Btn>
+        ) : (
+          <div style={{fontSize:12,color:"rgba(201,168,76,0.5)"}}>
+            Esperando a que un capitán cierre la mano…
+          </div>
+        )}
+        <BotonSalir onSalir={onSalir}/>
       </div>
     );
   }
@@ -851,7 +884,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           </table>
         </div>
 
-        <Btn onClick={onSalir}>Salir de la sala</Btn>
+        <BotonSalir onSalir={onSalir}/>
       </div>
     );
   }
@@ -864,7 +897,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         <div style={{fontSize:10,color:"rgba(201,168,76,0.35)",fontStyle:"italic",textAlign:"center"}}>
           La siguiente fase llega en la próxima pieza.
         </div>
-        <Btn onClick={onSalir}>Salir de la sala</Btn>
+        <BotonSalir onSalir={onSalir}/>
       </div>
     );
   }
@@ -942,7 +975,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         />
       )}
 
-      <Btn onClick={onSalir}>Salir de la sala</Btn>
+      <BotonSalir onSalir={onSalir}/>
     </div>
   );
 }

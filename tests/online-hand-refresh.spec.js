@@ -42,19 +42,25 @@ async function paginaConConfirma(pages, timeout = 30000) {
 // sigue visible después (RPC lenta/perdida contra el proyecto real no es
 // motivo para que el test sea flaky).
 async function confirmarPedidoEnQuienCorresponda(pages) {
-  for (let intento = 1; intento <= 5; intento++) {
+  for (let intento = 1; intento <= 10; intento++) {
     const p = await paginaConConfirma(pages);
-    await p.getByRole("button", { name: /^\d+$/ }).first().click();
+    // timeout acotado (a diferencia del resto de esta suite, que deja el
+    // default "sin límite" de Playwright): el tick de 1s del reloj de
+    // bidding (setInterval en PantallaPartidaOnline) puede desmontar y
+    // volver a montar este botón a mitad de un click sin timeout, colgando
+    // el test entero en vez de dejar que este for reintente (visto en la
+    // práctica contra el proyecto real).
+    const ok = await p.getByRole("button", { name: /^\d+$/ }).first().click({ timeout: 5000 }).then(() => true).catch(() => false);
+    if (!ok) continue;
     const confirmBtn = panelConfirma(p);
     // El botón CONFIRMA queda disabled hasta que el click de arriba haya
     // seteado el número elegido — si por lo que sea no prendió, un
     // confirmBtn.click() de posta se quedaría esperando a que se habilite
-    // para siempre (este proyecto no configura actionTimeout, el default
-    // de Playwright es "sin límite"), colgando el test entero en vez de
-    // dejar que este for reintente. isEnabled() con timeout acotado deja
-    // detectar ese caso y reintentar clickeando el número de nuevo.
+    // para siempre, colgando el test entero en vez de dejar que este for
+    // reintente. isEnabled() con timeout acotado deja detectar ese caso y
+    // reintentar clickeando el número de nuevo.
     if (!(await confirmBtn.isEnabled({ timeout: 3000 }).catch(() => false))) continue;
-    await confirmBtn.click();
+    await confirmBtn.click({ timeout: 5000 }).catch(() => {});
     await new Promise((r) => setTimeout(r, 1500));
     if (!(await panelConfirma(p).isVisible().catch(() => false))) return;
   }

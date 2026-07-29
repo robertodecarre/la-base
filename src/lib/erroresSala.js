@@ -52,6 +52,9 @@ const MENSAJES = {
   clock_not_muerte_mode: "El reclamo de tiempo solo aplica en modo muerte súbita.",
   no_clock_running: "No hay ningún reloj corriendo ahora mismo.",
   not_expired_yet: "Ese equipo todavía no se quedó sin tiempo.",
+  // close_hand / deal_hand: gates de rol (piece E, batch overnight post-5r)
+  close_hand_captain_only: "Solo un capitán puede cerrar la mano.",
+  deal_hand_dealer_only: "Solo quien reparte esta mano puede repartirla.",
 };
 
 // Dos formas de error posibles acá, con dos formas distintas de sacarles
