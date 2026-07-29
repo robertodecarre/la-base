@@ -180,11 +180,13 @@ const GEOM = {
 // resto de los asientos usa RX/RY tal cual.
 const PUSH_OWN = 1.22;
 // Cartas de la mesa y de la mano: 10% más grandes que el tamaño previo al
-// reskin (34x50 mesa, 28x40 mano). El asiento propio además multiplica su
-// mano por 1.4 (ver MYSEAT_SCALE).
+// reskin (34x50 mesa, 28x40 mano). El asiento propio (contenedor Y mano)
+// además se escala 1.5x contra el resto de los asientos — piece K (batch
+// overnight post-5r) sube esto desde 1.4x, reemplazando el factor viejo
+// en vez de apilar un 50% adicional sobre él.
 const CARTA_MESA = { w: 37, h: 55 };
 const CARTA_MANO = { w: 31, h: 44 };
-const MYSEAT_SCALE = 1.4;
+const MYSEAT_SCALE = 1.5;
 
 // `mySeat` es para la mesa online (pieza 5e): en hotseat es undefined y el
 // tablero se comporta como siempre (cualquier mano visible es jugable en su
