@@ -126,7 +126,7 @@ const MYSEAT_SCALE = 1.4;
 // no tiene nada que ocultar). Online, la única mano real es la propia; el
 // resto llega ya boca abajo desde el caller (ver PantallaPartidaOnline.jsx),
 // y acá alcanza con no dejar tirar cartas ajenas aunque sea su turno.
-export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capN, capE, ganaActual, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases }) {
+export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, ganaActual, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases }) {
   const nJug = jugadores.length || 6;
   const G = GEOM[nJug] || GEOM.default;
   const { RX, RY, canvasSize: SIZE, cx: CX, cy: CY, outerRX, outerRY, mesaRX, mesaRY, cartaMesaRX, cartaMesaRY, boxW, boxH } = G;
@@ -140,10 +140,10 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
         <linearGradient id="panelFondo" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#171f4a"/><stop offset="100%" stopColor="#0a0e26"/>
         </linearGradient>
-        <linearGradient id="nosotrosG" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id="localG" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#4a6ac0"/><stop offset="45%" stopColor="#253a80"/><stop offset="100%" stopColor="#16234f"/>
         </linearGradient>
-        <linearGradient id="ellosG" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id="visitanteG" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#d8703f"/><stop offset="45%" stopColor="#8a3c1c"/><stop offset="100%" stopColor="#4f1f0e"/>
         </linearGradient>
         <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
@@ -172,13 +172,13 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
       {ganadorBase!==null ? (
         <g>
           <text x={CX} y={CY-2} textAnchor="middle" fill="rgba(170,182,242,0.55)" fontSize={9} letterSpacing={2} fontFamily={fonts.display} fontWeight={800} fontStyle="italic">LA HIZO</text>
-          <text x={CX} y={CY+10} textAnchor="middle" fill={colors.team[ganadorBase%2===0?"nosotros":"ellos"].readyBorder} fontSize={15} fontFamily={fonts.display} fontWeight={800} fontStyle="italic" filter="url(#glow)">{jugadores[ganadorBase]?.nombre}</text>
+          <text x={CX} y={CY+10} textAnchor="middle" fill={colors.team[ganadorBase%2===0?"local":"visitante"].readyBorder} fontSize={15} fontFamily={fonts.display} fontWeight={800} fontStyle="italic" filter="url(#glow)">{jugadores[ganadorBase]?.nombre}</text>
         </g>
       ) : fase==="jugar" && cartasMesa.length % (jugadores.length||6) > 0 && ganaActual!==null ? (
         // Quién va ganando la base en curso — coloreado por SU equipo.
         <g>
           <text x={CX} y={CY-2} textAnchor="middle" fill="rgba(170,182,242,0.55)" fontSize={9} letterSpacing={2} fontFamily={fonts.display} fontWeight={800} fontStyle="italic">LA ESTÁ HACIENDO</text>
-          <text x={CX} y={CY+10} textAnchor="middle" fill={colors.team[ganaActual%2===0?"nosotros":"ellos"].readyBorder} fontSize={15} fontFamily={fonts.display} fontWeight={800} fontStyle="italic" filter="url(#glow)">
+          <text x={CX} y={CY+10} textAnchor="middle" fill={colors.team[ganaActual%2===0?"local":"visitante"].readyBorder} fontSize={15} fontFamily={fonts.display} fontWeight={800} fontStyle="italic" filter="url(#glow)">
             {jugadores[ganaActual]?.nombre}
           </text>
         </g>
@@ -191,7 +191,11 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
         const esTurno=idx===turnoIdx&&fase==="jugar";
         const puedeElegir = mySeat==null ? esTurno : (esTurno && idx===mySeat);
         const esPie=idx===pieIdx, esMano=idx===manoIdx;
-        const equipo = idx%2===0 ? "nosotros" : "ellos";
+        // idx%2 en vez de j.eq: MesaCircular solo se monta una vez arrancó
+        // la partida, momento en el que la invariante seat%2==team ya está
+        // garantizada server-side (ver choose_team_rpc.sql) — idx acá ES
+        // el seat.
+        const equipo = idx%2===0 ? "local" : "visitante";
         const t = colors.team[equipo];
         const escala = esMiAsiento ? MYSEAT_SCALE : 1;
         const bw=boxW*escala, bh=boxH*escala, bx=pos.x-bw/2, by=pos.y-bh/2;
@@ -208,11 +212,11 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
           <g key={`jug-${idx}`}>
             <g filter={filtro}>
               <rect x={bx} y={by} width={bw} height={bh} rx={16}
-                fill={`url(#${equipo==="nosotros"?"nosotrosG":"ellosG"})`}
+                fill={`url(#${equipo==="local"?"localG":"visitanteG"})`}
                 stroke={borderColor} strokeWidth={borderWidth}/>
             </g>
             <text x={pos.x} y={by+14*escala} textAnchor="middle" fill={colors.text.primary} fontSize={12*escala} fontFamily={fonts.display} fontWeight={800} fontStyle="italic">
-              {j.nombre}{(idx===capN||idx===capE)?" ★CAP":""}
+              {j.nombre}{(idx===capLocal||idx===capVisitante)?" ★CAP":""}
             </text>
             <text x={pos.x} y={by+25*escala} textAnchor="middle" fill={esTurno?colors.turn.color:"rgba(220,230,255,0.65)"} fontSize={7.5*escala} letterSpacing={1} fontFamily={esTurno?fonts.display:fonts.body} fontWeight={esTurno?800:600} fontStyle={esTurno?"italic":"normal"}>
               {[esPie&&"PIE",esMano&&"MANO",esTurno&&"▶ SU TURNO",esMiAsiento&&"VOS"].filter(Boolean).join(" · ")}

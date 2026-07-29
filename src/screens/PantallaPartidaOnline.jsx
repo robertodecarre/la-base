@@ -19,22 +19,23 @@ import { colors, fonts, panelStyle } from "../theme";
 // estrellas pedidas-vs-hechas de la mano EN CURSO (EstrellasPedido tal cual,
 // con datos en vivo — no confundir con las estrellas históricas de Tablero,
 // que son por mano ya cerrada) y meta de mano/cartas a la derecha.
-function ResumenMarcador({ scoreN, scoreE, pedN, hechoN, pedE, hechoE, handNumber, totalHands, totalBases }) {
+// LOCAL/VISITANTE son fijos (equipo 0/1), no relativos a quién mira (piece 5r).
+function ResumenMarcador({ scoreLocal, scoreVisitante, pedLocal, hechoLocal, pedVisitante, hechoVisitante, handNumber, totalHands, totalBases }) {
   const eqScore = (score) => ({
     fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 24,
-    color: score < 0 ? colors.negative : colors.team.nosotros.readyBorder,
+    color: score < 0 ? colors.negative : colors.team.local.readyBorder,
   });
   return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:26,padding:"9px 18px",position:"relative",borderBottom:"1px solid rgba(140,160,240,0.18)"}}>
       <div style={{textAlign:"center"}}>
-        <div style={{fontSize:10,letterSpacing:2,marginBottom:2,color:colors.team.nosotros.accent,fontFamily:fonts.body,fontWeight:600}}>NOSOTROS</div>
-        <div style={{...eqScore(scoreN), color: scoreN<0?colors.negative:colors.team.nosotros.readyBorder, textShadow:`0 0 12px ${scoreN<0?"rgba(255,90,90,0.5)":colors.team.nosotros.readyGlow}`}}>{scoreN}</div>
-        <EstrellasPedido pedidas={pedN} hechas={hechoN} color={colors.team.nosotros.readyBorder}/>
+        <div style={{fontSize:10,letterSpacing:2,marginBottom:2,color:colors.team.local.accent,fontFamily:fonts.body,fontWeight:600}}>LOCAL</div>
+        <div style={{...eqScore(scoreLocal), color: scoreLocal<0?colors.negative:colors.team.local.readyBorder, textShadow:`0 0 12px ${scoreLocal<0?"rgba(255,90,90,0.5)":colors.team.local.readyGlow}`}}>{scoreLocal}</div>
+        <EstrellasPedido pedidas={pedLocal} hechas={hechoLocal} color={colors.team.local.readyBorder}/>
       </div>
       <div style={{textAlign:"center"}}>
-        <div style={{fontSize:10,letterSpacing:2,marginBottom:2,color:colors.team.ellos.accent,fontFamily:fonts.body,fontWeight:600}}>ELLOS</div>
-        <div style={{...eqScore(scoreE), color: scoreE<0?colors.negative:colors.team.ellos.readyBorder, textShadow:`0 0 12px ${scoreE<0?"rgba(255,90,90,0.5)":colors.team.ellos.readyGlow}`}}>{scoreE}</div>
-        <EstrellasPedido pedidas={pedE} hechas={hechoE} color={colors.team.ellos.readyBorder}/>
+        <div style={{fontSize:10,letterSpacing:2,marginBottom:2,color:colors.team.visitante.accent,fontFamily:fonts.body,fontWeight:600}}>VISITANTE</div>
+        <div style={{...eqScore(scoreVisitante), color: scoreVisitante<0?colors.negative:colors.team.visitante.readyBorder, textShadow:`0 0 12px ${scoreVisitante<0?"rgba(255,90,90,0.5)":colors.team.visitante.readyGlow}`}}>{scoreVisitante}</div>
+        <EstrellasPedido pedidas={pedVisitante} hechas={hechoVisitante} color={colors.team.visitante.readyBorder}/>
       </div>
       <div style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",textAlign:"right",fontSize:9,color:"rgba(200,210,255,0.5)",letterSpacing:0.5,lineHeight:1.4,fontFamily:fonts.body}}>
         MANO {handNumber+1}/{totalHands}<br/>{totalBases} CARTA{totalBases!==1?"S":""}
@@ -229,8 +230,9 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   // ── Datos compartidos por el resumen+mesa+tablero (piece 5n) — antes solo
   // existían dentro del branch 'playing'; se hoistean para que las demás
   // fases (bidding/resolving/menus/closing) puedan mostrar la misma mesa. ──
-  const capN = players.find((p) => p.team === 0 && p.is_captain)?.seat ?? 0;
-  const capE = players.find((p) => p.team === 1 && p.is_captain)?.seat ?? 1;
+  // LOCAL=team 0, VISITANTE=team 1 — fijo, no relativo a quién mira (piece 5r).
+  const capLocal = players.find((p) => p.team === 0 && p.is_captain)?.seat ?? 0;
+  const capVisitante = players.find((p) => p.team === 1 && p.is_captain)?.seat ?? 1;
 
   // Cartas ya jugadas en ESTA mano (cualquier base) — pública, sirve para
   // cualquier fase que necesite mostrar la mesa, no solo 'playing'.
@@ -247,31 +249,30 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   const hechoTeam0 = players.filter((p) => p.team === 0).reduce((s, p) => s + (p.tricks_won ?? 0), 0);
   const hechoTeam1 = players.filter((p) => p.team === 1).reduce((s, p) => s + (p.tricks_won ?? 0), 0);
   const bidsActuales = gameState.bids ?? {};
-  const pedN = myTeam === 0 ? bidsActuales.team0 : bidsActuales.team1;
-  const pedE = myTeam === 0 ? bidsActuales.team1 : bidsActuales.team0;
-  const hechoN = myTeam === 0 ? hechoTeam0 : hechoTeam1;
-  const hechoE = myTeam === 0 ? hechoTeam1 : hechoTeam0;
+  // Absoluto — LOCAL=team0/VISITANTE=team1 siempre, sin mirar myTeam.
+  const pedLocal = bidsActuales.team0;
+  const pedVisitante = bidsActuales.team1;
+  const hechoLocal = hechoTeam0;
+  const hechoVisitante = hechoTeam1;
 
   // Puntaje ACUMULADO (manos ya cerradas, hand_results) para el resumen.
   const totalTeam0Acum = handResults.reduce((s, h) => s + h.delta_team0, 0);
   const totalTeam1Acum = handResults.reduce((s, h) => s + h.delta_team1, 0);
-  const scoreN = myTeam === 0 ? totalTeam0Acum : totalTeam1Acum;
-  const scoreE = myTeam === 0 ? totalTeam1Acum : totalTeam0Acum;
+  const scoreLocal = totalTeam0Acum;
+  const scoreVisitante = totalTeam1Acum;
 
-  // Historial para Tablero: una fila por hand_results ya cerrada, mapeada a
-  // la perspectiva de quien mira (NOSOTROS=mi equipo) — mismo shape que ya
-  // usa el hotseat ({deltaN,deltaE,pedN,pedE,hechoN,hechoE}).
+  // Historial para Tablero: una fila por hand_results ya cerrada. LOCAL/
+  // VISITANTE son fijos (equipo 0/1) — piece 5r reemplaza el mapeo
+  // anterior a la perspectiva de quien miraba (NOSOTROS=mi equipo).
   const estructuraCompleta = room.config?.estructura ?? [];
   const historialTablero = estructuraCompleta.map((_, i) => {
     const h = handResults.find((r) => r.hand_number === i);
     if (!h) return undefined;
-    const mio = myTeam === 0
-      ? { delta: h.delta_team0, ped: h.bid_team0, hecho: h.tricks_team0 }
-      : { delta: h.delta_team1, ped: h.bid_team1, hecho: h.tricks_team1 };
-    const rival = myTeam === 0
-      ? { delta: h.delta_team1, ped: h.bid_team1, hecho: h.tricks_team1 }
-      : { delta: h.delta_team0, ped: h.bid_team0, hecho: h.tricks_team0 };
-    return { deltaN: mio.delta, deltaE: rival.delta, pedN: mio.ped, hechoN: mio.hecho, pedE: rival.ped, hechoE: rival.hecho };
+    return {
+      deltaLocal: h.delta_team0, deltaVisitante: h.delta_team1,
+      pedLocal: h.bid_team0, hechoLocal: h.tricks_team0,
+      pedVisitante: h.bid_team1, hechoVisitante: h.tricks_team1,
+    };
   });
 
   // Jugadores para MesaCircular — la única mano real es la propia
@@ -290,7 +291,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   });
 
   const resumenProps = {
-    scoreN, scoreE, pedN, hechoN, pedE, hechoE,
+    scoreLocal, scoreVisitante, pedLocal, hechoLocal, pedVisitante, hechoVisitante,
     handNumber: gameState.hand_number, totalHands: estructuraCompleta.length, totalBases,
   };
 
@@ -310,23 +311,15 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     }
     return base;
   };
-  const tiempoTeam0 = restante(0);
-  const tiempoTeam1 = restante(1);
-  const agotadoTeam0 = !!clockState?.expired?.[0] || (clockState?.running === 0 && tiempoTeam0 <= 0);
-  const agotadoTeam1 = !!clockState?.expired?.[1] || (clockState?.running === 1 && tiempoTeam1 <= 0);
-  // DisplayReloj no sabe nada de team0/team1 — solo tiene un slot "N" y un
-  // slot "E" (fijo, NOSOTROS=team0 en el hotseat compartido, donde no hay
-  // viewer). Acá sí hay un viewer por sesión, así que hay que mapear el
-  // slot "N" al equipo de quien mira, igual que ya hacen 'closing'/
-  // 'finished' con su patrón mio/rival — de lo contrario un jugador de
-  // team1 vería su propio reloj etiquetado "ELLOS" (mismo bug que 5c tuvo
-  // con NOSOTROS/ELLOS en el lobby, corregido en 442d8a9).
-  const tiempoN = myTeam === 0 ? tiempoTeam0 : tiempoTeam1;
-  const tiempoE = myTeam === 0 ? tiempoTeam1 : tiempoTeam0;
-  const agotadoN = myTeam === 0 ? agotadoTeam0 : agotadoTeam1;
-  const agotadoE = myTeam === 0 ? agotadoTeam1 : agotadoTeam0;
-  // corriendo es el slot activo (0=N, 1=E), no el team index crudo.
-  const corriendoSlot = clockState?.running == null ? null : (clockState.running === myTeam ? 0 : 1);
+  const tiempoLocal = restante(0);
+  const tiempoVisitante = restante(1);
+  const agotadoLocal = !!clockState?.expired?.[0] || (clockState?.running === 0 && tiempoLocal <= 0);
+  const agotadoVisitante = !!clockState?.expired?.[1] || (clockState?.running === 1 && tiempoVisitante <= 0);
+  // DisplayReloj ahora toma directamente el team index (0=LOCAL,
+  // 1=VISITANTE, fijo) — piece 5r saca el mapeo viejo a "slot relativo a
+  // quién mira" que existía acá (ver 442d8a9, el mismo bug que tuvo el
+  // lobby con NOSOTROS/ELLOS).
+  const corriendoTeam = clockState?.running ?? null;
 
   // Reclamo automático: en cuanto el reloj del equipo que corre llega a
   // cero en modo muerte, cualquier sesión puede — y acá, lo intenta —
@@ -533,8 +526,8 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               fase="jugar"
               ganadorBase={null}
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]}
-              capN={capN}
-              capE={capE}
+              capLocal={capLocal}
+              capVisitante={capVisitante}
               ganaActual={ganaActual}
               expandidos={expandidos}
               onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
@@ -582,7 +575,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               jugadores={jugadoresMesa} cartasMesa={cartasDeTrick(trickNumber)}
               turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
               onTirar={()=>{}} fase="resolviendo" ganadorBase={seatGanador}
-              pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capN={capN} capE={capE}
+              pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
             />
@@ -646,7 +639,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               jugadores={jugadoresMesa} cartasMesa={cartasDeTrick(gameState.base_num)}
               turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
               onTirar={()=>{}} fase="copas" ganadorBase={null}
-              pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capN={capN} capE={capE}
+              pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
             />
@@ -705,7 +698,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               jugadores={jugadoresMesa} cartasMesa={cartasDeTrick(gameState.base_num - 1)}
               turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
               onTirar={()=>{}} fase="oros" ganadorBase={gameState.last_trick_winner_seat}
-              pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capN={capN} capE={capE}
+              pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
             />
@@ -753,9 +746,10 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     // Sin capitán/ganador de por medio: cualquiera ve el mismo resumen y
     // puede cerrar. bids/tricks_won todavía son los de la mano que se
     // acaba de terminar (close_hand recién los resetea al repartir la
-    // siguiente). hechoTeam0/1 vienen hoisteados arriba.
-    const mio = myTeam === 0 ? { bid: bids.team0, hecho: hechoTeam0 } : { bid: bids.team1, hecho: hechoTeam1 };
-    const rival = myTeam === 0 ? { bid: bids.team1, hecho: hechoTeam1 } : { bid: bids.team0, hecho: hechoTeam0 };
+    // siguiente). hechoTeam0/1 vienen hoisteados arriba. LOCAL/VISITANTE
+    // fijos, sin mirar myTeam (piece 5r).
+    const local = { bid: bids.team0, hecho: hechoTeam0 };
+    const visitante = { bid: bids.team1, hecho: hechoTeam1 };
 
     return (
       <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
@@ -768,7 +762,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               jugadores={jugadoresMesa} cartasMesa={[]}
               turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
               onTirar={()=>{}} fase="cerrada" ganadorBase={null}
-              pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capN={capN} capE={capE}
+              pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
             />
@@ -778,12 +772,12 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
         <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:340,display:"flex",gap:20,justifyContent:"center"}}>
           <div style={{textAlign:"center"}}>
-            <div style={{fontSize:10,color:"#5b9bd5",letterSpacing:1}}>NOSOTROS</div>
-            <div style={{fontSize:12,color:"rgba(201,168,76,0.6)"}}>pidió {mio.bid} · hizo {mio.hecho}</div>
+            <div style={{fontSize:10,color:colors.team.local.accent,letterSpacing:1}}>LOCAL</div>
+            <div style={{fontSize:12,color:"rgba(201,168,76,0.6)"}}>pidió {local.bid} · hizo {local.hecho}</div>
           </div>
           <div style={{textAlign:"center"}}>
-            <div style={{fontSize:10,color:"#e07b54",letterSpacing:1}}>ELLOS</div>
-            <div style={{fontSize:12,color:"rgba(201,168,76,0.6)"}}>pidió {rival.bid} · hizo {rival.hecho}</div>
+            <div style={{fontSize:10,color:colors.team.visitante.accent,letterSpacing:1}}>VISITANTE</div>
+            <div style={{fontSize:12,color:"rgba(201,168,76,0.6)"}}>pidió {visitante.bid} · hizo {visitante.hecho}</div>
           </div>
         </div>
 
@@ -802,12 +796,14 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   }
 
   if (gameState.phase === "finished") {
+    // LOCAL/VISITANTE fijos (equipo 0/1) en todo este bloque — piece 5r
+    // saca el mapeo viejo a miTotal/rivalTotal (relativo a myTeam), incl.
+    // en el propio mensaje de resultado ("¡GANARON ELLOS!" contenía el
+    // literal que este pase tenía que sacar de todos lados).
     const manosOrdenadas = [...handResults].sort((a, b) => a.hand_number - b.hand_number);
-    const totalTeam0 = manosOrdenadas.reduce((s, h) => s + h.delta_team0, 0);
-    const totalTeam1 = manosOrdenadas.reduce((s, h) => s + h.delta_team1, 0);
-    const miTotal = myTeam === 0 ? totalTeam0 : totalTeam1;
-    const rivalTotal = myTeam === 0 ? totalTeam1 : totalTeam0;
-    const resultado = miTotal === rivalTotal ? "¡EMPATE!" : miTotal > rivalTotal ? "¡GANAMOS!" : "¡GANARON ELLOS!";
+    const totalLocal = manosOrdenadas.reduce((s, h) => s + h.delta_team0, 0);
+    const totalVisitante = manosOrdenadas.reduce((s, h) => s + h.delta_team1, 0);
+    const resultado = totalLocal === totalVisitante ? "¡EMPATE!" : totalLocal > totalVisitante ? "¡GANÓ LOCAL!" : "¡GANÓ VISITANTE!";
     const causaTexto = {
       kamikaze: "El equipo mano perdió la partida por no declarar kamikaze y quedar 2 o más abajo de lo pedido.",
       clock_expired: "Un equipo se quedó sin tiempo.",
@@ -817,8 +813,8 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>FIN DE LA PARTIDA</div>
         {causaTexto && <div style={{fontSize:11,color:"rgba(201,168,76,0.5)",fontStyle:"italic",textAlign:"center",maxWidth:340}}>{causaTexto}</div>}
-        <div style={{fontSize:22,color:miTotal>rivalTotal?"#7ecf9e":miTotal<rivalTotal?"#e05555":"#f0d080",fontFamily:"Cinzel, Georgia, serif"}}>{resultado}</div>
-        <div style={{fontSize:14,color:"rgba(201,168,76,0.7)"}}>Nosotros: {miTotal} · Ellos: {rivalTotal}</div>
+        <div style={{fontSize:22,color:totalLocal>totalVisitante?"#7ecf9e":totalLocal<totalVisitante?"#e05555":"#f0d080",fontFamily:"Cinzel, Georgia, serif"}}>{resultado}</div>
+        <div style={{fontSize:14,color:"rgba(201,168,76,0.7)"}}>Local: {totalLocal} · Visitante: {totalVisitante}</div>
 
         <div style={{overflowX:"auto",width:"100%",maxWidth:480}}>
           <table style={{borderCollapse:"collapse",width:"100%",fontSize:11,fontFamily:"Crimson Text, Georgia, serif",color:"rgba(201,168,76,0.7)"}}>
@@ -826,32 +822,28 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               <tr style={{borderBottom:"1px solid rgba(201,168,76,0.22)"}}>
                 <th style={{padding:"4px 6px",textAlign:"center"}}>Mano</th>
                 <th style={{padding:"4px 6px",textAlign:"center"}}>Cartas</th>
-                <th style={{padding:"4px 6px",textAlign:"center",color:"#5b9bd5"}}>Ped.</th>
-                <th style={{padding:"4px 6px",textAlign:"center",color:"#5b9bd5"}}>Hecho</th>
-                <th style={{padding:"4px 6px",textAlign:"center",color:"#5b9bd5"}}>Δ</th>
-                <th style={{padding:"4px 6px",textAlign:"center",color:"#e07b54"}}>Ped.</th>
-                <th style={{padding:"4px 6px",textAlign:"center",color:"#e07b54"}}>Hecho</th>
-                <th style={{padding:"4px 6px",textAlign:"center",color:"#e07b54"}}>Δ</th>
+                <th style={{padding:"4px 6px",textAlign:"center",color:colors.team.local.accent}}>Ped.</th>
+                <th style={{padding:"4px 6px",textAlign:"center",color:colors.team.local.accent}}>Hecho</th>
+                <th style={{padding:"4px 6px",textAlign:"center",color:colors.team.local.accent}}>Δ</th>
+                <th style={{padding:"4px 6px",textAlign:"center",color:colors.team.visitante.accent}}>Ped.</th>
+                <th style={{padding:"4px 6px",textAlign:"center",color:colors.team.visitante.accent}}>Hecho</th>
+                <th style={{padding:"4px 6px",textAlign:"center",color:colors.team.visitante.accent}}>Δ</th>
               </tr>
             </thead>
             <tbody>
               {manosOrdenadas.map((h) => {
-                const mio = myTeam === 0
-                  ? { bid: h.bid_team0, hecho: h.tricks_team0, delta: h.delta_team0 }
-                  : { bid: h.bid_team1, hecho: h.tricks_team1, delta: h.delta_team1 };
-                const rival = myTeam === 0
-                  ? { bid: h.bid_team1, hecho: h.tricks_team1, delta: h.delta_team1 }
-                  : { bid: h.bid_team0, hecho: h.tricks_team0, delta: h.delta_team0 };
+                const local = { bid: h.bid_team0, hecho: h.tricks_team0, delta: h.delta_team0 };
+                const visitante = { bid: h.bid_team1, hecho: h.tricks_team1, delta: h.delta_team1 };
                 return (
                   <tr key={h.hand_number}>
                     <td style={{padding:"4px 6px",textAlign:"center"}}>{h.hand_number+1}</td>
                     <td style={{padding:"4px 6px",textAlign:"center"}}>{h.cards_dealt}</td>
-                    <td style={{padding:"4px 6px",textAlign:"center"}}>{mio.bid}</td>
-                    <td style={{padding:"4px 6px",textAlign:"center"}}>{mio.hecho}</td>
-                    <td style={{padding:"4px 6px",textAlign:"center",color:mio.delta<0?"#e05555":"#f0d080"}}>{mio.delta}</td>
-                    <td style={{padding:"4px 6px",textAlign:"center"}}>{rival.bid}</td>
-                    <td style={{padding:"4px 6px",textAlign:"center"}}>{rival.hecho}</td>
-                    <td style={{padding:"4px 6px",textAlign:"center",color:rival.delta<0?"#e05555":"#f0d080"}}>{rival.delta}</td>
+                    <td style={{padding:"4px 6px",textAlign:"center"}}>{local.bid}</td>
+                    <td style={{padding:"4px 6px",textAlign:"center"}}>{local.hecho}</td>
+                    <td style={{padding:"4px 6px",textAlign:"center",color:local.delta<0?"#e05555":"#f0d080"}}>{local.delta}</td>
+                    <td style={{padding:"4px 6px",textAlign:"center"}}>{visitante.bid}</td>
+                    <td style={{padding:"4px 6px",textAlign:"center"}}>{visitante.hecho}</td>
+                    <td style={{padding:"4px 6px",textAlign:"center",color:visitante.delta<0?"#e05555":"#f0d080"}}>{visitante.delta}</td>
                   </tr>
                 );
               })}
@@ -885,9 +877,9 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       </div>
 
       <DisplayReloj
-        tiempoN={tiempoN} tiempoE={tiempoE}
-        corriendo={corriendoSlot}
-        agotadoN={agotadoN} agotadoE={agotadoE}
+        tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante}
+        corriendo={corriendoTeam}
+        agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante}
         modoLento={false} modoTiempo={clockConfig?.modo} hayTiempo={hayReloj}
       />
 
@@ -899,7 +891,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
             jugadores={jugadoresMesa} cartasMesa={cartasDeTrick(gameState.base_num)}
             turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
             onTirar={()=>{}} fase="bidding" ganadorBase={null}
-            pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capN={capN} capE={capE}
+            pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
             ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
             cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
           />

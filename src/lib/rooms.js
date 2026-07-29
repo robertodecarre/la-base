@@ -30,3 +30,15 @@ export async function marcarListo(roomId, listo) {
   if (error) throw error;
   return data; // fila de players
 }
+
+// Elige equipo fijo — LOCAL (0) o VISITANTE (1) — para el propio jugador.
+// join_room ya reservó el cupo en la sala pero dejó seat/team en null;
+// choose_team es quien asigna ambos de una (ver choose_team_rpc.sql: el
+// asiento que le toca mantiene la invariante seat%2==team que el resto de
+// las RPCs de juego siguen asumiendo).
+export async function elegirEquipo(roomId, team) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("choose_team", { p_room_id: roomId, p_team: team });
+  if (error) throw error;
+  return data; // fila de players
+}

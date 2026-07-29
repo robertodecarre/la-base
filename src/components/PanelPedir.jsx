@@ -126,8 +126,8 @@ export function PanelPedir({ totalBases, nombresMano, nombresEq, esManoEq0, onCo
     }}>{n}</button>
   );
 
-  const teamMano = esManoEq0 ? "nosotros" : "ellos";
-  const teamPie = esManoEq0 ? "ellos" : "nosotros";
+  const teamMano = esManoEq0 ? "local" : "visitante";
+  const teamPie = esManoEq0 ? "visitante" : "local";
   const eqManoColor = colors.team[teamMano].accent;
   const eqPieColor = colors.team[teamPie].accent;
   const teamActual = subFase==="mano" ? teamMano : teamPie;

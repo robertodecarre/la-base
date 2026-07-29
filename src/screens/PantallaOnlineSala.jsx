@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useSala } from "../hooks/useSala";
 import { sortearRepartoInicial, repartirMano } from "../lib/game";
-import { marcarListo } from "../lib/rooms";
+import { marcarListo, elegirEquipo } from "../lib/rooms";
 import { mensajeDeError } from "../lib/erroresSala";
 import { posEnCirculo } from "../engine/structures";
 import { CartaSVG } from "../components/cards/CartaSVG";
 import { PantallaPartidaOnline } from "./PantallaPartidaOnline";
 import {
-  FONTS_URL, colors, fonts, panelStyle, badgeStyle, tituloStyle, codigoStyle,
+  FONTS_URL, colors, fonts, bevel, panelStyle, badgeStyle, tituloStyle, codigoStyle,
   equipoLabelStyle, filaStyle, filaVaciaStyle, puntoStyle, nombreStyle,
   ctaStyle, secondaryBtnStyle, WORDMARK, diagonalWordmarkStyle,
 } from "../theme";
@@ -67,8 +67,102 @@ function SorteoOnline({ nJug, players, sorteo }) {
   );
 }
 
+// Pantalla de selección de equipo (piece 5r) — se muestra a CADA jugador
+// apenas tiene un asiento reservado en la sala (join_room ya corrió) pero
+// todavía no eligió equipo (yo.team === null), tanto al host (apenas crea
+// + se une a su propia sala) como a cualquiera que se une después. Los
+// slots LOCAL/VISITANTE son fijos, no relativos a quién mira — el primero
+// en entrar a cada uno queda capitán y el asiento que le toca (par para
+// LOCAL, impar para VISITANTE) es lo que mantiene la invariante
+// seat%2===team que submit_bid/close_hand/clock_expired siguen asumiendo
+// sin haber tenido que tocarlas (ver choose_team_rpc.sql). Montada como
+// sub-vista de PantallaOnlineSala, mismo patrón que SorteoOnline arriba —
+// reusa la instancia de useSala del padre, sin suscripción propia.
+function SeleccionEquipo({ roomId, nJug, players, onSalir, onElegido }) {
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState(null);
+  const cupo = nJug / 2;
+  const equipos = [
+    { team: 0, key: "local", nombre: "LOCAL", cuenta: players.filter((p) => p.team === 0).length },
+    { team: 1, key: "visitante", nombre: "VISITANTE", cuenta: players.filter((p) => p.team === 1).length },
+  ];
+
+  // onElegido(team) avisa al padre apenas la RPC devuelve éxito, sin
+  // esperar a que la fila propia vuelva por Realtime — a diferencia de
+  // "listo" (donde cualquier jugador puede tardar en verse a sí mismo sin
+  // romper nada más), acá SÍ importa: postgres_changes nunca hace backfill
+  // de eventos previos a que la suscripción termine de armarse (ver
+  // scripts/verify-realtime-sala.mjs), así que si este click cae antes de
+  // que el canal de useSala llegue a SUBSCRIBED, el UPDATE de esta propia
+  // fila se pierde para siempre y esta pantalla quedaría trabada sin
+  // ningún timeout que la salve. choose_team ya devuelve la fila
+  // actualizada en la respuesta — no hace falta esperar el eco.
+  const elegir = async (team) => {
+    setError(null);
+    setEnviando(true);
+    try {
+      await elegirEquipo(roomId, team);
+      onElegido(team);
+    } catch (err) {
+      setError(await mensajeDeError(err));
+      setEnviando(false);
+    }
+  };
+
+  const fondoStyle = {
+    background: colors.bg, minHeight: "100vh", fontFamily: fonts.body,
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+    padding: "30px 14px",
+  };
+
+  return (
+    <div style={fondoStyle}>
+      <div style={{ ...panelStyle, width: "100%", maxWidth: 420, padding: "20px 18px 24px", display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
+        <div style={badgeStyle}>LB</div>
+        <div style={tituloStyle}>ELEGÍ TU EQUIPO</div>
+
+        {error && (
+          <div style={{ fontSize: 11, color: "#ffb3a8", background: "rgba(160,50,30,0.18)", border: "1px solid rgba(255,140,100,0.4)", borderRadius: 10, padding: "8px 12px", textAlign: "center", width: "100%", fontFamily: fonts.body }}>
+            {error}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 12, width: "100%" }}>
+          {equipos.map(({ team, key, nombre, cuenta }) => {
+            const t = colors.team[key];
+            const lleno = cuenta >= cupo;
+            const deshabilitado = enviando || lleno;
+            return (
+              <button key={team} onClick={() => elegir(team)} disabled={deshabilitado} style={{
+                flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 16, letterSpacing: 2,
+                color: colors.text.primary, borderRadius: 16, padding: "20px 10px",
+                border: `1.5px solid ${t.border}`, background: t.gradient, boxShadow: bevel,
+                cursor: deshabilitado ? "not-allowed" : "pointer",
+                opacity: lleno ? 0.5 : 1,
+              }}>
+                {nombre}
+                <span style={{ fontFamily: fonts.body, fontWeight: 600, fontSize: 11, letterSpacing: 1, opacity: 0.85 }}>
+                  {cuenta}/{cupo}{lleno ? " · COMPLETO" : ""}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ fontSize: 10, color: "rgba(200,210,255,0.4)", fontStyle: "italic", textAlign: "center", fontFamily: fonts.body }}>
+          El primero en entrar a cada equipo queda de capitán.
+        </div>
+      </div>
+
+      <button onClick={onSalir} style={secondaryBtnStyle()}>Salir de la sala</button>
+    </div>
+  );
+}
+
 // Fila de un asiento: nombre si está ocupado, placeholder si no, insignia
-// de capitán (seat 0 y 1, auto-asignados por join_room) y un indicador de
+// de capitán (primero en elegir cada equipo en SeleccionEquipo, ver arriba
+// — siempre seat 0 para LOCAL y seat 1 para VISITANTE) y un indicador de
 // "listo" (●/○) por asiento — llega en vivo vía Realtime, players ya está
 // en el canal de useSala, no hace falta canal nuevo. Sub-componente local
 // no exportado, mismo patrón que MesaCircular.jsx (EstrellasSVG,
@@ -126,6 +220,12 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
   const { room, players, gameState, playedCards, handResults, userId, mySeat, myTeam, isCaptain, ready, error, fetchMyHand } = useSala(roomId);
   const [enviandoListo, setEnviandoListo] = useState(false);
   const [errorListo, setErrorListo] = useState(null);
+  // Espejo local de "ya elegí equipo" — no depende del eco de Realtime
+  // (ver comentario largo en SeleccionEquipo). Una vez en true se queda
+  // así para el resto de la vida del componente; cuando players sí
+  // alcanza a reflejar el team elegido, yo.team deja de ser null también,
+  // así que ninguna de las dos fuentes queda "atrasada" de forma visible.
+  const [equipoLocalElegido, setEquipoLocalElegido] = useState(null);
 
   // Fuente Saira Condensed / Barlow Semi Condensed, propia de esta
   // pantalla — el resto de la app (menús, hotseat) sigue con Cinzel/Crimson
@@ -221,6 +321,18 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
     );
   }
 
+  // Selección de equipo (piece 5r) — se muestra ANTES del lobby, a esta
+  // sesión únicamente, mientras todavía no eligió equipo. Se apoya en
+  // equipoLocalElegido (set apenas la RPC devuelve éxito) en vez de
+  // esperar a que yo.team dejе de ser null vía Realtime — ver el
+  // comentario largo en SeleccionEquipo sobre por qué depender del eco
+  // acá es inseguro. Si gameState ya existe, por construcción yo.team ya
+  // está seteado (deal_hand exige seat asignado para las n_jug filas), así
+  // que esta rama nunca compite con la mesa de juego real.
+  if (yo && yo.team == null && equipoLocalElegido == null) {
+    return <SeleccionEquipo roomId={roomId} nJug={nJug} players={players} onSalir={onSalir} onElegido={setEquipoLocalElegido} />;
+  }
+
   // Ya se repartió la primera mano: la mesa de juego real (pieza 5d cubre
   // dealing/bidding, 5e suma jugar cartas y resolución, 5f suma copas/oros;
   // cierre/reloj/fin de partida es la 5g), montada sobre esta misma
@@ -259,15 +371,14 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
 
   // LOBBY
   const asientos = Array.from({length:nJug}, (_,seat)=>({seat, jugador: players.find(p=>p.seat===seat) ?? null}));
-  // A diferencia de lo que hacía PantallaPartida.jsx (hotseat, borrado en
-  // piece 5q: una sola pantalla compartida sin punto de vista individual),
-  // acá "NOSOTROS"/"ELLOS" es relativo a mySeat: cada jugador ve su propio
-  // equipo primero, no
-  // siempre team 0. Si mySeat todavía no se resolvió (debería ser
-  // momentáneo), se cae al mapeo fijo team0="NOSOTROS" en vez de adivinar.
-  const miEquipo = mySeat!=null ? mySeat%2 : 0;
-  const misCompaneros = asientos.filter(a=>a.seat%2===miEquipo);
-  const rivales = asientos.filter(a=>a.seat%2!==miEquipo);
+  // LOCAL/VISITANTE son fijos (piece 5r) — todo jugador ve la misma
+  // columna para el mismo equipo, sin importar en cuál esté (a diferencia
+  // de la versión vieja, donde "NOSOTROS"/"ELLOS" era relativo a mySeat).
+  // seat%2 alcanza acá porque choose_team garantiza LOCAL=asientos pares,
+  // VISITANTE=impares (ver choose_team_rpc.sql) — no hace falta leer
+  // jugador.team.
+  const localAsientos = asientos.filter(a=>a.seat%2===0);
+  const visitanteAsientos = asientos.filter(a=>a.seat%2===1);
 
   return (
     <div style={fondoStyle}>
@@ -287,15 +398,15 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
 
         <div style={{display:"flex",gap:12,width:"100%"}}>
           <div style={{flex:1,display:"flex",flexDirection:"column",gap:8}}>
-            <div style={{...equipoLabelStyle("nosotros"), textAlign:"center", marginBottom:2}}>NOSOTROS</div>
-            {misCompaneros.map(({seat,jugador})=>(
-              <FilaAsiento key={seat} seat={seat} jugador={jugador} mySeat={mySeat} team="nosotros"/>
+            <div style={{...equipoLabelStyle("local"), textAlign:"center", marginBottom:2}}>LOCAL</div>
+            {localAsientos.map(({seat,jugador})=>(
+              <FilaAsiento key={seat} seat={seat} jugador={jugador} mySeat={mySeat} team="local"/>
             ))}
           </div>
           <div style={{flex:1,display:"flex",flexDirection:"column",gap:8}}>
-            <div style={{...equipoLabelStyle("ellos"), textAlign:"center", marginBottom:2}}>ELLOS</div>
-            {rivales.map(({seat,jugador})=>(
-              <FilaAsiento key={seat} seat={seat} jugador={jugador} mySeat={mySeat} team="ellos"/>
+            <div style={{...equipoLabelStyle("visitante"), textAlign:"center", marginBottom:2}}>VISITANTE</div>
+            {visitanteAsientos.map(({seat,jugador})=>(
+              <FilaAsiento key={seat} seat={seat} jugador={jugador} mySeat={mySeat} team="visitante"/>
             ))}
           </div>
         </div>

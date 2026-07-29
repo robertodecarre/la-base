@@ -8,9 +8,13 @@ import { colors, fonts, bevel } from "../theme";
 // del indicador de turno en la mesa, mismo significado ("esto necesita tu
 // atención ya"). "Agotado" reusa colors.negative, igual que los puntajes
 // en contra en el resumen/Tablero. Ninguno de los dos es un color nuevo.
-export function DisplayReloj({ tiempoN, tiempoE, corriendo, agotadoN, agotadoE, modoLento, modoTiempo, hayTiempo }) {
+// `corriendo` es directamente el team index (0=LOCAL, 1=VISITANTE, o
+// null) — LOCAL/VISITANTE son fijos, así que no hace falta ningún mapeo
+// de "team index" a "slot", a diferencia de la vieja versión N/E relativa
+// a quién miraba.
+export function DisplayReloj({ tiempoLocal, tiempoVisitante, corriendo, agotadoLocal, agotadoVisitante, modoLento, modoTiempo, hayTiempo }) {
   if (!hayTiempo) return null;
-  const eqN = corriendo === 0, eqE = corriendo === 1;
+  const eqLocal = corriendo === 0, eqVisitante = corriendo === 1;
 
   const relojStyle = (activo, agotado) => ({
     display: "flex", flexDirection: "column", alignItems: "center",
@@ -25,24 +29,24 @@ export function DisplayReloj({ tiempoN, tiempoE, corriendo, agotadoN, agotadoE, 
 
   return (
     <div style={{ display:"flex", gap:8, alignItems:"center", justifyContent:"center" }}>
-      <div style={relojStyle(eqN, agotadoN)}>
-        <div style={{ fontFamily:fonts.body, fontWeight:600, fontSize:9, color:colors.team.nosotros.accent, letterSpacing:1, marginBottom:2 }}>NOSOTROS</div>
-        <div style={{ fontFamily:fonts.display, fontWeight:800, fontStyle:"italic", fontSize:22, color:tiempoColor(agotadoN,tiempoN), lineHeight:1 }}>
-          {modoLento && agotadoN ? "10s/m" : fmtTiempo(tiempoN)}
+      <div style={relojStyle(eqLocal, agotadoLocal)}>
+        <div style={{ fontFamily:fonts.body, fontWeight:600, fontSize:9, color:colors.team.local.accent, letterSpacing:1, marginBottom:2 }}>LOCAL</div>
+        <div style={{ fontFamily:fonts.display, fontWeight:800, fontStyle:"italic", fontSize:22, color:tiempoColor(agotadoLocal,tiempoLocal), lineHeight:1 }}>
+          {modoLento && agotadoLocal ? "10s/m" : fmtTiempo(tiempoLocal)}
         </div>
-        {eqN && <div style={{ fontFamily:fonts.body, fontWeight:700, fontSize:8, color:colors.turn.color, marginTop:2, letterSpacing:1 }}>● CORRIENDO</div>}
+        {eqLocal && <div style={{ fontFamily:fonts.body, fontWeight:700, fontSize:8, color:colors.turn.color, marginTop:2, letterSpacing:1 }}>● CORRIENDO</div>}
       </div>
 
       <div style={{ fontSize:10, color:colors.text.secondary, opacity:0.5 }}>
         {modoTiempo === "muerte" ? "⚡" : "🏃"}
       </div>
 
-      <div style={relojStyle(eqE, agotadoE)}>
-        <div style={{ fontFamily:fonts.body, fontWeight:600, fontSize:9, color:colors.team.ellos.accent, letterSpacing:1, marginBottom:2 }}>ELLOS</div>
-        <div style={{ fontFamily:fonts.display, fontWeight:800, fontStyle:"italic", fontSize:22, color:tiempoColor(agotadoE,tiempoE), lineHeight:1 }}>
-          {modoLento && agotadoE ? "10s/m" : fmtTiempo(tiempoE)}
+      <div style={relojStyle(eqVisitante, agotadoVisitante)}>
+        <div style={{ fontFamily:fonts.body, fontWeight:600, fontSize:9, color:colors.team.visitante.accent, letterSpacing:1, marginBottom:2 }}>VISITANTE</div>
+        <div style={{ fontFamily:fonts.display, fontWeight:800, fontStyle:"italic", fontSize:22, color:tiempoColor(agotadoVisitante,tiempoVisitante), lineHeight:1 }}>
+          {modoLento && agotadoVisitante ? "10s/m" : fmtTiempo(tiempoVisitante)}
         </div>
-        {eqE && <div style={{ fontFamily:fonts.body, fontWeight:700, fontSize:8, color:colors.turn.color, marginTop:2, letterSpacing:1 }}>● CORRIENDO</div>}
+        {eqVisitante && <div style={{ fontFamily:fonts.body, fontWeight:700, fontSize:8, color:colors.turn.color, marginTop:2, letterSpacing:1 }}>● CORRIENDO</div>}
       </div>
     </div>
   );

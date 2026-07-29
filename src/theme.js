@@ -23,8 +23,12 @@ export const colors = {
   bg: "radial-gradient(ellipse at 50% 20%, #24306e 0%, #0d1230 55%, #060814 100%)",
   panel: { bg: "linear-gradient(180deg, #171f4a 0%, #0a0e26 100%)", border: "#4a5aa8" },
   text: { primary: "#f2f4ff", secondary: "#aab6f2" },
+  // Equipos fijos (piece 5r) — LOCAL y VISITANTE son absolutos, no
+  // relativos a quién mira: todo jugador ve el mismo matiz para el mismo
+  // equipo, sin importar en cuál esté. LOCAL=team 0 (asientos pares),
+  // VISITANTE=team 1 (asientos impares) — ver choose_team_rpc.sql.
   team: {
-    nosotros: {
+    local: {
       gradient: "linear-gradient(180deg, #4a6ac0 0%, #253a80 45%, #16234f 100%)",
       border: "#6f8fe0",
       readyBorder: "#8fb0ff",
@@ -32,7 +36,7 @@ export const colors = {
       readyDot: "#cfe0ff",
       accent: "#6fa3ff",
     },
-    ellos: {
+    visitante: {
       gradient: "linear-gradient(180deg, #d8703f 0%, #8a3c1c 45%, #4f1f0e 100%)",
       border: "#f0966a",
       readyBorder: "#ffb385",

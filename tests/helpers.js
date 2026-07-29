@@ -45,11 +45,33 @@ export async function jugarCartaDelTurnoActual(page) {
 // entre los specs online.
 // ══════════════════════════════════════════════
 
+// Elige LOCAL o VISITANTE en la pantalla de selección de equipo (piece 5r)
+// que ahora se muestra a CADA sesión apenas tiene un asiento reservado
+// (host incluido, apenas crea+se une a su propia sala), antes del lobby.
+async function elegirEquipoEnPantalla(page, equipo) {
+  await expect(page.getByText("ELEGÍ TU EQUIPO")).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: equipo }).click();
+  // La transición de esta pantalla al lobby NO depende del eco de
+  // Realtime (ver comentario largo en SeleccionEquipo, PantallaOnlineSala.jsx
+  // — postgres_changes no hace backfill, así que un click que cae antes de
+  // que el canal termine de suscribirse perdería el UPDATE para siempre);
+  // React re-renderiza apenas la RPC de choose_team vuelve, así que 20s
+  // (mismo margen que el resto de esta suite le da a un round-trip único
+  // bajo carga) alcanza de sobra.
+  await expect(page.getByText("CÓDIGO PARA COMPARTIR")).toBeVisible({ timeout: 20000 });
+}
+
 // pages[0] crea la sala y el resto se une con el código, hasta dejar las N
-// páginas en el lobby (PantallaOnlineSala, sala completa). No marca a
-// nadie "listo" — desde piece 5h el arranque depende de eso, y es un paso
-// aparte a propósito para que los tests puedan inspeccionar el lobby
-// antes de arrancar.
+// páginas en el lobby (PantallaOnlineSala, sala completa). Cada sesión
+// elige equipo alternando LOCAL/VISITANTE por índice (P0=LOCAL,
+// P1=VISITANTE, P2=LOCAL, ...) apenas entra — reproduce la misma
+// composición de equipos/asientos que el viejo auto-asignado por
+// seat%2 (choose_team garantiza LOCAL=asientos pares, VISITANTE=impares;
+// ver choose_team_rpc.sql), así que el resto de esta suite no necesita
+// saber que la elección ahora es explícita. No marca a nadie "listo" —
+// desde piece 5h el arranque depende de eso, y es un paso aparte a
+// propósito para que los tests puedan inspeccionar el lobby antes de
+// arrancar.
 export async function crearYUnirseSalaOnline(pages, nombres, { nJug = 4, estructuraCustom = null, sinAses = false } = {}) {
   const host = pages[0];
   await host.goto("/");
@@ -72,8 +94,9 @@ export async function crearYUnirseSalaOnline(pages, nombres, { nJug = 4, estruct
   }
   await host.getByRole("button", { name: "Crear sala", exact: true }).click();
 
+  await elegirEquipoEnPantalla(host, "LOCAL");
+
   const codigoDiv = host.getByText("CÓDIGO PARA COMPARTIR").locator("xpath=following-sibling::div[1]");
-  await expect(codigoDiv).toBeVisible({ timeout: 20000 });
   const code = (await codigoDiv.textContent()).trim();
 
   for (let i = 1; i < pages.length; i++) {
@@ -83,7 +106,7 @@ export async function crearYUnirseSalaOnline(pages, nombres, { nJug = 4, estruct
     await p.getByPlaceholder("ABCDE").fill(code);
     await p.getByPlaceholder("Ej: Tincho").fill(nombres[i]);
     await p.getByRole("button", { name: "Unirse", exact: true }).click();
-    await expect(p.getByText("CÓDIGO PARA COMPARTIR")).toBeVisible({ timeout: 15000 });
+    await elegirEquipoEnPantalla(p, i % 2 === 0 ? "LOCAL" : "VISITANTE");
   }
 
   return code;

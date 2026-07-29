@@ -1,11 +1,11 @@
 // Traduce los errores que puede tirar create-room/join-room/submit-bid (edge
 // functions) y deal_hand/play_card/resolve_resolving/resolve_copas_menu/
-// resolve_oros_menu/close_hand/claim_timeout/set_ready (RPC directa) a
-// mensajes en español para mostrar en pantalla. Cubre todos los códigos que
-// esas llamadas pueden emitir realmente — ver supabase/functions/_shared/
-// errors.ts para la lista completa de STATUS_POR_ERROR. set_ready no suma
-// ningún código nuevo: solo puede tirar not_authenticated/not_room_member,
-// ambos ya cubiertos más abajo.
+// resolve_oros_menu/close_hand/claim_timeout/set_ready/choose_team (RPC
+// directa) a mensajes en español para mostrar en pantalla. Cubre todos los
+// códigos que esas llamadas pueden emitir realmente — ver supabase/functions/
+// _shared/errors.ts para la lista completa de STATUS_POR_ERROR. set_ready no
+// suma ningún código nuevo: solo puede tirar not_authenticated/
+// not_room_member, ambos ya cubiertos más abajo.
 const MENSAJES = {
   not_authenticated: "No se pudo verificar tu sesión. Probá de nuevo en unos segundos.",
   invalid_config: "La configuración de la sala no es válida.",
@@ -14,6 +14,10 @@ const MENSAJES = {
   room_not_open: "Esa sala ya empezó a jugar o ya terminó.",
   room_full: "Esa sala ya está completa.",
   could_not_allocate_code: "No se pudo crear la sala, intentá de nuevo.",
+  // choose_team (llamada directa vía supabase.rpc; pieza 5r)
+  invalid_team: "Ese equipo no existe.",
+  already_chose_team: "Ya elegiste equipo.",
+  team_full: "Ese equipo ya está completo.",
   // deal_hand (llamada directa vía supabase.rpc, no edge function)
   not_room_member: "No formás parte de esta sala.",
   room_not_full: "Todavía faltan jugadores para poder empezar.",
