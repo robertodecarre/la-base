@@ -152,6 +152,35 @@ function BotonSalir({ onSalir }) {
   );
 }
 
+// Overlay del Tablero (piece F, batch overnight post-5r) — antes el
+// historial de manos era siempre visible debajo de la mesa; ahora se abre
+// como panel flotante al tocar el ícono de libreta entre los capitanes
+// (ver LibretaIcon en MesaCircular.jsx). Backdrop clickeable para cerrar,
+// mismo panelStyle que el resto del chrome.
+function TableroOverlay({ estructura, historial, manoActual, onCerrar }) {
+  return (
+    <div
+      onClick={onCerrar}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(6,8,20,0.72)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 50, padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ ...panelStyle, width: "100%", maxWidth: 320, maxHeight: "80vh", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 13, letterSpacing: 2, color: colors.text.secondary }}>LIBRETA</div>
+          <button onClick={onCerrar} style={{ background: "none", border: "none", color: colors.text.secondary, fontSize: 16, cursor: "pointer", lineHeight: 1, padding: 4 }}>✕</button>
+        </div>
+        <Tablero estructura={estructura} historial={historial} manoActual={manoActual}/>
+      </div>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════
 // PANTALLA PARTIDA ONLINE — mesa real (piezas 5d/5e/5f/5g)
 // ══════════════════════════════════════════════
@@ -182,6 +211,11 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   const [errorReparto, setErrorReparto] = useState(null);
   const [ahora, setAhora] = useState(() => Date.now());
   const [reclamandoTiempo, setReclamandoTiempo] = useState(false);
+  // Piece F: preferencia del jugador, no estado de la mano — a propósito
+  // NO se resetea en el useEffect de "cambio de mano" de más abajo (a
+  // diferencia de expandidos/cartasLevantadas/errores), así que si alguien
+  // la deja abierta se le mantiene abierta entre manos.
+  const [tableroAbierto, setTableroAbierto] = useState(false);
 
   // La propia mano nunca viaja por Realtime (ver useSala) — hay que pedirla
   // explícitamente cada vez que cambia el número de mano (deal_hand ya dejó
@@ -560,13 +594,14 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               onLevantarCarta={(idx,ci)=>setCartasLevantadas((cl)=>({...cl,[idx]:cl[idx]===ci?-1:ci}))}
               mySeat={mySeat}
               totalBases={totalBases}
+              tableroAbierto={tableroAbierto}
+              onToggleTablero={()=>setTableroAbierto((v)=>!v)}
             />
           </BloqueMesa>
         </div>
 
-        <Tablero estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number}/>
-
         <BotonSalir onSalir={onSalir}/>
+        {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
       </div>
     );
   }
@@ -603,10 +638,10 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
+              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
             />
           </BloqueMesa>
         </div>
-        <Tablero estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number}/>
 
         <BaseResuelta cartas={cartasUltimaBase} nombreGanador={nombreGanador} seatGanador={seatGanador}/>
 
@@ -627,6 +662,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         )}
 
         <BotonSalir onSalir={onSalir}/>
+        {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
       </div>
     );
   }
@@ -667,10 +703,10 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
+              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
             />
           </BloqueMesa>
         </div>
-        <Tablero estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number}/>
 
         <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(192,57,43,0.35)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:420,display:"flex",flexDirection:"column",gap:8,alignItems:"center"}}>
           <div style={{fontSize:10,color:"rgba(192,57,43,0.6)",letterSpacing:3}}>AS DE COPAS</div>
@@ -698,6 +734,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         )}
 
         <BotonSalir onSalir={onSalir}/>
+        {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
       </div>
     );
   }
@@ -726,10 +763,10 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
+              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
             />
           </BloqueMesa>
         </div>
-        <Tablero estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number}/>
 
         <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:420,display:"flex",flexDirection:"column",gap:4,alignItems:"center"}}>
           <div style={{fontSize:10,color:"rgba(201,168,76,0.4)",letterSpacing:3}}>AS DE OROS</div>
@@ -763,6 +800,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         )}
 
         <BotonSalir onSalir={onSalir}/>
+        {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
       </div>
     );
   }
@@ -771,13 +809,11 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     // Todos ven el mismo resumen, pero solo un capitán (de cualquiera de
     // los dos equipos) puede cerrar la mano — piece E. close_hand ya lo
     // exige server-side (close_hand_captain_only); esto solo evita
-    // mostrarle el botón a quien igual lo rebotaría. bids/tricks_won
-    // todavía son los de la mano que se acaba de terminar (close_hand
-    // recién los resetea al repartir la siguiente). hechoTeam0/1 vienen
-    // hoisteados arriba. LOCAL/VISITANTE fijos, sin mirar myTeam (piece 5r).
-    const local = { bid: bids.team0, hecho: hechoTeam0 };
-    const visitante = { bid: bids.team1, hecho: hechoTeam1 };
-
+    // mostrarle el botón a quien igual lo rebotaría. El panel "pidió X ·
+    // hizo Y" por equipo que vivía acá se sacó en piece F (batch overnight
+    // post-5r): duplicaba, en texto, los mismos números que ResumenMarcador
+    // ya muestra arriba con estrellas (EstrellasPedido de pedLocal/
+    // hechoLocal/pedVisitante/hechoVisitante, hoisteados más arriba).
     return (
       <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
@@ -792,20 +828,9 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
+              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
             />
           </BloqueMesa>
-        </div>
-        <Tablero estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number}/>
-
-        <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:340,display:"flex",gap:20,justifyContent:"center"}}>
-          <div style={{textAlign:"center"}}>
-            <div style={{fontSize:10,color:colors.team.local.accent,letterSpacing:1}}>LOCAL</div>
-            <div style={{fontSize:12,color:"rgba(201,168,76,0.6)"}}>pidió {local.bid} · hizo {local.hecho}</div>
-          </div>
-          <div style={{textAlign:"center"}}>
-            <div style={{fontSize:10,color:colors.team.visitante.accent,letterSpacing:1}}>VISITANTE</div>
-            <div style={{fontSize:12,color:"rgba(201,168,76,0.6)"}}>pidió {visitante.bid} · hizo {visitante.hecho}</div>
-          </div>
         </div>
 
         {errorCierre && (
@@ -824,6 +849,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           </div>
         )}
         <BotonSalir onSalir={onSalir}/>
+        {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
       </div>
     );
   }
@@ -927,10 +953,10 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
             pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
             ganaActual={null} expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
             cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
+            tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
           />
         </BloqueMesa>
       </div>
-      <Tablero estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number}/>
 
       {requiredTeam===null ? (
         <div style={{fontSize:11,color:"rgba(201,168,76,0.4)",fontStyle:"italic"}}>Cerrando el pedido…</div>
@@ -976,6 +1002,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       )}
 
       <BotonSalir onSalir={onSalir}/>
+      {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
     </div>
   );
 }

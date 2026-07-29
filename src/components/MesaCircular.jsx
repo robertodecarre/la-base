@@ -86,6 +86,38 @@ function CartasManoSVG({ mano, cx, cy, seleccionable, onTirar, expandido, onTogg
   );
 }
 
+// Ícono de "libreta" (piece F, batch overnight post-5r) — togglea el
+// overlay del Tablero (historial de manos). Siempre entre los dos
+// capitanes: choose_team garantiza que el capitán de LOCAL es SIEMPRE
+// seat 0 y el de VISITANTE SIEMPRE seat 1 (el primero en elegir cada
+// equipo), así que están siempre en asientos adyacentes — el ícono se
+// planta en el punto medio de esas dos posiciones (siempre a escala 1,
+// sin importar si alguno de los dos es mySeat, para que no salte de
+// lugar según quién mire). SVG dibujado a mano (tapa + anillado +
+// líneas), no un ícono importado, para no salirse de la estética chrome.
+function LibretaIcon({ x, y, abierta, onToggle }) {
+  const w = 22, h = 26;
+  const activo = colors.cta.border, inactivo = colors.panel.border;
+  return (
+    <g transform={`translate(${x - w / 2},${y - h / 2})`} style={{ cursor: "pointer" }}
+       role="button" aria-label={abierta ? "Cerrar libreta" : "Ver libreta"}
+       onClick={(e) => { e.stopPropagation(); onToggle(); }}>
+      <rect x={0} y={0} width={w} height={h} rx={3}
+        fill={abierta ? "rgba(255,130,80,0.18)" : "rgba(10,14,38,0.85)"}
+        stroke={abierta ? activo : inactivo} strokeWidth={abierta ? 1.6 : 1.2}
+        filter={abierta ? "url(#glow)" : undefined}/>
+      {/* anillado */}
+      {[0.22, 0.5, 0.78].map((f) => (
+        <circle key={f} cx={3} cy={h * f} r={1.3} fill="none" stroke={abierta ? activo : "rgba(200,210,255,0.5)"} strokeWidth={1}/>
+      ))}
+      {/* líneas de texto */}
+      {[0.35, 0.55, 0.75].map((f) => (
+        <line key={f} x1={7} y1={h * f} x2={w - 3} y2={h * f} stroke={abierta ? activo : "rgba(200,210,255,0.45)"} strokeWidth={1}/>
+      ))}
+    </g>
+  );
+}
+
 // Config geométrica por cantidad de jugadores. RX/RY (radio del anillo de
 // asientos) se mantienen igual que antes del reskin — no es parte de este
 // pase, solo el tamaño de la mesa central, el anillo de cartas jugadas y
@@ -126,10 +158,15 @@ const MYSEAT_SCALE = 1.4;
 // no tiene nada que ocultar). Online, la única mano real es la propia; el
 // resto llega ya boca abajo desde el caller (ver PantallaPartidaOnline.jsx),
 // y acá alcanza con no dejar tirar cartas ajenas aunque sea su turno.
-export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, ganaActual, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases }) {
+export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, ganaActual, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases, tableroAbierto, onToggleTablero }) {
   const nJug = jugadores.length || 6;
   const G = GEOM[nJug] || GEOM.default;
   const { RX, RY, canvasSize: SIZE, cx: CX, cy: CY, outerRX, outerRY, mesaRX, mesaRY, cartaMesaRX, cartaMesaRY, boxW, boxH } = G;
+  // Punto medio entre los dos capitanes (siempre seat 0 y seat 1) a
+  // escala 1 — ver comentario de LibretaIcon.
+  const posCapLocal = posEnCirculo(0, RX, RY, CX, CY, nJug);
+  const posCapVisitante = posEnCirculo(1, RX, RY, CX, CY, nJug);
+  const libretaPos = { x: (posCapLocal.x + posCapVisitante.x) / 2, y: (posCapLocal.y + posCapVisitante.y) / 2 };
 
   return (
     <svg viewBox={`0 0 ${SIZE} ${SIZE}`} style={{width:"100%",userSelect:"none"}}>
@@ -236,6 +273,10 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
           </g>
         );
       })}
+
+      {onToggleTablero && (
+        <LibretaIcon x={libretaPos.x} y={libretaPos.y} abierta={!!tableroAbierto} onToggle={onToggleTablero}/>
+      )}
     </svg>
   );
 }
