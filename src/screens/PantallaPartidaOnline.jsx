@@ -4,6 +4,7 @@ import { MesaCircular } from "../components/MesaCircular";
 import { DisplayReloj } from "../components/DisplayReloj";
 import { Tablero } from "../components/Tablero";
 import { EstrellasPedido } from "../components/EstrellasPedido";
+import { AvionKamikaze } from "../components/AvionKamikaze";
 import { CartaSVG } from "../components/cards/CartaSVG";
 import { Btn } from "../components/Btn";
 import {
@@ -19,7 +20,12 @@ import { colors, fonts, panelStyle } from "../theme";
 // con datos en vivo — no confundir con las estrellas históricas de Tablero,
 // que son por mano ya cerrada) y meta de mano/cartas a la derecha.
 // LOCAL/VISITANTE son fijos (equipo 0/1), no relativos a quién mira (piece 5r).
-function ResumenMarcador({ scoreLocal, scoreVisitante, pedLocal, hechoLocal, pedVisitante, hechoVisitante, handNumber, totalHands, totalBases }) {
+// kamikazeLocal/kamikazeVisitante (piece I, batch overnight post-5r): a lo
+// sumo uno de los dos es true por mano (kamikaze_only_for_mano — solo el
+// equipo mano puede declararlo) — muestra el avión debajo de las
+// estrellas de ESE equipo, se queda puesto el resto de la mano porque
+// game_state.kamikaze_declared no se resetea hasta el próximo deal_hand.
+function ResumenMarcador({ scoreLocal, scoreVisitante, pedLocal, hechoLocal, pedVisitante, hechoVisitante, kamikazeLocal, kamikazeVisitante, handNumber, totalHands, totalBases }) {
   const eqScore = (score) => ({
     fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 24,
     color: score < 0 ? colors.negative : colors.team.local.readyBorder,
@@ -30,11 +36,13 @@ function ResumenMarcador({ scoreLocal, scoreVisitante, pedLocal, hechoLocal, ped
         <div style={{fontSize:10,letterSpacing:2,marginBottom:2,color:colors.team.local.accent,fontFamily:fonts.body,fontWeight:600}}>LOCAL</div>
         <div style={{...eqScore(scoreLocal), color: scoreLocal<0?colors.negative:colors.team.local.readyBorder, textShadow:`0 0 12px ${scoreLocal<0?"rgba(255,90,90,0.5)":colors.team.local.readyGlow}`}}>{scoreLocal}</div>
         <EstrellasPedido pedidas={pedLocal} hechas={hechoLocal} color={colors.team.local.readyBorder}/>
+        {kamikazeLocal && <div style={{marginTop:3,display:"flex",justifyContent:"center"}}><AvionKamikaze/></div>}
       </div>
       <div style={{textAlign:"center"}}>
         <div style={{fontSize:10,letterSpacing:2,marginBottom:2,color:colors.team.visitante.accent,fontFamily:fonts.body,fontWeight:600}}>VISITANTE</div>
         <div style={{...eqScore(scoreVisitante), color: scoreVisitante<0?colors.negative:colors.team.visitante.readyBorder, textShadow:`0 0 12px ${scoreVisitante<0?"rgba(255,90,90,0.5)":colors.team.visitante.readyGlow}`}}>{scoreVisitante}</div>
         <EstrellasPedido pedidas={pedVisitante} hechas={hechoVisitante} color={colors.team.visitante.readyBorder}/>
+        {kamikazeVisitante && <div style={{marginTop:3,display:"flex",justifyContent:"center"}}><AvionKamikaze/></div>}
       </div>
       <div style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",textAlign:"right",fontSize:9,color:"rgba(200,210,255,0.5)",letterSpacing:0.5,lineHeight:1.4,fontFamily:fonts.body}}>
         MANO {handNumber+1}/{totalHands}<br/>{totalBases} CARTA{totalBases!==1?"S":""}
@@ -336,8 +344,15 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     return { nombre: jugador?.name ?? `Asiento ${seat}`, eq: jugador?.team ?? (seat % 2), mano, bases: jugador?.tricks_won ?? 0 };
   });
 
+  // Piece I: kamikaze solo lo puede declarar el equipo mano
+  // (kamikaze_only_for_mano en submit_bid_rpc.sql), así que el equipo que
+  // lo declaró siempre es mano_seat%2 cuando kamikaze_declared es true —
+  // no hace falta guardar el equipo aparte server-side.
+  const equipoKamikaze = gameState.kamikaze_declared ? gameState.mano_seat % 2 : null;
+
   const resumenProps = {
     scoreLocal, scoreVisitante, pedLocal, hechoLocal, pedVisitante, hechoVisitante,
+    kamikazeLocal: equipoKamikaze === 0, kamikazeVisitante: equipoKamikaze === 1,
     handNumber: gameState.hand_number, totalHands: estructuraCompleta.length, totalBases,
   };
 
