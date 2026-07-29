@@ -861,7 +861,12 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     const manosOrdenadas = [...handResults].sort((a, b) => a.hand_number - b.hand_number);
     const totalLocal = manosOrdenadas.reduce((s, h) => s + h.delta_team0, 0);
     const totalVisitante = manosOrdenadas.reduce((s, h) => s + h.delta_team1, 0);
-    const resultado = totalLocal === totalVisitante ? "¡EMPATE!" : totalLocal > totalVisitante ? "¡GANÓ LOCAL!" : "¡GANÓ VISITANTE!";
+    // Piece L (batch overnight post-5r): texto exacto "GANÓ EQUIPO LOCAL"/
+    // "GANÓ EQUIPO VISITANTE", más los nombres del equipo ganador — no hay
+    // equipo ganador en un empate, así que ahí queda en null.
+    const equipoGanador = totalLocal === totalVisitante ? null : (totalLocal > totalVisitante ? 0 : 1);
+    const resultado = equipoGanador === null ? "¡EMPATE!" : equipoGanador === 0 ? "GANÓ EQUIPO LOCAL" : "GANÓ EQUIPO VISITANTE";
+    const nombresGanadores = equipoGanador === null ? [] : players.filter((p) => p.team === equipoGanador).map((p) => p.name);
     const causaTexto = {
       kamikaze: "El equipo mano perdió la partida por no declarar kamikaze y quedar 2 o más abajo de lo pedido.",
       clock_expired: "Un equipo se quedó sin tiempo.",
@@ -872,6 +877,11 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>FIN DE LA PARTIDA</div>
         {causaTexto && <div style={{fontSize:11,color:"rgba(201,168,76,0.5)",fontStyle:"italic",textAlign:"center",maxWidth:340}}>{causaTexto}</div>}
         <div style={{fontSize:22,color:totalLocal>totalVisitante?"#7ecf9e":totalLocal<totalVisitante?"#e05555":"#f0d080",fontFamily:"Cinzel, Georgia, serif"}}>{resultado}</div>
+        {nombresGanadores.length > 0 && (
+          <div style={{fontSize:13,color:colors.team[equipoGanador===0?"local":"visitante"].accent,fontFamily:fonts.body,fontWeight:600,textAlign:"center"}}>
+            {nombresGanadores.join(" · ")}
+          </div>
+        )}
         <div style={{fontSize:14,color:"rgba(201,168,76,0.7)"}}>Local: {totalLocal} · Visitante: {totalVisitante}</div>
 
         <div style={{overflowX:"auto",width:"100%",maxWidth:480}}>
