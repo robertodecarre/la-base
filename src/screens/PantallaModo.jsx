@@ -7,8 +7,8 @@ import {
 // ══════════════════════════════════════════════
 // PANTALLA MODO — primera pantalla de la app: crear o unirse a una sala
 // online. Hotseat dejó de ser un punto de entrada alcanzable desde la UI
-// (PantallaInicio.jsx y el resto del flujo hotseat siguen existiendo,
-// simplemente no hay ningún botón que lleve ahí) y el paso intermedio
+// en piece 5m (nada llevaba ahí ya) y se borró del todo en piece 5q
+// (PantallaInicio.jsx y el resto del flujo hotseat). El paso intermedio
 // "Jugar online" (antes PantallaOnlineMenu.jsx) se fusionó acá mismo.
 // ══════════════════════════════════════════════
 export function PantallaModo({ onCrear, onUnirse }) {

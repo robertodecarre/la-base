@@ -10,12 +10,6 @@ export function maxCartas(nJug, dosMazos) {
   if (nJug === 8) return dosMazos ? 7 : 5;
   return 6;
 }
-// Nombres por defecto según cantidad de jugadores
-export const NOMBRES_POR_CANT = {
-  4: ["Micho","Tincho","Leo","Negro"],
-  6: ["Micho","Tincho","Leo","Negro","Gordo","CabezonIA"],
-  8: ["Micho","Tincho","Leo","Negro","Gordo","CabezonIA","Flaco","Pelado"],
-};
 export const POS_ANGULOS = {
   4: [270, 0, 90, 180],
   6: [270, 330, 30, 90, 150, 210],

@@ -17,10 +17,11 @@ const errorBox = { fontSize: 11, color: "#ffb3a8", background: "rgba(160,50,30,0
 // ══════════════════════════════════════════════
 // PANTALLA ONLINE CREAR — arma la config de la sala
 // ══════════════════════════════════════════════
-// Mismos campos de configuración que PantallaInicio.jsx (nJug, dosMazos,
-// estructura, ases, kamikazes, tiempo) compuestos acá aparte en vez de
-// extraídos de PantallaInicio, para no tocar ese flujo hotseat ya
-// funcionando. create_room en sí no espera nombre/capitán (ver
+// Mismos campos de configuración que tenía PantallaInicio.jsx (nJug,
+// dosMazos, estructura, ases, kamikazes, tiempo) — hotseat (borrado en
+// piece 5q) compuestos acá aparte en vez de extraídos de esa pantalla, en
+// su momento para no tocar ese flujo ya funcionando. create_room en sí no
+// espera nombre/capitán (ver
 // validateConfig.ts) — pero quien crea la sala también tiene que hacer
 // join_room para tener un asiento, igual que cualquier otro jugador:
 // players/game_state/played_cards están detrás de is_room_member(room_id)

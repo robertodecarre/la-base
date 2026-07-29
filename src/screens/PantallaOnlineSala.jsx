@@ -13,13 +13,14 @@ import {
 } from "../theme";
 
 // Sorteo de quién reparte primero — alimentado por rooms.sorteo_inicial
-// (piece 5l) en vez de un sorteo local como PantallaSorteo.jsx (hotseat).
-// A propósito en el look viejo (Cinzel/dorado) todavía, NO en el tema
-// "chrome" de theme.js: el rediseño visual de esta pantalla es una pieza
-// aparte pendiente, esto solo pone el mecanismo a funcionar. Adaptado
-// directo del SVG de PantallaSorteo.jsx, sin el paso "tocar para revelar"
-// (el sorteo ya viene resuelto del servidor) ni botón de continuar (se
-// encadena solo a repartirMano() por timer, ver el useEffect más abajo).
+// (piece 5l) en vez de un sorteo local como el que tenía PantallaSorteo.jsx
+// (hotseat, borrado en piece 5q). A propósito en el look viejo (Cinzel/
+// dorado) todavía, NO en el tema "chrome" de theme.js: el rediseño visual
+// de esta pantalla es una pieza aparte pendiente, esto solo pone el
+// mecanismo a funcionar. Adaptado del SVG que tenía PantallaSorteo.jsx,
+// sin el paso "tocar para revelar" (el sorteo ya viene resuelto del
+// servidor) ni botón de continuar (se encadena solo a repartirMano() por
+// timer, ver el useEffect más abajo).
 function SorteoOnline({ nJug, players, sorteo }) {
   const cartaPorSeat = {};
   for (const { seat, carta } of sorteo.cartas) cartaPorSeat[seat] = carta;
@@ -258,9 +259,10 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
 
   // LOBBY
   const asientos = Array.from({length:nJug}, (_,seat)=>({seat, jugador: players.find(p=>p.seat===seat) ?? null}));
-  // A diferencia de PantallaPartida.jsx (hotseat, una sola pantalla
-  // compartida sin punto de vista individual), acá "NOSOTROS"/"ELLOS" es
-  // relativo a mySeat: cada jugador ve su propio equipo primero, no
+  // A diferencia de lo que hacía PantallaPartida.jsx (hotseat, borrado en
+  // piece 5q: una sola pantalla compartida sin punto de vista individual),
+  // acá "NOSOTROS"/"ELLOS" es relativo a mySeat: cada jugador ve su propio
+  // equipo primero, no
   // siempre team 0. Si mySeat todavía no se resolvió (debería ser
   // momentáneo), se cae al mapeo fijo team0="NOSOTROS" en vez de adivinar.
   const miEquipo = mySeat!=null ? mySeat%2 : 0;

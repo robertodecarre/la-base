@@ -1,7 +1,7 @@
 import { supabase, asegurarSesion } from "./supabase";
 
-// Crea una sala nueva. config debe tener la misma forma que ya produce
-// PantallaInicio: { nJug, dosMazos, estructura, ases, kamikazes, clock }.
+// Crea una sala nueva. config debe tener esta forma:
+// { nJug, dosMazos, estructura, ases, kamikazes, clock }.
 export async function crearSala(config) {
   await asegurarSesion();
   const { data, error } = await supabase.functions.invoke("create-room", { body: config });

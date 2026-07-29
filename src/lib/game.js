@@ -84,8 +84,8 @@ export async function resolverOros(roomId, seat) {
 // last_trick_winner_seat) mientras la sala está en fase 'resolving' (base
 // completada sin trigger de As de Copas ni de As de Oros). No hay ninguna
 // decisión que tomar — solo confirma el avance a la siguiente base,
-// abriendo con el ganador. Mirror online de PantallaPartida.jsx's botón
-// "SIGUIENTE BASE →".
+// abriendo con el ganador — mismo botón "SIGUIENTE BASE →" que tenía el
+// hotseat (borrado en piece 5q).
 export async function siguienteBase(roomId) {
   await asegurarSesion();
   const { data, error } = await supabase.rpc("resolve_resolving", {

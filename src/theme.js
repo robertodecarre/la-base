@@ -7,9 +7,9 @@
 // referencia) y PantallaOnlineSala.jsx (primer uso real).
 //
 // Ojo: esto NO toca las cartas españolas (src/components/cards/*), que se
-// quedan en su estilo clásico actual, ni las pantallas hotseat — esas
-// siguen con la estética sobria vieja hasta que se haga el rollout pieza
-// por pieza.
+// quedan en su estilo clásico actual. El hotseat (que sí seguía con la
+// estética sobria vieja) se borró entero en piece 5q — la app es
+// online-only ahora.
 
 export const FONTS_URL =
   "https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&family=Barlow+Semi+Condensed:wght@500;600&display=swap";

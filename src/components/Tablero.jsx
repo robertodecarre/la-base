@@ -20,9 +20,10 @@ function ColumnaActual({ parte }) {
 }
 
 // ══════════════════════════════════════════════
-// TABLERO — historial de manos. Compartido entre hotseat (PantallaPartida.jsx,
-// hoy inalcanzable desde la UI, ver piece 5m) y online (PantallaPartidaOnline.jsx,
-// piece 5n) — un solo componente, sin fork: no hace falta mantener dos looks.
+// TABLERO — historial de manos. Usado por PantallaPartidaOnline.jsx (piece
+// 5n). Originalmente compartido con el hotseat (PantallaPartida.jsx), que
+// se borró en piece 5q una vez confirmado que ya no era alcanzable desde
+// la UI (piece 5m).
 // `historial[i]` es undefined para manos todavía no jugadas, o
 // { deltaN, deltaE, pedN, pedE, hechoN, hechoE } una vez cerradas.
 // `manoActual` (índice, opcional) resalta esa columna con un solo marco
