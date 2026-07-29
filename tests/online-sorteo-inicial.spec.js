@@ -122,8 +122,14 @@ test("online: sorteo inicial real, mismo resultado en las 4 sesiones y dealer co
     for (const p of pages) {
       await expect(p.getByText("CONFIRMA")).toBeVisible({ timeout: 15000 }).catch(() => {});
     }
-    await confirmarPedidoEnQuienCorresponda(pages); // mano
-    await confirmarPedidoEnQuienCorresponda(pages); // pie
+    // Con estructura de 1 carta, el pie no tiene ningún pedido válido
+    // propio (opcionesValidas colapsa a un solo valor) — desde piece D
+    // (batch overnight post-5r, ver 20260706190000_pie_forced_bid_auto_
+    // resolve.sql) submit_bid resuelve los dos pedidos en la misma llamada
+    // de mano y salta directo a 'playing', así que ya no hay un segundo
+    // panel de "pie" que confirmar acá (antes de esa pieza, esta línea se
+    // llamaba dos veces).
+    await confirmarPedidoEnQuienCorresponda(pages); // mano (y pie, auto-resuelto)
 
     // Ya en fase 'playing': la mesa (MesaCircular) muestra "PIE" en el
     // asiento que ganó el sorteo. `text` en el nodetest XPath no matchea

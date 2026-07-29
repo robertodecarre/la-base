@@ -123,8 +123,14 @@ test("online: la mano 2 en bidding muestra la mano repartida, no vacía", async 
     }
 
     // MANO 1 (hand_number=0): pedir, jugar la única base, cerrar, repartir.
-    await confirmarPedidoEnQuienCorresponda(pages); // mano
-    await confirmarPedidoEnQuienCorresponda(pages); // pie
+    // Con estructura de 1 carta, el pie no tiene ningún pedido válido
+    // propio (opcionesValidas colapsa a un solo valor) — desde piece D
+    // (batch overnight post-5r, ver 20260706190000_pie_forced_bid_auto_
+    // resolve.sql) submit_bid resuelve los dos pedidos en la misma llamada
+    // de mano y salta directo a 'playing', así que ya no hay un segundo
+    // panel de "pie" que confirmar acá (antes de esa pieza, esta línea se
+    // llamaba dos veces).
+    await confirmarPedidoEnQuienCorresponda(pages); // mano (y pie, auto-resuelto)
     await jugarBaseDeUnaCarta(pages);
 
     const cierre = await esperaBotonVisible(pages, /^Cerrar mano/);

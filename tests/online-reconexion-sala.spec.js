@@ -131,8 +131,13 @@ test("online: recargar la página en distintos momentos siempre devuelve al juga
     await expect(host.getByText("ELEGÍ TU EQUIPO")).toHaveCount(0);
     await expect(host.getByText("CÓDIGO PARA COMPARTIR")).toHaveCount(0);
 
-    await confirmarPedidoEnQuienCorresponda(pages); // mano
-    await confirmarPedidoEnQuienCorresponda(pages); // pie
+    // Con estructura de 1 carta, el pie no tiene ningún pedido válido
+    // propio (opcionesValidas colapsa a un solo valor) — desde piece D
+    // (batch overnight post-5r, ver 20260706190000_pie_forced_bid_auto_
+    // resolve.sql) submit_bid resuelve los dos pedidos en la misma llamada
+    // de mano y salta directo a 'playing', así que ya no hay un segundo
+    // panel de "pie" que confirmar acá.
+    await confirmarPedidoEnQuienCorresponda(pages); // mano (y pie, auto-resuelto)
 
     // Ya en 'playing': ubica a quien tiene el turno. OJO acá: played_cards/
     // turn_seat son públicos, así que "▶ SU TURNO" aparece en la mesa de
