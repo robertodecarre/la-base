@@ -118,6 +118,30 @@ function LibretaIcon({ x, y, abierta, onToggle }) {
   );
 }
 
+// Ícono de "reloj" (piece O, batch overnight post-5r) — mismo patrón de
+// click-to-expand que LibretaIcon, plantado justo al lado (mismo eje Y,
+// offset en X) para que ambos lean como un solo grupo de íconos "info
+// secundaria" entre los capitanes. Togglea el overlay con DisplayReloj
+// (ver RelojOverlay en PantallaPartidaOnline.jsx) — a diferencia de la
+// libreta, este ícono solo se monta si la sala tiene reloj configurado
+// (hayReloj), para no mostrar un botón que abre un panel vacío.
+function ClockIcon({ x, y, abierta, onToggle }) {
+  const r = 12;
+  const activo = colors.cta.border, inactivo = colors.panel.border;
+  return (
+    <g transform={`translate(${x},${y})`} style={{ cursor: "pointer" }}
+       role="button" aria-label={abierta ? "Cerrar reloj" : "Ver reloj"}
+       onClick={(e) => { e.stopPropagation(); onToggle(); }}>
+      <circle cx={0} cy={0} r={r}
+        fill={abierta ? "rgba(255,130,80,0.18)" : "rgba(10,14,38,0.85)"}
+        stroke={abierta ? activo : inactivo} strokeWidth={abierta ? 1.6 : 1.2}
+        filter={abierta ? "url(#glow)" : undefined}/>
+      <line x1={0} y1={0} x2={0} y2={-r * 0.55} stroke={abierta ? activo : "rgba(200,210,255,0.6)"} strokeWidth={1.4} strokeLinecap="round"/>
+      <line x1={0} y1={0} x2={r * 0.4} y2={r * 0.15} stroke={abierta ? activo : "rgba(200,210,255,0.6)"} strokeWidth={1.4} strokeLinecap="round"/>
+    </g>
+  );
+}
+
 // "Siguiente base" (piece G, batch overnight post-5r) — antes vivía como
 // <Btn> HTML debajo de la mesa, en PantallaPartidaOnline.jsx; ahora se
 // planta en la esquina inferior derecha de "la habitación": el canvas
@@ -194,7 +218,7 @@ const MYSEAT_SCALE = 1.5;
 // no tiene nada que ocultar). Online, la única mano real es la propia; el
 // resto llega ya boca abajo desde el caller (ver PantallaPartidaOnline.jsx),
 // y acá alcanza con no dejar tirar cartas ajenas aunque sea su turno.
-export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases, tableroAbierto, onToggleTablero, onSiguienteBase, enviandoResolucion }) {
+export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases, tableroAbierto, onToggleTablero, onSiguienteBase, enviandoResolucion, hayReloj, relojAbierto, onToggleReloj }) {
   const nJug = jugadores.length || 6;
   const G = GEOM[nJug] || GEOM.default;
   const { RX, RY, canvasSize: SIZE, cx: CX, cy: CY, outerRX, outerRY, mesaRX, mesaRY, cartaMesaRX, cartaMesaRY, boxW, boxH } = G;
@@ -203,6 +227,7 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
   const posCapLocal = posEnCirculo(0, RX, RY, CX, CY, nJug);
   const posCapVisitante = posEnCirculo(1, RX, RY, CX, CY, nJug);
   const libretaPos = { x: (posCapLocal.x + posCapVisitante.x) / 2, y: (posCapLocal.y + posCapVisitante.y) / 2 };
+  const clockPos = { x: libretaPos.x + 28, y: libretaPos.y };
 
   return (
     <svg viewBox={`0 0 ${SIZE} ${SIZE}`} style={{width:"100%",userSelect:"none"}}>
@@ -307,6 +332,9 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
 
       {onToggleTablero && (
         <LibretaIcon x={libretaPos.x} y={libretaPos.y} abierta={!!tableroAbierto} onToggle={onToggleTablero}/>
+      )}
+      {onToggleReloj && hayReloj && (
+        <ClockIcon x={clockPos.x} y={clockPos.y} abierta={!!relojAbierto} onToggle={onToggleReloj}/>
       )}
 
       {fase==="resolviendo" && ganadorBase!=null && onSiguienteBase && (

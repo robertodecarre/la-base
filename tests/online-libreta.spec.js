@@ -39,6 +39,13 @@ test("online: el historial de manos vive detrás del ícono de libreta, no siemp
     await expect(libretaBtn).toBeVisible();
     await expect(host.getByText("LIBRETA")).toHaveCount(0);
 
+    // Piece O (batch overnight post-5r): esta sala se creó sin reloj (ver
+    // crearYUnirseSalaOnline — no togglea "Jugar con reloj"), así que el
+    // ícono de reloj al lado de la libreta ni se monta (MesaCircular solo
+    // lo agrega si hayReloj) — no tiene sentido un botón que abre un panel
+    // vacío.
+    await expect(host.getByRole("button", { name: "Ver reloj" })).toHaveCount(0);
+
     // Click abre el overlay con el Tablero (layout vertical: encabezado
     // MANO/CARTAS/LOCAL/VISITANTE, una fila por mano).
     await libretaBtn.click();

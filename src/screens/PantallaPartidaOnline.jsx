@@ -228,6 +228,41 @@ function TableroOverlay({ estructura, historial, manoActual, onCerrar }) {
   );
 }
 
+// Overlay del reloj (piece O, batch overnight post-5r) — mismo patrón que
+// TableroOverlay (backdrop clickeable, panelStyle), pero envolviendo
+// DisplayReloj tal cual en vez del Tablero. A diferencia del reloj de
+// arriba de la pantalla (que solo se auto-muestra durante 'bidding'),
+// este overlay se puede abrir en cualquier fase de la mano vía el ícono
+// de reloj en MesaCircular.jsx — deja consultar el tiempo restante de
+// ambos equipos sin tener que esperar a la próxima ronda de pedidos.
+function RelojOverlay({ tiempoLocal, tiempoVisitante, corriendo, agotadoLocal, agotadoVisitante, modoTiempo, onCerrar }) {
+  return (
+    <div
+      onClick={onCerrar}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(6,8,20,0.72)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 50, padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ ...panelStyle, width: "100%", maxWidth: 320, padding: 16, display: "flex", flexDirection: "column", gap: 10 }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 13, letterSpacing: 2, color: colors.text.secondary }}>RELOJ</div>
+          <button onClick={onCerrar} style={{ background: "none", border: "none", color: colors.text.secondary, fontSize: 16, cursor: "pointer", lineHeight: 1, padding: 4 }}>✕</button>
+        </div>
+        <DisplayReloj
+          tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendo}
+          agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante}
+          modoLento={false} modoTiempo={modoTiempo} hayTiempo={true}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════
 // PANTALLA PARTIDA ONLINE — mesa real (piezas 5d/5e/5f/5g)
 // ══════════════════════════════════════════════
@@ -263,6 +298,9 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   // diferencia de expandidos/cartasLevantadas/errores), así que si alguien
   // la deja abierta se le mantiene abierta entre manos.
   const [tableroAbierto, setTableroAbierto] = useState(false);
+  // Piece O: mismo criterio que tableroAbierto — preferencia del jugador,
+  // no se resetea entre manos.
+  const [relojAbierto, setRelojAbierto] = useState(false);
 
   // La propia mano nunca viaja por Realtime (ver useSala) — hay que pedirla
   // explícitamente cada vez que cambia el número de mano (deal_hand ya dejó
@@ -660,12 +698,16 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               totalBases={totalBases}
               tableroAbierto={tableroAbierto}
               onToggleTablero={()=>setTableroAbierto((v)=>!v)}
+              hayReloj={hayReloj}
+              relojAbierto={relojAbierto}
+              onToggleReloj={()=>setRelojAbierto((v)=>!v)}
             />
           </BloqueMesa>
         </div>
 
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
+        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
       </div>
     );
   }
@@ -717,6 +759,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
+        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
       </div>
     );
   }
@@ -758,6 +801,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
               tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
+              hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
             />
           </BloqueMesa>
         </div>
@@ -789,6 +833,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
+        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
       </div>
     );
   }
@@ -818,6 +863,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
               tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
+              hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
             />
           </BloqueMesa>
         </div>
@@ -855,6 +901,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
+        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
       </div>
     );
   }
@@ -883,6 +930,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
               tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
+              hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
             />
           </BloqueMesa>
         </div>
@@ -904,6 +952,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         )}
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
+        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
       </div>
     );
   }
@@ -1018,6 +1067,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
             expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
             cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
             tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
+            hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
           />
         </BloqueMesa>
       </div>
@@ -1067,6 +1117,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
       <BotonSalir onSalir={onSalir}/>
       {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
+      {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
     </div>
   );
 }

@@ -137,6 +137,20 @@ test("online: el reloj corre de verdad durante el pedido de mano, y con 1 carta 
       await expect(p.getByText("● CORRIENDO")).toHaveCount(0);
     }
 
+    // Piece O (batch overnight post-5r): DisplayReloj ya no se auto-monta
+    // fuera de 'bidding', pero el ícono de reloj al lado de la libreta deja
+    // consultarlo on-demand en cualquier fase — acá, en 'playing'. Ningún
+    // equipo está "corriendo" (bidding ya terminó, running quedó en null),
+    // pero el tiempo restante de ambos sigue siendo consultable.
+    const relojBtn = host.getByRole("button", { name: "Ver reloj" });
+    await expect(relojBtn).toBeVisible();
+    await relojBtn.click();
+    await expect(host.getByText("RELOJ")).toBeVisible();
+    await expect(host.getByText(/^\d+:\d{2}$/)).toHaveCount(2); // LOCAL y VISITANTE
+    await expect(host.getByText("● CORRIENDO")).toHaveCount(0);
+    await host.getByRole("button", { name: "✕" }).click();
+    await expect(host.getByText("RELOJ")).toHaveCount(0);
+
     expect(erroresConsola, `errores de consola:\n${erroresConsola.join("\n")}`).toEqual([]);
   } finally {
     for (const c of contexts) await c.close();
