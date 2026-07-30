@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PanelPedir } from "../components/PanelPedir";
 import { MesaCircular } from "../components/MesaCircular";
 import { DisplayReloj } from "../components/DisplayReloj";
@@ -286,6 +286,19 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   // Piece O: mismo criterio que tableroAbierto — preferencia del jugador,
   // no se resetea entre manos.
   const [relojAbierto, setRelojAbierto] = useState(false);
+  // Piece Q (batch overnight post-5r): reparto animado. cartasLlegadas
+  // cuenta, por asiento, cuántas cartas ya "aterrizaron" visualmente —
+  // alimenta jugadoresMesa truncado mientras la animación corre; vacío
+  // (objeto {}) fuera de la animación, momento en que jugadoresMesa usa
+  // los datos reales sin truncar (ver más abajo). viajandoReparto son las
+  // cartas actualmente en vuelo, para que MesaCircular las dibuje.
+  const [cartasLlegadas, setCartasLlegadas] = useState({});
+  const [animandoReparto, setAnimandoReparto] = useState(false);
+  const [viajandoReparto, setViajandoReparto] = useState([]);
+  // {handNumber, deberiaAnimar} — decidido una sola vez por mano, la
+  // primera vez que esta sesión ve phase==='bidding' para ese hand_number
+  // (ver el useEffect de más abajo).
+  const manoAnimadaRef = useRef(null);
 
   // La propia mano nunca viaja por Realtime (ver useSala) — hay que pedirla
   // explícitamente cada vez que cambia el número de mano (deal_hand ya dejó
@@ -343,6 +356,87 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   const nJug = room.config?.nJug ?? players.length;
   const seatOfPlayerId = (playerId) => players.find((p) => p.id === playerId)?.seat;
   const jugadorEnAsiento = (seat) => players.find((p) => p.seat === seat);
+
+  // Piece Q: dispara el reparto animado apenas ESTA sesión ve phase=
+  // 'bidding' por primera vez para esta mano — no en 'dealing' (deal_hand
+  // todavía no corrió, no hay nada que animar todavía) ni de nuevo si
+  // hand_number no cambió (evita re-disparar en cada re-render). deal_hand
+  // reparte TODAS las cartas de golpe server-side en la misma llamada que
+  // pasa a 'bidding' (no hay reparto incremental real) — igual que el
+  // sorteo (piece H), esta animación es puramente visual/local, cada
+  // sesión la reproduce a su propio ritmo.
+  //
+  // Reconexión/mount tardío: si esta sesión ve la mano ya en 'bidding' con
+  // game_state.updated_at viejo (deal_hand, que es quien pone ese
+  // timestamp al repartir, no corrió hace instantes sino hace rato), es
+  // un reconnect a mitad de mano — se salta la animación entera y se
+  // muestra el estado final ya repartido, mismo criterio que el sorteo
+  // (piece H) para el mismo tipo de bug.
+  useEffect(() => {
+    if (gameState.phase !== "bidding") return;
+    if (manoAnimadaRef.current?.handNumber === gameState.hand_number) return;
+    const edadMs = Date.now() - new Date(gameState.updated_at).getTime();
+    const deberiaAnimar = edadMs < 5000 && totalBases > 0;
+    manoAnimadaRef.current = { handNumber: gameState.hand_number, deberiaAnimar };
+
+    if (!deberiaAnimar) {
+      setAnimandoReparto(false);
+      setCartasLlegadas({});
+      setViajandoReparto([]);
+      // Ver comentario del cleanup de más abajo: resetear acá también,
+      // no solo en la rama que programa timers.
+      return () => { manoAnimadaRef.current = null; };
+    }
+
+    const STAGGER_MS = 130, PAUSA_RONDA_MS = 90, VIAJE_MS = 360;
+    const orden = [];
+    let s = gameState.dealer_seat;
+    for (let i = 0; i < nJug; i++) {
+      orden.push(s);
+      s = gameState.direction === 1 ? (s + nJug - 1) % nJug : (s + 1) % nJug;
+    }
+
+    setAnimandoReparto(true);
+    setCartasLlegadas(Object.fromEntries(Array.from({ length: nJug }, (_, seat) => [seat, 0])));
+    setViajandoReparto([]);
+
+    const timers = [];
+    for (let ronda = 0; ronda < totalBases; ronda++) {
+      for (let i = 0; i < nJug; i++) {
+        const seat = orden[i];
+        const key = `${ronda}-${seat}`;
+        const delayInicio = ronda * (nJug * STAGGER_MS + PAUSA_RONDA_MS) + i * STAGGER_MS;
+        timers.push(setTimeout(() => {
+          setViajandoReparto((v) => [...v, { seat, key }]);
+          timers.push(setTimeout(() => {
+            setViajandoReparto((v) => v.filter((x) => x.key !== key));
+            setCartasLlegadas((c) => ({ ...c, [seat]: (c[seat] ?? 0) + 1 }));
+          }, VIAJE_MS));
+        }, delayInicio));
+      }
+    }
+    timers.push(setTimeout(() => setAnimandoReparto(false), totalBases * (nJug * STAGGER_MS + PAUSA_RONDA_MS)));
+
+    // Resetea manoAnimadaRef acá también (no solo limpia timers): React
+    // StrictMode invoca este efecto dos veces en dev (monta → limpia →
+    // vuelve a montar) para detectar cleanups faltantes — si el reset del
+    // ref quedara solo en la rama "no animar" de arriba, la SEGUNDA
+    // invocación (la que de verdad cuenta) encontraría el ref ya seteado
+    // por la primera y se saltearía de largo sin programar nada. Cada
+    // camino que setea el ref tiene que deshacerlo en su propio cleanup.
+    return () => {
+      timers.forEach(clearTimeout);
+      manoAnimadaRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState.hand_number, gameState.phase]);
+
+  // Cuántas cartas de MI PROPIO asiento ya "llegaron" — gatea la
+  // interactividad del panel de pedir (item 5 de piece Q): no depende de
+  // que las OTRAS sesiones también terminen su animación, cada sesión se
+  // paces sola. Fuera de una animación activa (nunca arrancó, o ya
+  // terminó) esto siempre da true.
+  const repartoListoParaMi = (cartasLlegadas[mySeat] ?? totalBases) >= totalBases;
 
   // ── Datos compartidos por el resumen+mesa+tablero (piece 5n) — antes solo
   // existían dentro del branch 'playing'; se hoistean para que las demás
@@ -413,12 +507,16 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   // en curso, no solo 'playing' como antes.
   const jugadoresMesa = Array.from({ length: nJug }, (_, seat) => {
     const jugador = jugadorEnAsiento(seat);
-    const mano = seat === mySeat
+    const manoCompleta = seat === mySeat
       ? (misCartas ?? [])
       : Array.from(
           { length: Math.max(totalBases - jugadasEstaMano.filter((pc) => pc.player_id === jugador?.id).length, 0) },
           (_, i) => ({ uid: `back-${seat}-${i}` }),
         );
+    // Piece Q: mientras el reparto animado está en curso, cada asiento
+    // solo muestra las cartas que ya "llegaron" (abanico/pila creciendo) —
+    // fuera de la animación, la mano completa de siempre.
+    const mano = animandoReparto ? manoCompleta.slice(0, cartasLlegadas[seat] ?? 0) : manoCompleta;
     return { nombre: jugador?.name ?? `Asiento ${seat}`, eq: jugador?.team ?? (seat % 2), mano, bases: jugador?.tricks_won ?? 0 };
   });
 
@@ -1043,12 +1141,20 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
             cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
             tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
             hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
+            cartasViajandoReparto={viajandoReparto}
           />
         </BloqueMesa>
       </div>
 
       {requiredTeam===null ? (
         <div style={{fontSize:11,color:"rgba(201,168,76,0.4)",fontStyle:"italic"}}>Cerrando el pedido…</div>
+      ) : esMiTurno && !repartoListoParaMi ? (
+        // Piece Q: aunque el server ya me habilitó a pedir, mi propio
+        // abanico todavía no terminó de llegar — mostrar el panel real
+        // acá sería pedirle a alguien que apueste sin haber visto toda su
+        // mano todavía. No depende de que las OTRAS sesiones también
+        // terminen su reparto (cada una se paces sola).
+        <div style={{fontSize:11,color:"rgba(201,168,76,0.4)",fontStyle:"italic"}}>Repartiendo tu mano…</div>
       ) : esMiTurno ? (
         <div style={{width:"100%",maxWidth:260}}>
           {errorPedido && (

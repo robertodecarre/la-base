@@ -212,13 +212,57 @@ const CARTA_MESA = { w: 37, h: 55 };
 const CARTA_MANO = { w: 31, h: 44 };
 const MYSEAT_SCALE = 1.5;
 
+// Piece Q (batch overnight post-5r): keyframe del viaje de reparto,
+// calcado de direccion-reparto-mano-animado.html (0.36s, pico de escala
+// 1.05, giro 380/520deg según paridad de asiento — mismo criterio que el
+// sorteo, ver SorteoAnimado.jsx). Separado del keyframe del sorteo (otra
+// duración/escala/giro) en vez de reusarlo con variables — son dos
+// mockups distintos con valores propios, no una sola animación
+// parametrizada.
+const REPARTO_KEYFRAMES = `
+@keyframes lbRepartoViaje {
+  0%   { opacity: 1; transform: translate(0,0) rotate(0deg) scale(1); }
+  55%  { transform: translate(var(--tx-mid), var(--ty-mid)) rotate(var(--rot-mid)) scale(1.05); }
+  100% { opacity: 0; transform: translate(var(--tx), var(--ty)) rotate(var(--rot-final)) scale(1); }
+}
+.lb-reparto-viajera {
+  animation: lbRepartoViaje 0.36s cubic-bezier(.2,.8,.3,1) forwards;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+`;
+
+// Carta viajera del reparto — misma estructura de doble <g> que el
+// sorteo (posición estática afuera, animación CSS adentro) y el mismo
+// motivo (una animación CSS sobre `transform` reemplaza cualquier
+// atributo transform estático en el mismo elemento en vez de componerlo).
+// Siempre boca abajo: ninguna sesión puede ver la cara de una carta
+// ajena en vuelo (esa mano ni siquiera llega al cliente, ver useSala.js),
+// y la propia tampoco se revela hasta que "aterriza" en el abanico —
+// igual que repartir cartas de verdad, no se ven boca arriba en el aire.
+function CartaViajeraReparto({ destino, origen }) {
+  const tx = destino.x - origen.x, ty = destino.y - origen.y;
+  const rotSigno = destino.seat % 2 === 0 ? 1 : -1;
+  return (
+    <g transform={`translate(${origen.x - CARTA_MANO.w / 2},${origen.y - CARTA_MANO.h / 2})`}>
+      <g className="lb-reparto-viajera" style={{
+        "--tx": `${tx}px`, "--ty": `${ty}px`,
+        "--tx-mid": `${tx * 0.55}px`, "--ty-mid": `${ty * 0.55 - 24}px`,
+        "--rot-mid": `${380 * rotSigno}deg`, "--rot-final": `${520 * rotSigno}deg`,
+      }}>
+        <CartaSVG bocaAbajo w={CARTA_MANO.w} h={CARTA_MANO.h} />
+      </g>
+    </g>
+  );
+}
+
 // `mySeat` es para la mesa online (pieza 5e): en hotseat es undefined y el
 // tablero se comporta como siempre (cualquier mano visible es jugable en su
 // turno, porque las cuatro manos son reales — un solo dispositivo compartido
 // no tiene nada que ocultar). Online, la única mano real es la propia; el
 // resto llega ya boca abajo desde el caller (ver PantallaPartidaOnline.jsx),
 // y acá alcanza con no dejar tirar cartas ajenas aunque sea su turno.
-export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases, tableroAbierto, onToggleTablero, onSiguienteBase, enviandoResolucion, hayReloj, relojAbierto, onToggleReloj }) {
+export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases, tableroAbierto, onToggleTablero, onSiguienteBase, enviandoResolucion, hayReloj, relojAbierto, onToggleReloj, cartasViajandoReparto }) {
   const nJug = jugadores.length || 6;
   const G = GEOM[nJug] || GEOM.default;
   const { RX, RY, canvasSize: SIZE, cx: CX, cy: CY, outerRX, outerRY, mesaRX, mesaRY, cartaMesaRX, cartaMesaRY, boxW, boxH } = G;
@@ -253,6 +297,7 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
         <filter id="glowTurno" x="-80%" y="-80%" width="260%" height="260%">
           <feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
+        <style>{REPARTO_KEYFRAMES}</style>
       </defs>
 
       <ellipse cx={CX} cy={CY} rx={outerRX} ry={outerRY} fill="url(#mesaFondo)" stroke={colors.panel.border} strokeWidth={2}/>
@@ -328,6 +373,12 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
             <PuntosBasesSVG ganadas={j.bases} total={totalBases||0} cx={pos.x} y={by+bh-6*escala} color={t.accent}/>
           </g>
         );
+      })}
+
+      {cartasViajandoReparto?.map(({ seat, key }) => {
+        const push = seat === mySeat ? PUSH_OWN : 1;
+        const destino = { ...posEnCirculo(seat, RX * push, RY * push, CX, CY, nJug), seat };
+        return <CartaViajeraReparto key={key} destino={destino} origen={{ x: CX, y: CY }} />;
       })}
 
       {onToggleTablero && (
