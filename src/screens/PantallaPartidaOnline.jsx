@@ -151,10 +151,50 @@ function BaseResuelta({ cartas, nombreGanador, seatGanador }) {
 // danger+small), con margen propio arriba para separarlo visualmente de
 // la acción principal en vez de sentarse pegado a "Cerrar mano"/"Repartir
 // mano" como antes.
+//
+// Piece M (batch overnight post-5r): onSalir ya no dispara directo del
+// click — antes un click perdido (o un toque en mobile) sacaba a alguien
+// de la sala sin aviso, y aunque piece M's join_room fix ahora deja
+// volver a entrar mid-game, seguía siendo una acción destructiva sin
+// red. Confirmación acotada al propio botón (estado local, no en el
+// padre) para no tener que tocar los 9 lugares donde se monta.
 function BotonSalir({ onSalir }) {
+  const [confirmando, setConfirmando] = useState(false);
   return (
     <div style={{ marginTop: 18 }}>
-      <Btn danger small onClick={onSalir}>Salir de la sala</Btn>
+      <Btn danger small onClick={() => setConfirmando(true)}>Salir de la sala</Btn>
+      {confirmando && (
+        <ConfirmarSalirOverlay onConfirmar={onSalir} onCancelar={() => setConfirmando(false)} />
+      )}
+    </div>
+  );
+}
+
+function ConfirmarSalirOverlay({ onConfirmar, onCancelar }) {
+  return (
+    <div
+      onClick={onCancelar}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(6,8,20,0.72)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 60, padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ ...panelStyle, width: "100%", maxWidth: 300, padding: 18, display: "flex", flexDirection: "column", gap: 14, alignItems: "center", textAlign: "center" }}
+      >
+        <div style={{ fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 14, color: colors.text.secondary }}>
+          ¿Salís de la sala?
+        </div>
+        <div style={{ fontSize: 11, color: "rgba(201,168,76,0.6)" }}>
+          Podés volver a entrar con el mismo código.
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Btn small onClick={onCancelar}>Seguir acá</Btn>
+          <Btn danger small onClick={onConfirmar}>Sí, salir</Btn>
+        </div>
+      </div>
     </div>
   );
 }
