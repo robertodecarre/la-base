@@ -102,8 +102,9 @@ test("online: cerrar mano y repartir mano quedan gateados por rol (capitán / pr
 
     await botonCerrar(capitanPages[0]).click();
 
-    // Repartir mano — solo el próximo repartidor lo ve.
-    const botonRepartir = (p) => p.getByRole("button", { name: /^Repartir/ });
+    // Repartir mano (piece U: ahora el botón "DAR", ícono de mazo, no
+    // texto "Repartir mano") — solo el próximo repartidor lo ve.
+    const botonRepartir = (p) => p.getByRole("button", { name: "DAR" });
     let repartidorPage = null;
     for (let intento = 0; intento < 20 && !repartidorPage; intento++) {
       for (const p of pages) {

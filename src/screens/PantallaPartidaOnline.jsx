@@ -7,6 +7,7 @@ import { EstrellasPedido } from "../components/EstrellasPedido";
 import { AvionKamikaze } from "../components/AvionKamikaze";
 import { CartaSVG } from "../components/cards/CartaSVG";
 import { Btn } from "../components/Btn";
+import { BotonDar } from "../components/BotonDar";
 import {
   enviarPedido, jugarCarta, siguienteBase, resolverCopas, resolverOros,
   repartirMano, cerrarMano, reclamarTiempo,
@@ -771,9 +772,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           </div>
         )}
         {esProximoRepartidor ? (
-          <Btn verde onClick={onRepartir} disabled={enviandoReparto}>
-            {enviandoReparto ? "Repartiendo…" : "Repartir mano"}
-          </Btn>
+          <BotonDar onClick={onRepartir} disabled={enviandoReparto} enviando={enviandoReparto}/>
         ) : (
           <div style={{fontSize:12,color:"rgba(201,168,76,0.5)"}}>
             Esperando a que <b style={{color:"#f0d080"}}>{nombreProximoRepartidor}</b> reparta la mano…

@@ -174,8 +174,10 @@ test("online: la mano 2 en bidding muestra la mano repartida, no vacía", async 
 
     // Esto dispara close_hand: hand_number pasa a 1 con phase='dealing' —
     // el punto exacto donde el bug pre-fix ya deja misCartas cacheado en [].
-    const reparto = await esperaBotonVisible(pages, /^Repartir/);
-    await reparto.getByRole("button", { name: /^Repartir/ }).click();
+    // Piece U: el botón ahora es "DAR" (ícono de mazo), no texto "Repartir
+    // mano".
+    const reparto = await esperaBotonVisible(pages, "DAR");
+    await reparto.getByRole("button", { name: "DAR" }).click();
 
     // deal_hand reparte la mano 1 y pasa a phase='bidding' sin volver a
     // cambiar hand_number — el escenario exacto que el fix cubre.
