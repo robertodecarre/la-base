@@ -1,0 +1,156 @@
+// Verifies piece T's fix end-to-end against the real linked Supabase
+// project: completing a hand's LAST base now goes through 'resolving'
+// (same as every other base) instead of skipping straight to 'closing'.
+//
+// Before this fix, resolve_trick jumped straight to phase='closing' when
+// the just-completed trick was the hand's last base — the client's
+// 'closing' render always sends cartasMesa=[] to MesaCircular, so that
+// base's cards vanished immediately with no "Llevar base" confirmation
+// step, unlike every other base. Root-caused by reading resolve_trick/
+// resolve_resolving directly (20260706080000/20260706090000/20260706110000)
+// — this predates piece P and piece Q by three weeks, so it isn't a
+// regression from either.
+//
+// estructura=[2]: 2 bases in the one hand — base 0 exercises the
+// already-correct "not the last base" path (same as verify-resolving-
+// resolution.mjs), base 1 is the one this fix targets. ases all off to
+// avoid any copas_menu/oros_menu detour.
+//
+// Usage: node --env-file=.env scripts/verify-resolving-last-base.mjs
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error("Missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY.");
+  process.exit(1);
+}
+
+const N_JUG = 4;
+const CONFIG = {
+  nJug: N_JUG,
+  dosMazos: false,
+  estructura: [2],
+  ases: { espadas: false, copas: false, oros: false },
+  kamikazes: 0,
+};
+
+function assertEq(actual, expected, label) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`FAIL ${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+  console.log(`  ok: ${label} (${JSON.stringify(actual)})`);
+}
+
+async function newSession() {
+  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { error } = await client.auth.signInAnonymously();
+  if (error) throw error;
+  return client;
+}
+
+async function rpc(client, fn, args) {
+  const { data, error } = await client.rpc(fn, args);
+  if (error) throw new Error(`${fn} failed: ${error.message}`);
+  return data;
+}
+
+async function myHand(client, roomId, handNumber) {
+  const { data, error } = await client
+    .from("hands")
+    .select("cards")
+    .eq("room_id", roomId)
+    .eq("hand_number", handNumber)
+    .single();
+  if (error) throw error;
+  return data.cards;
+}
+
+async function playedCardsForTrick(client, roomId, handNumber, trickNumber) {
+  const { data, error } = await client
+    .from("played_cards")
+    .select("seq_in_trick, card, player_id")
+    .eq("room_id", roomId)
+    .eq("hand_number", handNumber)
+    .eq("trick_number", trickNumber)
+    .order("seq_in_trick", { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+async function playTrick(sessions, room, gs) {
+  const startBase = gs.base_num;
+  while (gs.phase === "playing" && gs.base_num === startBase) {
+    const seat = gs.turn_seat;
+    const cards = await myHand(sessions[seat], room.id, gs.hand_number);
+    gs = await rpc(sessions[seat], "play_card", { p_room_id: room.id, p_card_uid: cards[0].uid });
+  }
+  return gs;
+}
+
+async function main() {
+  console.log("Signing in 4 anonymous sessions...");
+  const sessions = [];
+  for (let i = 0; i < N_JUG; i++) sessions.push(await newSession());
+
+  const room = await rpc(sessions[0], "create_room", { p_config: CONFIG });
+  for (let i = 0; i < N_JUG; i++) {
+    await rpc(sessions[i], "join_room", { p_code: room.code, p_name: `J${i}` });
+  }
+  // join_room leaves seat/team null (piece 5r) — choose_team assigns both
+  // (LOCAL=team0/even seats, VISITANTE=team1/odd seats, first-to-choose-
+  // each-team becomes captain).
+  const players = [];
+  for (let i = 0; i < N_JUG; i++) {
+    players.push(await rpc(sessions[i], "choose_team", { p_room_id: room.id, p_team: i % 2 }));
+  }
+
+  let gs = await rpc(sessions[0], "deal_hand", { p_room_id: room.id });
+  const teamMano = gs.mano_seat % 2;
+  const teamPie = 1 - teamMano;
+  const captainMano = players.find((p) => p.team === teamMano && p.is_captain);
+  const captainPie = players.find((p) => p.team === teamPie && p.is_captain);
+  // opcionesValidas(1, 2) = [0, 2] — la suma tiene que dar total-1 o
+  // total+1, así que pie NO puede pedir 1 igual que mano (ver
+  // src/engine/bidding.js). 0 es siempre una opción válida acá.
+  await rpc(sessions[captainMano.seat], "submit_bid", { p_room_id: room.id, p_value: 1, p_kamikaze: false });
+  gs = await rpc(sessions[captainPie.seat], "submit_bid", { p_room_id: room.id, p_value: 0, p_kamikaze: false });
+
+  console.log("\n=== Base 0 of 2 (not the last base — unchanged behavior) ===");
+  gs = await playTrick(sessions, room, gs);
+  assertEq(gs.phase, "resolving", "phase after base 0 completes");
+  assertEq(gs.base_num, 1, "base_num advanced to 1");
+  const winner0 = gs.last_trick_winner_seat;
+  const trick0Cards = await playedCardsForTrick(sessions[0], room.id, gs.hand_number, 0);
+  assertEq(trick0Cards.length, N_JUG, "base 0's played_cards are all still there for resolving to show");
+
+  gs = await rpc(sessions[winner0], "resolve_resolving", { p_room_id: room.id });
+  assertEq(gs.phase, "playing", "phase after resolve_resolving on a non-last base");
+  assertEq(gs.turn_seat, winner0, "turn_seat handed to base 0's winner");
+
+  console.log("\n=== Base 1 of 2 (THE LAST BASE — piece T's actual fix) ===");
+  gs = await playTrick(sessions, room, gs);
+  // Before the fix this was 'closing' already, with base 1's cards
+  // effectively invisible (the 'closing' render never shows cartasMesa).
+  assertEq(gs.phase, "resolving", "phase after the LAST base completes — must be 'resolving', not 'closing'");
+  assertEq(gs.base_num, 2, "base_num advanced to 2 (== total_bases)");
+  const winner1 = gs.last_trick_winner_seat;
+  const trick1Cards = await playedCardsForTrick(sessions[0], room.id, gs.hand_number, 1);
+  assertEq(trick1Cards.length, N_JUG, "the last base's played_cards are queryable while still in 'resolving' — this is what the table renders during the Llevar-base wait");
+
+  // Only the trick winner can confirm — same authorization as every other base.
+  const impostor = (winner1 + 1) % N_JUG;
+  const { error: impostorErr } = await sessions[impostor].rpc("resolve_resolving", { p_room_id: room.id });
+  if (!impostorErr) throw new Error("FAIL: a non-winner was able to call resolve_resolving on the last base");
+  console.log(`  ok: resolve_resolving still rejects a non-winner on the last base (${impostorErr.message})`);
+
+  gs = await rpc(sessions[winner1], "resolve_resolving", { p_room_id: room.id });
+  assertEq(gs.phase, "closing", "phase after resolve_resolving on the LAST base — now finally advances to 'closing'");
+
+  console.log("\nALL CHECKS PASSED against the real project.");
+}
+
+main().catch((err) => {
+  console.error("\nFAILED:", err.message);
+  process.exit(1);
+});

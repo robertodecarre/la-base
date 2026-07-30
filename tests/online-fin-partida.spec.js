@@ -53,9 +53,23 @@ test("online: la pantalla de fin de partida anuncia el equipo ganador y sus juga
     }
     expect(confirmado).toBe(true);
 
+    // Piece T: la última base de la mano también pasa por 'resolving'
+    // ahora (antes saltaba derecho a 'closing') — hace falta clickear
+    // "Siguiente base" una vez que aparece.
     let enClosing = false;
+    let sigBaseClickeado = false;
     for (let i = 0; i < 40 && !enClosing; i++) {
       for (const p of pages) await jugarCartaDelTurnoActual(p).catch(() => {});
+      if (!sigBaseClickeado) {
+        for (const p of pages) {
+          const btn = p.getByRole("button", { name: "Siguiente base" });
+          if (await btn.isVisible().catch(() => false)) {
+            await btn.click({ timeout: 5000 }).catch(() => {});
+            sigBaseClickeado = true;
+            break;
+          }
+        }
+      }
       for (const p of pages) {
         if (await p.getByText(/terminada/).isVisible().catch(() => false)) { enClosing = true; break; }
       }

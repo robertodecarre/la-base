@@ -61,9 +61,23 @@ test("online: cerrar mano y repartir mano quedan gateados por rol (capitán / pr
     expect(confirmado).toBe(true);
 
     // Juega la única base (1 carta cada uno) hasta llegar a 'closing'.
+    // Piece T: incluso la última base de la mano pasa por 'resolving'
+    // ahora (antes saltaba derecho a 'closing') — hay que clickear
+    // "Siguiente base" una vez que aparece, si no la mano nunca avanza.
     let enClosing = false;
+    let sigBaseClickeado = false;
     for (let i = 0; i < 40 && !enClosing; i++) {
       for (const p of pages) await jugarCartaDelTurnoActual(p).catch(() => {});
+      if (!sigBaseClickeado) {
+        for (const p of pages) {
+          const btn = p.getByRole("button", { name: "Siguiente base" });
+          if (await btn.isVisible().catch(() => false)) {
+            await btn.click({ timeout: 5000 }).catch(() => {});
+            sigBaseClickeado = true;
+            break;
+          }
+        }
+      }
       for (const p of pages) {
         if (await p.getByText(/terminada/).isVisible().catch(() => false)) { enClosing = true; break; }
       }

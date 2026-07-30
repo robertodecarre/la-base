@@ -139,6 +139,18 @@ export async function pasarSorteoAnimado(pages) {
     await pages[i].getByRole("button", { name: "Dar vuelta tu carta" }).click({ timeout: 10000 });
   }
   for (const p of pages) {
-    await p.getByRole("button", { name: "ARRANCAMOS" }).click({ timeout: 15000 });
+    // La última sesión en confirmar ve todosArrancados pasar a true por su
+    // propio estado optimista en el mismo instante del click — su propia
+    // pantalla de SorteoAnimado puede desmontarse (onCumplido) mientras
+    // Playwright todavía está chequeando que el botón esté "estable" antes
+    // de despachar el click, reportando "element was detached from the
+    // DOM, retrying" y agotando el timeout aunque el click ya haya surtido
+    // efecto. Si para cuando esto falla la sesión ya no está en SORTEO, el
+    // click funcionó igual — no es un fallo real.
+    const ok = await p.getByRole("button", { name: "ARRANCAMOS" }).click({ timeout: 15000 }).then(() => true).catch(() => false);
+    if (!ok) {
+      const siguesEnSorteo = await p.getByText("SORTEO", { exact: true }).isVisible().catch(() => false);
+      if (siguesEnSorteo) throw new Error("no se pudo confirmar ARRANCAMOS y la sesión sigue en SORTEO");
+    }
   }
 }

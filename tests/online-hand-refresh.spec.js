@@ -97,11 +97,25 @@ async function esperaBotonVisible(pages, regex, timeout = 30000) {
 // Juega la única base de una mano de 1 carta: en cada ronda intenta el click
 // en las 4 sesiones (en las que no es el turno de esa sesión, onTirar
 // aborta solo porque seatIdx!==mySeat — ver MesaCircular's `puedeElegir`),
-// hasta que aparezca "Cerrar mano".
+// hasta que aparezca "Cerrar mano". Piece T: la última base de la mano
+// también pasa por 'resolving' ahora (antes saltaba derecho a 'closing'),
+// así que hace falta clickear "Siguiente base" una vez que aparece, antes
+// de que "Cerrar mano" llegue a mostrarse.
 async function jugarBaseDeUnaCarta(pages) {
+  let sigBaseClickeado = false;
   for (let i = 0; i < 40; i++) {
     for (const p of pages) {
       await jugarCartaDelTurnoActual(p).catch(() => {});
+    }
+    if (!sigBaseClickeado) {
+      for (const p of pages) {
+        const btn = p.getByRole("button", { name: "Siguiente base" });
+        if (await btn.isVisible().catch(() => false)) {
+          await btn.click({ timeout: 5000 }).catch(() => {});
+          sigBaseClickeado = true;
+          break;
+        }
+      }
     }
     for (const p of pages) {
       if (await p.getByRole("button", { name: /^Cerrar mano/ }).isVisible().catch(() => false)) return;
