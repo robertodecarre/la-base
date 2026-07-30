@@ -78,6 +78,11 @@ const CLOCK_ADAPTER_PANEL = { iniciarPara: () => {}, detener: () => {} };
 // index.html), dejando ver el verde viejo alrededor/detrás de la mesa.
 const fondoStyle = { background: colors.bg, minHeight: "100vh", fontFamily: fonts.body };
 
+// Piece P (batch overnight post-5r): ya no dibuja las cartas en sí —
+// duplicaban lo que el propio asiento ("VOS") ya muestra en la mesa,
+// justo debajo. Sigue existiendo para el error/"Cargando…", que mySeat's
+// panel en la mesa no cubre (ahí una mano vacía por error es indistinguible
+// de una mano vacía real).
 function MiMano({ cartas, error }) {
   if (error) {
     return <div style={{fontSize:11,color:"#e88"}}>No se pudo cargar tu mano: {error.message}</div>;
@@ -85,15 +90,7 @@ function MiMano({ cartas, error }) {
   if (!cartas) {
     return <div style={{fontSize:11,color:"rgba(201,168,76,0.4)"}}>Cargando tu mano…</div>;
   }
-  return (
-    <div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"center",minHeight:52}}>
-      {cartas.map((carta) => (
-        <svg key={carta.uid} viewBox="0 0 36 52" width={36} height={52}>
-          <CartaSVG carta={carta} w={36} h={52}/>
-        </svg>
-      ))}
-    </div>
-  );
+  return null;
 }
 
 // Panel de solo lectura para todos menos el capitán a quien le toca pedir
@@ -130,18 +127,6 @@ function FilaCartasJugadas({ cartas, seatDestacado }) {
           </svg>
         </div>
       ))}
-    </div>
-  );
-}
-
-// Fase 'resolving': la base ya se decidió server-side (last_trick_winner_seat)
-// pero nadie confirmó el avance todavía. Muestra las cartas de esa base ya
-// completa y quién la ganó.
-function BaseResuelta({ cartas, nombreGanador, seatGanador }) {
-  return (
-    <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:420,display:"flex",flexDirection:"column",gap:8,alignItems:"center"}}>
-      <div style={{fontSize:12,color:"#f0d080"}}>¡<b>{nombreGanador}</b> gana la base!</div>
-      <FilaCartasJugadas cartas={cartas} seatDestacado={seatGanador}/>
     </div>
   );
 }
@@ -717,15 +702,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     // play_card completó el truco (ver play_card_trick_resolution.sql) —
     // la base recién resuelta es base_num-1, no base_num.
     const trickNumber = gameState.base_num - 1;
-    const cartasUltimaBase = playedCards
-      .filter((pc) => pc.hand_number === gameState.hand_number && pc.trick_number === trickNumber)
-      .sort((a, b) => a.seq_in_trick - b.seq_in_trick)
-      .map((pc) => {
-        const seat = seatOfPlayerId(pc.player_id);
-        return { pc, seat, nombre: jugadorEnAsiento(seat)?.name ?? `Asiento ${seat}` };
-      });
     const seatGanador = gameState.last_trick_winner_seat;
-    const nombreGanador = jugadorEnAsiento(seatGanador)?.name;
 
     return (
       <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
@@ -748,8 +725,6 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
             />
           </BloqueMesa>
         </div>
-
-        <BaseResuelta cartas={cartasUltimaBase} nombreGanador={nombreGanador} seatGanador={seatGanador}/>
 
         {errorResolucion && (
           <div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",textAlign:"center",maxWidth:340}}>

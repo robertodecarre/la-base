@@ -170,9 +170,16 @@ test("online: la mano 2 en bidding muestra la mano repartida, no vacía", async 
 
     // La aserción central: cada sesión tiene que ver su propia carta (1,
     // según estructura[1]=1), no una mano vacía ni quedarse en "Cargando".
+    // Piece P (batch overnight post-5r) sacó la tira redundante de cartas
+    // que vivía arriba de la pantalla (MiMano ya no dibuja las cartas,
+    // solo error/"Cargando…" — duplicaba el propio asiento en la mesa), así
+    // que la única fuente de la mano real ahora es el asiento "VOS" dentro
+    // de MesaCircular: 2 elementos <g> directos para una mano de 1 carta
+    // (borde + la única carta; el toggle "▼ ver" no se renderiza para
+    // mano.length===1 — mismo conteo que ya usa online-reconexion-sala.spec.js).
     for (let i = 0; i < 4; i++) {
-      const cartas = pages[i].locator('svg[width="36"][height="52"]');
-      await expect(cartas, `sesión ${NOMBRES[i]}: mano de la carta 2 debería tener 1 carta`).toHaveCount(1, { timeout: 10000 });
+      const miAsiento = pages[i].locator("svg g", { hasText: "VOS" }).first();
+      await expect(miAsiento.locator(":scope > g"), `sesión ${NOMBRES[i]}: mano de la carta 2 debería tener 1 carta`).toHaveCount(2, { timeout: 10000 });
       await expect(pages[i].getByText("Cargando tu mano")).toHaveCount(0);
     }
 
