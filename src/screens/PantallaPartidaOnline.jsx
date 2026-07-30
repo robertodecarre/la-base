@@ -156,6 +156,11 @@ function BotonSalir({ onSalir }) {
   );
 }
 
+// Piece V (batch overnight post-5r): copy/botones con la voz irreverente
+// propia de esta app (misma línea que "la está haciendo" — ver piece G/
+// online-habitacion.spec.js) — texto tal cual pedido, sin suavizar.
+// "ME QUEDO" reusa colors.positive (Btn verde), el mismo verde que ya usa
+// el resto del chrome para "confirmar/continuar" — no un acento nuevo.
 function ConfirmarSalirOverlay({ onConfirmar, onCancelar }) {
   return (
     <div
@@ -171,14 +176,14 @@ function ConfirmarSalirOverlay({ onConfirmar, onCancelar }) {
         style={{ ...panelStyle, width: "100%", maxWidth: 300, padding: 18, display: "flex", flexDirection: "column", gap: 14, alignItems: "center", textAlign: "center" }}
       >
         <div style={{ fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 14, color: colors.text.secondary }}>
-          ¿Salís de la sala?
+          ¿Ya te vas, forro?
         </div>
         <div style={{ fontSize: 11, color: "rgba(201,168,76,0.6)" }}>
           Podés volver a entrar con el mismo código.
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          <Btn small onClick={onCancelar}>Seguir acá</Btn>
-          <Btn danger small onClick={onConfirmar}>Sí, salir</Btn>
+          <Btn verde small onClick={onCancelar}>ME QUEDO</Btn>
+          <Btn danger small onClick={onConfirmar}>ME VOY A LA MIERDA</Btn>
         </div>
       </div>
     </div>

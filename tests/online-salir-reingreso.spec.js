@@ -77,15 +77,15 @@ test("online: salir de la sala pide confirmación, y reingresar mid-game por có
     // donde estaba (todavía en la mesa, sin salir) — cubre el motivo por
     // el que se agregó el diálogo (evitar un click perdido).
     await saliente.getByRole("button", { name: "Salir de la sala" }).click();
-    await expect(saliente.getByText("¿Salís de la sala?")).toBeVisible({ timeout: 5000 });
-    await saliente.getByRole("button", { name: "Seguir acá" }).click();
-    await expect(saliente.getByText("¿Salís de la sala?")).toHaveCount(0);
+    await expect(saliente.getByText("¿Ya te vas, forro?")).toBeVisible({ timeout: 5000 });
+    await saliente.getByRole("button", { name: "ME QUEDO" }).click();
+    await expect(saliente.getByText("¿Ya te vas, forro?")).toHaveCount(0);
     await expect(saliente.getByText(/Mano 1/)).toBeVisible();
 
     // Ahora sí: confirmar la salida real.
     await saliente.getByRole("button", { name: "Salir de la sala" }).click();
-    await expect(saliente.getByText("¿Salís de la sala?")).toBeVisible({ timeout: 5000 });
-    await saliente.getByRole("button", { name: "Sí, salir" }).click();
+    await expect(saliente.getByText("¿Ya te vas, forro?")).toBeVisible({ timeout: 5000 });
+    await saliente.getByRole("button", { name: "ME VOY A LA MIERDA" }).click();
     await expect(saliente.getByRole("button", { name: /Crear sala/ })).toBeVisible({ timeout: 15000 });
     await expect(saliente.getByRole("button", { name: /Unirse a sala/ })).toBeVisible();
 
