@@ -123,15 +123,22 @@ export async function alternarListoEnPantalla(page) {
 // Piece H (batch overnight post-5r): la pantalla de sorteo ya no revela
 // el resultado solo — cada sesión tiene que dar vuelta su propia carta
 // (click real, sincronizado por Realtime vía rooms.sorteo_inicial.flipped)
-// antes de que sorteoCumplido se active y la sala pase a la mesa. Sin
-// este paso, cualquier test que llegue hasta acá después de marcarse
-// "listo" se queda colgado esperando "Mano 1"/"CONFIRMA" para siempre —
-// llamar esto una vez, con las nJug páginas, apenas todas están listas.
+// antes de que sorteoCumplido se active y la sala pase a la mesa. Piece R
+// (batch overnight post-5r) sumó un segundo paso: una vez que las nJug
+// dieron vuelta, las cartas quedan asentadas y cada sesión tiene que
+// confirmar "ARRANCAMOS" (click real, sincronizado vía rooms.sorteo_
+// inicial.arrancamos) antes de que deal_hand corra. Sin estos dos pasos,
+// cualquier test que llegue hasta acá después de marcarse "listo" se
+// queda colgado esperando "Mano 1"/"CONFIRMA" para siempre — llamar esto
+// una vez, con las nJug páginas, apenas todas están listas.
 export async function pasarSorteoAnimado(pages) {
   for (const p of pages) {
     await p.getByText("SORTEO", { exact: true }).waitFor({ timeout: 15000 });
   }
   for (let i = 0; i < pages.length; i++) {
     await pages[i].getByRole("button", { name: "Dar vuelta tu carta" }).click({ timeout: 10000 });
+  }
+  for (const p of pages) {
+    await p.getByRole("button", { name: "ARRANCAMOS" }).click({ timeout: 15000 });
   }
 }

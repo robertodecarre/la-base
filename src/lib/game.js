@@ -25,6 +25,17 @@ export async function marcarFlipSorteo(roomId) {
   return data; // fila de rooms
 }
 
+// Piece R (batch overnight post-5r): marca que la propia sesión confirmó
+// "ARRANCAMOS" — igual que marcarFlipSorteo, el asiento sale de la propia
+// fila de players server-side. Solo una vez que los nJug asientos
+// confirmaron, PantallaOnlineSala.jsx dispara repartirMano().
+export async function marcarArrancamosSorteo(roomId) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("marcar_arrancamos_sorteo", { p_room_id: roomId });
+  if (error) throw error;
+  return data; // fila de rooms
+}
+
 // Reparte la mano actual: la primera vez que se llama arranca la partida
 // (rooms.status "waiting" -> "playing", elige quién reparte al azar);
 // las siguientes veces reutiliza el hand_number/dealer_seat que haya

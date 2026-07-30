@@ -24,6 +24,11 @@ import { crearYUnirseSalaOnline, alternarListoEnPantalla } from "./helpers.js";
 // sesiones entre sí y contra rooms.sorteo_inicial.ganador_seat leído
 // directo de la base — mismo nivel de garantía que antes, ahora pasando
 // por la interacción real en vez de solo el markup.
+//
+// Piece R (batch overnight post-5r): agrega el paso de confirmación
+// compartida "ARRANCAMOS" — las cartas ya no se limpian solas después del
+// flip, cada sesión tiene que apretar el botón (ejercitando el click real +
+// marcar_arrancamos_sorteo + Realtime) antes de que deal_hand corra.
 
 function leerEnv() {
   const texto = fs.readFileSync(".env", "utf8");
@@ -110,18 +115,17 @@ test("online: sorteo inicial real, mismo resultado en las 4 sesiones y dealer co
     }
 
     // Esperar a que las 4 sesiones vean, cada una por su cuenta, que TODOS
-    // ya dieron vuelta — el hint desaparece recién ahí (ver SorteoAnimado.
-    // jsx). Necesario antes de leer la base directo: el click de arriba
-    // solo garantiza que ESTA sesión marcó su propio flip local; que las
-    // OTRAS 3 sesiones ya vean el flip de, por ejemplo, la última página
-    // clickeada depende de que marcar_flip_sorteo haya terminado de
-    // escribir Y de que Realtime ya lo haya propagado — sin esperar esto,
-    // el fetch a rooms.sorteo_inicial de más abajo puede correr antes de
-    // que ese último write llegue a la base, viendo un `flipped` todavía
-    // incompleto (visto en la práctica: pasaba justo con el último
-    // asiento clickeado).
+    // ya dieron vuelta — el botón ARRANCAMOS aparece recién ahí (ver
+    // SorteoAnimado.jsx). Necesario antes de leer la base directo: el
+    // click de arriba solo garantiza que ESTA sesión marcó su propio flip
+    // local; que las OTRAS 3 sesiones ya vean el flip de, por ejemplo, la
+    // última página clickeada depende de que marcar_flip_sorteo haya
+    // terminado de escribir Y de que Realtime ya lo haya propagado — sin
+    // esperar esto, el click de ARRANCAMOS de más abajo podría correr
+    // antes de que esa sesión vea todosFlipeados=true (visto en la
+    // práctica: pasaba justo con el último asiento clickeado).
     for (const p of pages) {
-      await expect(p.getByText(/Tocá tu carta|Esperando a los demás/)).toHaveCount(0, { timeout: 15000 });
+      await expect(p.getByRole("button", { name: "ARRANCAMOS" })).toBeVisible({ timeout: 15000 });
     }
 
     // Leyenda "DA -nombre-": mismo ganador en las 4 sesiones. El texto
@@ -137,27 +141,48 @@ test("online: sorteo inicial real, mismo resultado en las 4 sesiones y dealer co
     const ganadorNombre = nombresGanador[0];
     expect(NOMBRES).toContain(ganadorNombre);
 
+    // Piece R: las cartas se quedan asentadas — deal_hand todavía NO corrió
+    // (sin sondear la base activamente para no crear una carrera con el
+    // paso de abajo, se confirma indirectamente: el panel "CONFIRMA" de
+    // bidding todavía no puede estar visible en ninguna sesión porque
+    // ninguna confirmó ARRANCAMOS todavía).
+    for (const p of pages) {
+      await expect(p.getByText("CONFIRMA")).toHaveCount(0);
+    }
+
+    // Cada sesión confirma "ARRANCAMOS" — recién cuando las 4 lo hicieron,
+    // marcar_arrancamos_sorteo completa rooms.sorteo_inicial.arrancamos y
+    // PantallaOnlineSala.jsx dispara repartirMano().
+    for (const p of pages) {
+      await p.getByRole("button", { name: "ARRANCAMOS" }).click({ timeout: 10000 });
+    }
+
     // Chequeo directo contra la base: sorteo_inicial.ganador_seat resuelve
     // al mismo nombre (el orden de join = seat, ver crearYUnirseSalaOnline
     // en helpers.js), confirmando que lo que muestran las 4 sesiones es
     // realmente lo que el server guardó, no una casualidad de render.
+    // También confirma que flipped Y arrancamos quedaron completos para
+    // los 4 asientos.
     const env = leerEnv();
-    const resp = await fetch(
-      `${env.VITE_SUPABASE_URL}/rest/v1/rooms?code=eq.${code}&select=sorteo_inicial`,
-      { headers: { apikey: env.VITE_SUPABASE_ANON_KEY } }
-    );
-    const filas = await resp.json();
-    expect(filas).toHaveLength(1);
-    const { sorteo_inicial } = filas[0];
+    let sorteo_inicial;
+    await expect(async () => {
+      const resp = await fetch(
+        `${env.VITE_SUPABASE_URL}/rest/v1/rooms?code=eq.${code}&select=sorteo_inicial`,
+        { headers: { apikey: env.VITE_SUPABASE_ANON_KEY } }
+      );
+      const filas = await resp.json();
+      expect(filas).toHaveLength(1);
+      sorteo_inicial = filas[0].sorteo_inicial;
+      expect(sorteo_inicial.arrancamos, "las 4 sesiones ya deberían haber confirmado ARRANCAMOS").toEqual({ "0": true, "1": true, "2": true, "3": true });
+    }).toPass({ timeout: 15000 });
     expect(sorteo_inicial).toBeTruthy();
     expect(sorteo_inicial.cartas).toHaveLength(4);
     expect(sorteo_inicial.flipped, "las 4 sesiones ya deberían haber marcado su flip").toEqual({ "0": true, "1": true, "2": true, "3": true });
     expect(NOMBRES[sorteo_inicial.ganador_seat]).toBe(ganadorNombre);
 
-    // Una vez las 4 dieron vuelta su carta (+ la gracia breve de la
-    // leyenda), deal_hand reparte la mano 0 usando ese asiento como
-    // dealer_seat — llega a bidding directo (no hay fase 'dealing' para
-    // la mano 0).
+    // Una vez las 4 confirmaron ARRANCAMOS, deal_hand reparte la mano 0
+    // usando ese asiento como dealer_seat — llega a bidding directo (no
+    // hay fase 'dealing' para la mano 0).
     for (const p of pages) {
       await expect(p.getByText("CONFIRMA")).toBeVisible({ timeout: 15000 }).catch(() => {});
     }

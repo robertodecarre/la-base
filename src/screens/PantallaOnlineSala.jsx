@@ -155,12 +155,14 @@ function FilaAsiento({ seat, jugador, mySeat, team }) {
 // propósito: sortear_reparto_inicial solo escribe rooms.sorteo_inicial si
 // todavía es null, así que solo el primer intento que llega tiene efecto
 // real y el resto ve el mismo resultado ya calculado (mismo patrón
-// "ungated" que deal_hand). Una vez que rooms.sorteo_inicial llega por
-// Realtime a las 4 sesiones, cada una arranca su propio timer de ~3s y
-// recién ahí llama a repartirMano() — mismo no-coordination-needed: solo
-// el primer intento reparte de verdad (deal_hand sigue gateado por
-// rooms.status<>'waiting'), el resto recibe 'room_not_open' sin romper
-// nada.
+// "ungated" que deal_hand). Piece R: ya no hay timer fijo desde que
+// aparece rooms.sorteo_inicial — cada asiento tiene que dar vuelta su
+// carta Y confirmar "ARRANCAMOS" (SorteoAnimado.jsx, rooms.sorteo_inicial.
+// arrancamos) antes de que CUALQUIER sesión llame a repartirMano(). Mismo
+// no-coordination-needed de siempre: las 4 sesiones lo intentan a la vez
+// apenas todosArrancaron, solo el primer intento reparte de verdad
+// (deal_hand sigue gateado por rooms.status<>'waiting'), el resto recibe
+// 'room_not_open' sin romper nada.
 export function PantallaOnlineSala({ roomId, onSalir }) {
   const { room, players, gameState, playedCards, handResults, userId, mySeat, myTeam, isCaptain, ready, error, fetchMyHand } = useSala(roomId);
   const [enviandoListo, setEnviandoListo] = useState(false);
@@ -190,20 +192,28 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
   const salaCompleta = players.length === nJug;
   const todosListos = salaCompleta && players.length > 0 && players.every((p) => p.ready);
   const tieneSorteo = !!room?.sorteo_inicial;
+  // Piece R: la mano recién se reparte cuando los nJug asientos
+  // confirmaron ARRANCAMOS (rooms.sorteo_inicial.arrancamos, ver
+  // marcar_arrancamos_sorteo/SorteoAnimado.jsx) — ya no un timer fijo
+  // desde que aparece el sorteo, sin importar si alguien todavía no dio
+  // vuelta su carta ni confirmó nada.
+  const arrancamosSorteo = room?.sorteo_inicial?.arrancamos ?? {};
+  const todosArrancaron = tieneSorteo && Array.from({ length: nJug }, (_, s) => s).every((s) => !!arrancamosSorteo[s]);
 
   useEffect(() => {
     if (!todosListos || gameState || tieneSorteo) return;
     sortearRepartoInicial(roomId).catch(() => {});
   }, [todosListos, gameState, tieneSorteo, roomId]);
 
-  // Dispara deal_hand server-side — independiente de cuánto falta para que
-  // ESTA sesión termine de "mostrar" el sorteo (abajo). Si gameState ya
-  // existe (otra sesión ya lo hizo), no hace falta reintentar.
+  // Dispara deal_hand server-side apenas todosArrancaron — igual patrón
+  // "ungated" que sortearRepartoInicial: las 4 sesiones lo intentan a la
+  // vez, deal_hand solo deja efecto a la primera (rooms.status='waiting').
+  // Si gameState ya existe (otra sesión ya lo hizo), no hace falta
+  // reintentar.
   useEffect(() => {
-    if (!tieneSorteo || gameState) return;
-    const t = setTimeout(() => { repartirMano(roomId).catch(() => {}); }, 3000);
-    return () => clearTimeout(t);
-  }, [tieneSorteo, gameState, roomId]);
+    if (!todosArrancaron || gameState) return;
+    repartirMano(roomId).catch(() => {});
+  }, [todosArrancaron, gameState, roomId]);
 
   // "Ya vi el sorteo" — LOCAL a esta sesión, sin importar si gameState YA
   // existía apenas montó (sesión que reconecta tarde, después de que otra
@@ -212,15 +222,16 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
   // que el chequeo de sorteo) dejaba a esa sesión saltar derecho a la
   // mesa sin haber visto nunca el sorteo — bug real reportado en
   // producción, reproducido con un reload a mitad del reparto en
-  // online-sorteo-inicial.spec.js. Piece H (batch overnight post-5r): ya
-  // no es un timer ciego de 3s desde tieneSorteo — SorteoAnimado llama a
-  // onCumplido() recién cuando los nJug asientos dieron vuelta su carta
-  // (Realtime-sincronizado, ver rooms.sorteo_inicial.flipped) más una
-  // gracia breve para que la leyenda del ganador se alcance a leer; una
-  // sesión que reconecta después de que todos ya flipearon ve el estado
-  // final de una, sin repetir la animación ni esperar de más (mismo
-  // patrón de "detectar el estado ya resuelto al montar" que sorteoCumplido
-  // siempre usó, ahora vive dentro de SorteoAnimado).
+  // online-sorteo-inicial.spec.js. Piece H: ya no es un timer ciego de 3s
+  // desde tieneSorteo — SorteoAnimado llama a onCumplido() recién cuando
+  // los nJug asientos dieron vuelta su carta. Piece R: eso ahora además
+  // exige que los nJug asientos confirmen ARRANCAMOS (rooms.sorteo_inicial.
+  // arrancamos) — las cartas quedan asentadas en la mesa hasta que se
+  // confirma, sin auto-avanzar solas; una sesión que reconecta después de
+  // que todos ya confirmaron ve el estado final de una, sin repetir la
+  // animación ni esperar ningún click (mismo patrón de "detectar el estado
+  // ya resuelto al montar" que sorteoCumplido siempre usó, ahora vive
+  // dentro de SorteoAnimado).
   const [sorteoCumplido, setSorteoCumplido] = useState(false);
 
   const alternarListo = async () => {

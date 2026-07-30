@@ -20,14 +20,16 @@ import { crearYUnirseSalaOnline, alternarListoEnPantalla } from "./helpers.js";
 // (batch overnight post-5r) cambió CUÁNDO se activa — ya no es un timer
 // ciego de ~3s desde que se observa tieneSorteo, sino recién cuando los
 // nJug asientos dieron vuelta su carta (Realtime-sincronizado vía
-// rooms.sorteo_inicial.flipped) más una gracia breve para leer la
-// leyenda. Este test reproduce el mount tardío con un reload real a
-// mitad de la mano 0 (no las 4 sesiones montando juntas, que es lo que ya
-// cubre online-sorteo-inicial.spec.js y no alcanza a agarrar este caso) —
-// y confirma que la sesión que reconecta después de que todo ya se
-// resolvió NO repite la animación de viaje ni el click-para-dar-vuelta:
-// ve el estado final (todas las cartas boca arriba, leyenda visible) de
-// una, tal como pide la pieza.
+// rooms.sorteo_inicial.flipped). Piece R sumó un segundo requisito: los
+// nJug asientos también tienen que confirmar "ARRANCAMOS" (rooms.
+// sorteo_inicial.arrancamos) antes de que deal_hand corra y antes de que
+// sorteoCumplido se active. Este test reproduce el mount tardío con un
+// reload real a mitad de la mano 0 (no las 4 sesiones montando juntas, que
+// es lo que ya cubre online-sorteo-inicial.spec.js y no alcanza a agarrar
+// este caso) — y confirma que la sesión que reconecta después de que todo
+// ya se resolvió NO repite la animación de viaje ni el click-para-dar-
+// vuelta ni el click de ARRANCAMOS: ve el estado final (todas las cartas
+// boca arriba, leyenda visible) de una, tal como pide la pieza.
 test("online: una sesión que recarga después de que la mano 0 ya se repartió igual ve el sorteo", async ({ browser }) => {
   test.setTimeout(120_000);
   const nombres = ["Roberto", "Tincho", "Vale", "Naza"];
@@ -47,6 +49,15 @@ test("online: una sesión que recarga después de que la mano 0 ya se repartió 
       await pages[i].getByRole("button", { name: "Dar vuelta tu carta" }).click({ timeout: 10000 });
     }
 
+    // Piece R: además hace falta que las 4 confirmen ARRANCAMOS — sin
+    // esto, deal_hand nunca corre y "MANO 1/2" no aparece nunca.
+    for (const p of pages) {
+      await expect(p.getByRole("button", { name: "ARRANCAMOS" })).toBeVisible({ timeout: 15000 });
+    }
+    for (const p of pages) {
+      await p.getByRole("button", { name: "ARRANCAMOS" }).click({ timeout: 10000 });
+    }
+
     // Señal universal de "la mano 0 ya se repartió", visible en CUALQUIER
     // sesión sin importar de quién sea el turno de pedir (a diferencia de
     // "CONFIRMA", que solo lo ve el capitán activo en ese momento): el
@@ -64,13 +75,15 @@ test("online: una sesión que recarga después de que la mano 0 ya se repartió 
 
     // ...mostrando el estado YA resuelto — sin el botón de "dar vuelta"
     // (todos, incluida esta sesión, ya flipearon antes del reload) ni el
-    // hint de "tocá tu carta".
+    // hint de "tocá tu carta", ni un botón ARRANCAMOS todavía por
+    // confirmar (esta sesión ya lo había confirmado antes del reload).
     await expect(pages[3].getByRole("button", { name: "Dar vuelta tu carta" })).toHaveCount(0);
     await expect(pages[3].getByText(/Tocá tu carta/)).toHaveCount(0);
+    await expect(pages[3].getByRole("button", { name: "ARRANCAMOS", exact: true })).toHaveCount(0);
 
-    // ...y sin repetir la animación de viaje, pasa a la mesa casi de
-    // inmediato (gracia corta para el caso "ya resuelto al montar", no la
-    // gracia normal de ~1.8s) — no quedarse trabada mostrándolo para
+    // ...y sin repetir la animación de viaje ni pedir el click de
+    // ARRANCAMOS de nuevo, pasa a la mesa casi de inmediato (todosArrancados
+    // ya nace en true al montar) — no quedarse trabada mostrándolo para
     // siempre.
     await expect(pages[3].getByText("MANO 1/2", { exact: false })).toBeVisible({ timeout: 6000 });
   } finally {

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { posEnCirculo } from "../engine/structures";
 import { CartaSVG } from "./cards/CartaSVG";
-import { marcarFlipSorteo } from "../lib/game";
-import { colors, fonts } from "../theme";
+import { marcarFlipSorteo, marcarArrancamosSorteo } from "../lib/game";
+import { colors, fonts, ctaStyle } from "../theme";
 
 // ══════════════════════════════════════════════
 // SORTEO ANIMADO (piece H, batch overnight post-5r) — reemplaza el
@@ -16,7 +16,11 @@ import { colors, fonts } from "../theme";
 // el flip de las cartas ajenas se sincroniza por Realtime vía
 // rooms.sorteo_inicial.flipped (marcar_flip_sorteo RPC, piece H) — no
 // hace falta compartir posición/gesto continuo (esa es la pieza J,
-// todavía diferida), alcanza con un boolean on/off por asiento.
+// todavía diferida), alcanza con un boolean on/off por asiento. Piece R:
+// una vez que todos flipearon, ya no hay auto-avance por timer — las
+// cartas quedan asentadas y cada asiento tiene que confirmar "ARRANCAMOS"
+// (mismo patrón boolean-por-asiento, ahora en rooms.sorteo_inicial.
+// arrancamos vía marcar_arrancamos_sorteo) antes de avisar al padre.
 //
 // Duraciones/easing/rotación calcados de la referencia, no aproximados:
 // viaje 0.62s cubic-bezier(.2,.8,.3,1), escala pico 1.08, giro 540/720deg
@@ -26,8 +30,7 @@ import { colors, fonts } from "../theme";
 const CW = 40, CH = 58;
 const STAGGER_MS = 90;
 const VIAJE_MS = 620;
-const GRACIA_MS = 1800; // "1.5-2s" pedido, sin precisión exigida
-const GRACIA_TARDIA_MS = 300; // sesión que ya vio todo resuelto — sin re-esperar de más
+const GRACIA_TARDIA_MS = 300; // sesión que reconecta con todo ya confirmado — sin esto, onCumplido() dispara en el mismo tick del mount y la pantalla de sorteo nunca llega a pintarse
 
 const KEYFRAMES = `
 @keyframes lbSorteoViaje {
@@ -124,6 +127,18 @@ export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplid
   const estaFlippeado = (seat) => (seat === mySeat ? (misFlipLocal || !!flippedRemoto[seat]) : !!flippedRemoto[seat]);
   const todosFlipeados = Array.from({ length: nJug }, (_, s) => s).every(estaFlippeado);
 
+  // Piece R: una vez que todos dieron vuelta su carta, las cartas quedan
+  // asentadas en la mesa (nada se limpia/transiciona sola) y hace falta
+  // una confirmación explícita de cada asiento — mismo jsonb boolean-por-
+  // asiento que sorteo.flipped, ahora en sorteo.arrancamos (marcar_
+  // arrancamos_sorteo, piece R). El padre (PantallaOnlineSala.jsx) usa
+  // este mismo campo para recién ahí disparar repartirMano() — onCumplido
+  // acá solo mueve la vista de ESTA sesión, no reparte nada.
+  const [misArranqueLocal, setMisArranqueLocal] = useState(false);
+  const arrancamosRemoto = sorteo.arrancamos ?? {};
+  const estaArrancado = (seat) => (seat === mySeat ? (misArranqueLocal || !!arrancamosRemoto[seat]) : !!arrancamosRemoto[seat]);
+  const todosArrancados = todosFlipeados && Array.from({ length: nJug }, (_, s) => s).every(estaArrancado);
+
   // Programa el viaje+aterrizaje de cada asiento, una sola vez, salvo que
   // ya estuviera todo resuelto al montar (arriba).
   useEffect(() => {
@@ -142,35 +157,67 @@ export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Leyenda + aviso al padre: aparece recién cuando TODOS dieron vuelta su
-  // carta (Realtime-sincronizado vía sorteo.flipped, salvo la propia que
-  // usa el feedback optimista local). El padre decide qué pantalla mostrar
-  // después (PantallaOnlineSala.jsx) — acá solo se avisa una vez.
+  // Leyenda: aparece apenas TODOS dieron vuelta su carta (Realtime-
+  // sincronizado vía sorteo.flipped, salvo la propia que usa el feedback
+  // optimista local) — se queda arriba de las cartas asentadas mientras
+  // se espera la confirmación de ARRANCAMOS, ya no dispara nada por su
+  // cuenta.
   useEffect(() => {
-    if (!todosFlipeados || cumplidoAvisado.current) return;
+    if (!todosFlipeados) return;
     const tLeyenda = setTimeout(() => setLegendaVisible(true), 200);
-    const gracia = yaResueltoAlMontar.current ? GRACIA_TARDIA_MS : GRACIA_MS;
-    const tCumplido = setTimeout(() => {
-      cumplidoAvisado.current = true;
-      onCumplido();
-    }, gracia);
-    return () => { clearTimeout(tLeyenda); clearTimeout(tCumplido); };
+    return () => clearTimeout(tLeyenda);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todosFlipeados]);
 
+  // Aviso al padre: recién cuando los nJug asientos confirmaron ARRANCAMOS
+  // (Realtime-sincronizado vía sorteo.arrancamos, salvo la propia que usa
+  // el feedback optimista local, mismo patrón que flipped). El padre
+  // decide qué pantalla mostrar después (PantallaOnlineSala.jsx) — acá
+  // solo se avisa una vez. Si al montar ya estaba todo confirmado (sesión
+  // que reconecta tarde), todosArrancados ya nace en true en el primer
+  // render — sin una gracia mínima acá, este efecto dispararía onCumplido()
+  // en el mismo tick del mount y la pantalla de sorteo nunca llegaría a
+  // pintarse en pantalla; con un click real de por medio (caso normal) la
+  // gracia es 0 porque ya hubo tiempo de sobra viendo la leyenda mientras
+  // se esperaba la confirmación de los demás.
+  useEffect(() => {
+    if (!todosArrancados || cumplidoAvisado.current) return;
+    const gracia = yaResueltoAlMontar.current ? GRACIA_TARDIA_MS : 0;
+    const t = setTimeout(() => {
+      cumplidoAvisado.current = true;
+      onCumplido();
+    }, gracia);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todosArrancados]);
+
   // A diferencia de sortearRepartoInicial/repartirMano (que cualquier
   // sesión puede reintentar sola porque todas llaman a la misma RPC
-  // ungated), marcar_flip_sorteo solo lo puede llamar el dueño del
-  // asiento — sin una sesión redundante que reintente por mí, un fallo
-  // silencioso acá deja a las OTRAS 3 esperando para siempre un flip que
-  // esta sesión ya ve como hecho (misFlipLocal). Reintento acotado en vez
-  // de un catch mudo de una sola vez.
+  // ungated), marcar_flip_sorteo/marcar_arrancamos_sorteo solo los puede
+  // llamar el dueño del asiento — sin una sesión redundante que reintente
+  // por mí, un fallo silencioso acá deja a las OTRAS esperando para
+  // siempre una confirmación que esta sesión ya ve como hecha. Reintento
+  // acotado en vez de un catch mudo de una sola vez, mismo patrón en las
+  // dos.
   const onClickPropia = async () => {
     if (mySeat == null || !llegadas.has(mySeat) || estaFlippeado(mySeat)) return;
     setMisFlipLocal(true);
     for (let intento = 1; intento <= 3; intento++) {
       try {
         await marcarFlipSorteo(roomId);
+        return;
+      } catch {
+        if (intento < 3) await new Promise((r) => setTimeout(r, 1000 * intento));
+      }
+    }
+  };
+
+  const onClickArrancamos = async () => {
+    if (mySeat == null || !todosFlipeados || estaArrancado(mySeat)) return;
+    setMisArranqueLocal(true);
+    for (let intento = 1; intento <= 3; intento++) {
+      try {
+        await marcarArrancamosSorteo(roomId);
         return;
       } catch {
         if (intento < 3) await new Promise((r) => setTimeout(r, 1000 * intento));
@@ -186,7 +233,9 @@ export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplid
     ? (estaFlippeado(mySeat)
         ? `Esperando a los demás… (${Array.from({ length: nJug }, (_, s) => s).filter(estaFlippeado).length}/${nJug})`
         : "Tocá tu carta cuando llegue a tu lugar para darla vuelta.")
-    : "";
+    : (estaArrancado(mySeat)
+        ? `Esperando a los demás… (${Array.from({ length: nJug }, (_, s) => s).filter(estaArrancado).length}/${nJug})`
+        : "");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: 16 }}>
@@ -265,6 +314,14 @@ export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplid
           </text>
         </g>
       </svg>
+
+      {todosFlipeados && (
+        <div style={{ width: "100%", maxWidth: 260 }}>
+          <button onClick={onClickArrancamos} disabled={estaArrancado(mySeat)} style={ctaStyle({ disabled: estaArrancado(mySeat) })}>
+            {estaArrancado(mySeat) ? "✓ ARRANCAMOS" : "ARRANCAMOS"}
+          </button>
+        </div>
+      )}
 
       <div style={{ fontFamily: fonts.display, fontWeight: 700, fontStyle: "italic", fontSize: 11, letterSpacing: 1, color: "rgba(170,182,242,0.5)", textAlign: "center", minHeight: 18 }}>
         {hint}
