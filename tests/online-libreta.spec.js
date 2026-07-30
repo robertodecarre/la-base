@@ -100,3 +100,81 @@ test("online: el historial de manos vive detrás del ícono de libreta, no siemp
     for (const c of contexts) await c.close();
   }
 });
+
+// Piece N (batch overnight post-5r): la libreta ahora muestra las
+// estrellas pedido/hecho de la mano EN CURSO apenas hay pedidos, sin
+// esperar a que cierre (antes solo mostraba manos ya cerradas, en
+// hand_results). Estructura de 2 cartas (no 1,1 como el test de arriba) a
+// propósito: con 1 carta el pedido forzado del pie (piece D) suele
+// terminar en 0★ para ambos equipos, y EstrellasPedido no renderiza nada
+// para pedidas===0 — no serviría para probar que las estrellas aparecen.
+test("online: la libreta muestra las estrellas de la mano en curso antes de que cierre", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const nombres = ["P0", "P1", "P2", "P3"];
+  const contexts = await Promise.all(nombres.map(() => browser.newContext()));
+  const pages = await Promise.all(contexts.map((c) => c.newPage()));
+
+  const erroresConsola = [];
+  for (const p of pages) {
+    p.on("pageerror", (err) => erroresConsola.push(err.message));
+  }
+
+  try {
+    await crearYUnirseSalaOnline(pages, nombres, { nJug: 4, estructuraCustom: "2,2", sinAses: true });
+    for (const p of pages) await alternarListoEnPantalla(p);
+    for (const p of pages) {
+      await expect(p.getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
+    }
+
+    const host = pages[0];
+
+    // Antes de pedir: la libreta no tiene ninguna fila con estrellas
+    // todavía (gameState.bids sigue null para ambos equipos).
+    await host.getByRole("button", { name: "Ver libreta" }).click();
+    await expect(host.getByText("LIBRETA")).toBeVisible();
+    // Acotado a la tabla del Tablero: "★CAP" (capitanes) y los "★" de
+    // PanelPedir también matchean getByText("★") en el resto de la
+    // pantalla, sin relación con esta feature.
+    await expect(host.getByRole("table").getByText("★")).toHaveCount(0);
+    await host.getByRole("button", { name: "✕" }).click();
+
+    const panelConfirma = (page) => page.getByRole("button", { name: /CONFIRMA/ });
+    // "1" con totalBases=2 deja 2 opciones reales para el pie ({0,2}), pero
+    // lo que importa acá es que el pedido de MANO sea != 0 para garantizar
+    // al menos una estrella visible — no importa cuál de los dos equipos
+    // es mano esta mano.
+    async function confirmarUno(valorPreferido) {
+      for (let intento = 1; intento <= 24; intento++) {
+        let p = null;
+        for (let i = 0; i < 30 && !p; i++) {
+          for (const pg of pages) if (await panelConfirma(pg).isVisible().catch(() => false)) { p = pg; break; }
+          if (!p) await new Promise((r) => setTimeout(r, 200));
+        }
+        expect(p, "ninguna sesión mostró el panel de pedir a tiempo").toBeTruthy();
+        const boton = valorPreferido != null && await p.getByRole("button", { name: valorPreferido, exact: true }).isVisible().catch(() => false)
+          ? p.getByRole("button", { name: valorPreferido, exact: true })
+          : p.getByRole("button", { name: /^\d+$/ }).first();
+        const ok = await boton.click({ timeout: 5000 }).then(() => true).catch(() => false);
+        if (!ok) continue;
+        const btn = panelConfirma(p);
+        if (await btn.isEnabled({ timeout: 3000 }).catch(() => false)) await btn.click({ timeout: 5000 }).catch(() => {});
+        await new Promise((r) => setTimeout(r, 1000));
+        if (!(await panelConfirma(p).isVisible().catch(() => false))) return;
+      }
+      throw new Error("el pedido no se confirmó tras varios intentos");
+    }
+    await confirmarUno("1"); // mano
+    await confirmarUno(); // pie
+
+    // Ahora en 'playing', mid-hand, todavía lejos de 'closing' — la
+    // aserción central: la libreta ya muestra estrellas para la mano 1 sin
+    // que haya cerrado.
+    await host.getByRole("button", { name: "Ver libreta" }).click();
+    await expect(host.getByText("LIBRETA")).toBeVisible();
+    await expect(host.getByRole("table").getByText("★").first()).toBeVisible();
+
+    expect(erroresConsola, `errores de consola:\n${erroresConsola.join("\n")}`).toEqual([]);
+  } finally {
+    for (const c of contexts) await c.close();
+  }
+});

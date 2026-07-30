@@ -361,12 +361,27 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   const estructuraCompleta = room.config?.estructura ?? [];
   const historialTablero = estructuraCompleta.map((_, i) => {
     const h = handResults.find((r) => r.hand_number === i);
-    if (!h) return undefined;
-    return {
-      deltaLocal: h.delta_team0, deltaVisitante: h.delta_team1,
-      pedLocal: h.bid_team0, hechoLocal: h.tricks_team0,
-      pedVisitante: h.bid_team1, hechoVisitante: h.tricks_team1,
-    };
+    if (h) {
+      return {
+        deltaLocal: h.delta_team0, deltaVisitante: h.delta_team1,
+        pedLocal: h.bid_team0, hechoLocal: h.tricks_team0,
+        pedVisitante: h.bid_team1, hechoVisitante: h.tricks_team1,
+      };
+    }
+    // Piece N (batch overnight post-5r): la mano en curso todavía no tiene
+    // fila en hand_results (esa llega recién al cerrar), pero sus
+    // estrellas pedido/hecho ya se pueden mostrar en la libreta apenas
+    // ambos equipos pidieron — sin esperar a que cierre. deltaLocal/
+    // deltaVisitante quedan null a propósito: Tablero solo suma al
+    // acumulado cuando hay delta, así que esta fila muestra estrellas
+    // pero "·" en la columna de puntaje hasta que cierre de verdad.
+    if (i === gameState.hand_number && pedLocal != null && pedVisitante != null) {
+      return {
+        deltaLocal: null, deltaVisitante: null,
+        pedLocal, hechoLocal, pedVisitante, hechoVisitante,
+      };
+    }
+    return undefined;
   });
 
   // Jugadores para MesaCircular — la única mano real es la propia

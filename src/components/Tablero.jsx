@@ -25,8 +25,12 @@ export function Tablero({ estructura, historial, manoActual }) {
   let acumLocal = 0, acumVisitante = 0;
   const filas = estructura.map((cartas, i) => {
     const h = historial[i];
-    if (h) { acumLocal += h.deltaLocal; acumVisitante += h.deltaVisitante; }
-    return { cartas, h, acumLocal: h ? acumLocal : null, acumVisitante: h ? acumVisitante : null };
+    // Piece N: una fila puede venir con estrellas pero sin delta todavía
+    // (la mano en curso, antes de cerrar) — no suma al acumulado, muestra
+    // "·" en el puntaje pero las estrellas sí.
+    const tieneDelta = h && h.deltaLocal != null;
+    if (tieneDelta) { acumLocal += h.deltaLocal; acumVisitante += h.deltaVisitante; }
+    return { cartas, h, acumLocal: tieneDelta ? acumLocal : null, acumVisitante: tieneDelta ? acumVisitante : null };
   });
 
   return (
