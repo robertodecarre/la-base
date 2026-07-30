@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>La Base — dirección: reparto de mano animado</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&family=Barlow+Semi+Condensed:wght@500;600&display=swap');
+
+  :root {
+    --bg: radial-gradient(ellipse at 50% 20%, #24306e 0%, #0d1230 55%, #060814 100%);
+    --text-primary: #f2f4ff;
+    --text-secondary: #aab6f2;
+    --cta-glow: rgba(255,90,50,0.45);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    font-family: 'Barlow Semi Condensed', sans-serif; color: var(--text-primary); padding: 20px;
+  }
+  h1 {
+    font-family: 'Saira Condensed', sans-serif; font-weight: 800; font-style: italic;
+    font-size: 15px; letter-spacing: 4px; color: var(--text-secondary);
+    text-shadow: 0 0 8px rgba(140,160,240,0.5); margin: 0;
+  }
+  .controles {
+    display: flex; gap: 10px; align-items: center;
+    font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-style: italic;
+    font-size: 12px; letter-spacing: 1px; color: rgba(200,210,255,0.7);
+  }
+  .controles select, .controles button {
+    font-family: inherit; font-weight: 800; font-size: 12px; letter-spacing: 2px;
+    color: #fff2ea; border-radius: 999px; padding: 7px 16px; cursor: pointer;
+    border: 1px solid #ffab8a;
+    background: linear-gradient(180deg, #ff8a63 0%, #d8512c 55%, #a02f16 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -6px 10px rgba(0,0,0,0.35), 0 0 14px var(--cta-glow);
+  }
+  .mesa-wrap { position: relative; width: 560px; height: 560px; }
+  svg { width: 100%; height: 100%; overflow: visible; }
+  .anillo { fill: rgba(20,26,64,0.55); stroke: #4a5aa8; stroke-width: 2; }
+  .asiento-caja { fill: rgba(10,14,38,0.6); stroke: rgba(120,140,220,0.25); stroke-width: 1; }
+  .asiento-caja.vos { stroke: #ffab8a; stroke-width: 2; }
+  .nombre-jugador { font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 11px; }
+
+  .mazo-central rect { fill: #171f4a; stroke: #4a5aa8; stroke-width: 2; }
+  .mazo-central.repartiendo rect { animation: pulso-mazo 0.5s ease-in-out infinite alternate; }
+  @keyframes pulso-mazo {
+    from { filter: drop-shadow(0 0 4px rgba(120,140,240,0.4)); }
+    to   { filter: drop-shadow(0 0 14px rgba(120,140,240,0.85)); }
+  }
+
+  .carta-viajera { opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .carta-viajera.activa { animation: viaje-carta var(--dur,0.42s) cubic-bezier(.2,.8,.3,1) forwards; }
+  @keyframes viaje-carta {
+    0%   { opacity: 1; transform: translate(0,0) rotate(0deg) scale(1); }
+    55%  { transform: translate(var(--tx-mid), var(--ty-mid)) rotate(var(--rot-mid)) scale(1.05); }
+    100% { opacity: 0; transform: translate(var(--tx), var(--ty)) rotate(var(--rot-final)) scale(1); }
+  }
+
+  /* Pila de dorsos que crece en cada asiento ajeno */
+  .pila-dorso rect { fill: #3d0e0e; stroke: #5a1414; stroke-width: 1.5; }
+
+  /* Abanico de "mi mano" que crece con cada carta que llega */
+  .mi-carta { transform-box: fill-box; transform-origin: bottom center; }
+  .mi-carta rect { fill: #fff8ec; stroke: #c9a84c; stroke-width: 1.5; }
+  .mi-carta text { font-family: 'Saira Condensed', sans-serif; font-weight: 800; font-style: italic; fill: #253a80; }
+
+  .contador {
+    font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-style: italic;
+    font-size: 10px; letter-spacing: 1px; fill: rgba(200,210,255,0.55);
+  }
+</style>
+</head>
+<body>
+
+  <h1>REPARTIENDO — RONDA POR RONDA</h1>
+  <div class="controles">
+    <label>Cartas por jugador:</label>
+    <select id="selCartas">
+      <option value="1">1 (última mano)</option>
+      <option value="3">3</option>
+      <option value="5" selected>5</option>
+      <option value="8">8</option>
+    </select>
+    <button onclick="reiniciar()">REPARTIR</button>
+  </div>
+
+  <div class="mesa-wrap"><svg viewBox="0 0 560 560" id="svg-mesa"></svg></div>
+
+<script>
+// ══════════════════════════════════════════════
+// Mockup — reparto ronda por ronda: carta 1 a cada asiento (en orden desde
+// el que reparte), después carta 2 a cada asiento, etc. Mismo mecanismo de
+// viaje+giro que el sorteo, pero repetido N veces por asiento y con un
+// stagger más corto entre cartas (la ronda tiene que sentirse rápida y
+// rítmica, no cartas sueltas espaciadas).
+// ══════════════════════════════════════════════
+
+const N_JUG = 4;
+const MI_ASIENTO = 2;
+const CX = 280, CY = 280, RX = 190, RY = 170;
+const NOMBRES = ["N R","S L ★CAP","VOS","N L ★CAP"];
+const svg = document.getElementById("svg-mesa");
+const ns = "http://www.w3.org/2000/svg";
+
+function posEnCirculo(idx, n) {
+  const ang = -Math.PI/2 + (idx / n) * Math.PI * 2;
+  return { x: CX + RX * Math.cos(ang), y: CY + RY * Math.sin(ang) };
+}
+
+function add(tag, attrs, parent=svg) {
+  const el = document.createElementNS(ns, tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  parent.appendChild(el);
+  return el;
+}
+
+let recibidas = new Array(N_JUG).fill(0);
+
+function render() {
+  svg.innerHTML = "";
+  add("ellipse", { class:"anillo", cx:CX, cy:CY, rx:RX+55, ry:RY+50 });
+  const mazoG = add("g", { class:"mazo-central repartiendo", id:"mazo" });
+  add("rect", { x:CX-22, y:CY-31, width:44, height:62, rx:5 }, mazoG);
+
+  for (let seat=0; seat<N_JUG; seat++) {
+    const pos = posEnCirculo(seat, N_JUG);
+    add("rect", { class:"asiento-caja" + (seat===MI_ASIENTO?" vos":""), x:pos.x-52, y:pos.y-56, width:104, height:104, rx:8 });
+    add("text", { class:"nombre-jugador", x:pos.x, y:pos.y-62, "text-anchor":"middle", fill: seat%2===0?"#8fb0ff":"#ffb385" }).textContent = NOMBRES[seat];
+
+    if (seat !== MI_ASIENTO) {
+      // pila de dorsos apilados, uno por carta recibida
+      for (let i=0; i<recibidas[seat]; i++) {
+        add("g", { transform:`translate(${pos.x-16+i*3},${pos.y-24-i*1.5})`, class:"pila-dorso" }, svg)
+          .appendChild((()=>{ const r=document.createElementNS(ns,"rect"); r.setAttribute("width",32); r.setAttribute("height",46); r.setAttribute("rx",4); return r; })());
+      }
+      add("text", { class:"contador", x:pos.x, y:pos.y+34, "text-anchor":"middle" }).textContent = `${recibidas[seat]}`;
+    } else {
+      // abanico de mi mano, crece hacia los costados
+      const total = recibidas[seat];
+      for (let i=0; i<total; i++) {
+        const offset = (i - (total-1)/2) * 24;
+        const g = add("g", { class:"mi-carta", transform:`translate(${pos.x-16+offset},${pos.y-24}) rotate(${(i-(total-1)/2)*6})` }, svg);
+        add("rect", { width:32, height:46, rx:4 }, g);
+        add("text", { x:16, y:28, "text-anchor":"middle", "font-size":13 }, g).textContent = String((i*3+2)%12+1);
+      }
+    }
+  }
+}
+
+function repartirCarta(seat, ronda, cb) {
+  const pos = posEnCirculo(seat, N_JUG);
+  const tvgPos = add("g", { transform:`translate(${CX-16},${CY-23})` });
+  const tvg = add("g", {
+    class:"carta-viajera",
+    style:`--dur:0.36s; --tx:${pos.x-CX}px; --ty:${pos.y-16-CY}px; --tx-mid:${(pos.x-CX)*0.55}px; --ty-mid:${(pos.y-16-CY)*0.55-24}px; --rot-mid:${seat%2===0?380:-380}deg; --rot-final:${seat%2===0?520:-520}deg;`
+  }, tvgPos);
+  add("rect", { width:32, height:46, rx:4, fill:"#3d0e0e", stroke:"#c9a84c", "stroke-width":2 }, tvg);
+  requestAnimationFrame(() => tvg.classList.add("activa"));
+  setTimeout(() => { recibidas[seat]++; render(); cb && cb(); }, 340);
+}
+
+function repartir(cartasPorJugador) {
+  let ronda = 0;
+  const STAGGER = 130; // ms entre cartas de la misma ronda — más corto que el sorteo, ritmo de "mazo real"
+  const RONDA_PAUSA = 90;
+
+  function siguienteRonda() {
+    if (ronda >= cartasPorJugador) {
+      document.getElementById("mazo").classList.remove("repartiendo");
+      return;
+    }
+    for (let i=0; i<N_JUG; i++) {
+      const seat = i; // orden desde asiento 0 — en real, desde el que reparte
+      setTimeout(() => repartirCarta(seat, ronda), i * STAGGER);
+    }
+    setTimeout(() => { ronda++; siguienteRonda(); }, N_JUG * STAGGER + RONDA_PAUSA);
+  }
+  siguienteRonda();
+}
+
+function reiniciar() {
+  recibidas = new Array(N_JUG).fill(0);
+  render();
+  document.getElementById("mazo").classList.add("repartiendo");
+  const n = parseInt(document.getElementById("selCartas").value, 10);
+  setTimeout(() => repartir(n), 400);
+}
+
+reiniciar();
+</script>
+</body>
+</html>

@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>La Base — dirección: sorteo animado</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&family=Barlow+Semi+Condensed:wght@500;600&display=swap');
+
+  :root {
+    --bg: radial-gradient(ellipse at 50% 20%, #24306e 0%, #0d1230 55%, #060814 100%);
+    --local-grad: linear-gradient(180deg, #4a6ac0 0%, #253a80 45%, #16234f 100%);
+    --local-border: #6f8fe0;
+    --visitante-grad: linear-gradient(180deg, #d8703f 0%, #8a3c1c 45%, #4f1f0e 100%);
+    --visitante-border: #f0966a;
+    --text-primary: #f2f4ff;
+    --text-secondary: #aab6f2;
+    --cta-glow: rgba(255,90,50,0.45);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    font-family: 'Barlow Semi Condensed', sans-serif;
+    color: var(--text-primary);
+    padding: 20px;
+  }
+
+  h1 {
+    font-family: 'Saira Condensed', sans-serif;
+    font-weight: 800;
+    font-style: italic;
+    font-size: 15px;
+    letter-spacing: 6px;
+    color: var(--text-secondary);
+    text-shadow: 0 0 8px rgba(140,160,240,0.5);
+    margin: 0;
+  }
+
+  .subtitulo {
+    font-family: 'Saira Condensed', sans-serif;
+    font-weight: 700;
+    font-style: italic;
+    font-size: 11px;
+    letterSpacing: 2px;
+    color: rgba(170,182,242,0.55);
+    margin-top: -12px;
+  }
+
+  .mesa-wrap { position: relative; width: 560px; height: 560px; }
+  svg { width: 100%; height: 100%; overflow: visible; }
+
+  .anillo { fill: rgba(20,26,64,0.55); stroke: #4a5aa8; stroke-width: 2; }
+
+  .asiento-caja {
+    fill: rgba(10,14,38,0.6);
+    stroke: rgba(120,140,220,0.25);
+    stroke-width: 1;
+    transition: stroke 0.4s, fill 0.4s;
+  }
+  .asiento-caja.ganador {
+    fill: rgba(255,140,60,0.12);
+    stroke: #ffab8a;
+    stroke-width: 2;
+  }
+
+  .nombre-jugador {
+    font-family: 'Barlow Semi Condensed', sans-serif;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Host / mazo central ── */
+  .mazo-central rect {
+    fill: #171f4a;
+    stroke: #4a5aa8;
+    stroke-width: 2;
+  }
+  .mazo-central.repartiendo rect {
+    animation: pulso-mazo 0.5s ease-in-out infinite alternate;
+  }
+  @keyframes pulso-mazo {
+    from { filter: drop-shadow(0 0 4px rgba(120,140,240,0.4)); }
+    to   { filter: drop-shadow(0 0 14px rgba(120,140,240,0.85)); }
+  }
+
+  /* ── Carta viajera (una instancia por asiento, se anima y desaparece) ── */
+  .carta-viajera {
+    opacity: 0;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .carta-viajera.activa {
+    animation: viaje-carta 0.62s cubic-bezier(.2,.8,.3,1) forwards;
+  }
+  @keyframes viaje-carta {
+    0%   { opacity: 1; transform: translate(0,0) rotate(0deg) scale(1); }
+    55%  { transform: translate(var(--tx-mid), var(--ty-mid)) rotate(var(--rot-mid)) scale(1.08); }
+    100% { opacity: 0; transform: translate(var(--tx), var(--ty)) rotate(var(--rot-final)) scale(1); }
+  }
+
+  /* ── Carta asentada en el asiento (dorso), aparece cuando termina el viaje ── */
+  .carta-asiento {
+    cursor: pointer;
+    opacity: 0;
+  }
+  .carta-asiento.llegada { animation: aparecer 0.15s ease-out forwards; }
+  @keyframes aparecer { to { opacity: 1; } }
+
+  .carta-asiento .dorso {
+    fill: #3d0e0e;
+    stroke: #5a1414;
+    stroke-width: 2;
+  }
+  .carta-asiento .dorso-patron { fill: rgba(255,180,140,0.12); }
+
+  .carta-asiento.mia { cursor: pointer; }
+  .carta-asiento.mia .dorso { stroke: #ffab8a; stroke-width: 2.5; }
+  .carta-asiento.mia .dorso-patron { fill: rgba(255,171,138,0.35); }
+  .carta-asiento.ajena { cursor: default; }
+
+  .carta-asiento .grupo-flip {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform 0.5s cubic-bezier(.34,1.56,.64,1);
+    transform-style: preserve-3d;
+  }
+  .carta-asiento.dada-vuelta .grupo-flip { transform: rotateY(180deg); }
+
+  .carta-asiento .cara-dorso, .carta-asiento .cara-frente {
+    backface-visibility: hidden;
+  }
+  .carta-asiento .cara-frente { transform: rotateY(180deg); }
+  .carta-asiento .cara-frente rect { fill: #fff8ec; stroke: #c9a84c; stroke-width: 1.5; }
+  .carta-asiento .valor { font-family: 'Saira Condensed', sans-serif; font-weight: 800; font-style: italic; }
+
+  .pulso-toque {
+    fill: none; stroke: rgba(255,171,138,0.65); stroke-width: 1.5;
+    animation: pulso-anillo 1.4s ease-out infinite;
+  }
+  @keyframes pulso-anillo {
+    0%   { r: 30; opacity: 0.9; }
+    100% { r: 48; opacity: 0; }
+  }
+
+  .leyenda-da { opacity: 0; transition: opacity 0.5s; }
+  .leyenda-da.visible { opacity: 1; }
+  .leyenda-da .etiqueta {
+    font-family: 'Saira Condensed', sans-serif; font-weight: 700; font-style: italic;
+    font-size: 9px; letter-spacing: 2px; fill: rgba(170,182,242,0.6);
+  }
+  .leyenda-da .nombre {
+    font-family: 'Saira Condensed', sans-serif; font-weight: 800; font-style: italic;
+    font-size: 16px; letter-spacing: 1px;
+  }
+
+  .footer-hint {
+    font-family: 'Saira Condensed', sans-serif;
+    font-weight: 700;
+    font-style: italic;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: rgba(170,182,242,0.5);
+    text-align: center;
+    min-height: 18px;
+  }
+
+  .btn-reset {
+    font-family: 'Saira Condensed', sans-serif;
+    font-weight: 800; font-style: italic; font-size: 12px; letter-spacing: 2px;
+    color: #fff2ea;
+    border-radius: 999px;
+    padding: 8px 22px;
+    border: 1px solid #ffab8a;
+    background: linear-gradient(180deg, #ff8a63 0%, #d8512c 55%, #a02f16 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -6px 10px rgba(0,0,0,0.35), 0 0 18px var(--cta-glow);
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+  <h1>SORTEO</h1>
+  <div class="subtitulo">¿QUIÉN REPARTE PRIMERO?</div>
+
+  <div class="mesa-wrap">
+    <svg viewBox="0 0 560 560" id="svg-mesa"></svg>
+  </div>
+
+  <div class="footer-hint" id="hint">Tocá tu carta cuando llegue a tu lugar para darla vuelta.</div>
+  <button class="btn-reset" onclick="reiniciar()">REPETIR</button>
+
+<script>
+// ══════════════════════════════════════════════
+// Mockup de dirección — 6 jugadores de ejemplo, seat 2 es "vos" (mySeat).
+// En la implementación real: cartas y ganador ya vienen resueltos del
+// servidor (sortear_reparto_inicial), esto solo cambia CUÁNDO se revelan
+// al cliente — el viaje+giro es puramente visual/local, el flip de "mi"
+// carta es un click local, y el flip de las cartas ajenas se sincroniza
+// por Realtime (un boolean "flipped" por seat en rooms.sorteo_inicial o
+// una tabla liviana aparte — no hace falta compartir posición/gesto
+// continuo como en la pieza de gestos de mano, alcanza con on/off).
+// ══════════════════════════════════════════════
+
+const N_JUG = 6;
+const MI_ASIENTO = 2;
+const CX = 280, CY = 280;
+const RX = 190, RY = 170;
+const HOST_X = CX, HOST_Y = CY; // el mazo nace en el centro (host)
+
+const NOMBRES = ["Ana","Bruno","Vos","Carla","Diego","Elena"];
+const GANADOR_SEAT = 4; // fijo para la demo — en real, ya lo sabe el server
+
+const svg = document.getElementById("svg-mesa");
+const hint = document.getElementById("hint");
+
+function posEnCirculo(idx, n) {
+  const ang = -Math.PI/2 + (idx / n) * Math.PI * 2;
+  return { x: CX + RX * Math.cos(ang), y: CY + RY * Math.sin(ang) };
+}
+
+let vueltas = new Set();
+
+function render() {
+  svg.innerHTML = "";
+  const ns = "http://www.w3.org/2000/svg";
+  const add = (tag, attrs, parent=svg) => {
+    const el = document.createElementNS(ns, tag);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    parent.appendChild(el);
+    return el;
+  };
+
+  add("ellipse", { class:"anillo", cx:CX, cy:CY, rx:RX+55, ry:RY+50 });
+
+  // mazo central
+  const mazoG = add("g", { class:"mazo-central repartiendo", id:"mazo" });
+  add("rect", { x:HOST_X-22, y:HOST_Y-31, width:44, height:62, rx:5 }, mazoG);
+
+  for (let seat=0; seat<N_JUG; seat++) {
+    const pos = posEnCirculo(seat, N_JUG);
+    const esGanador = vueltas.size === N_JUG && seat === GANADOR_SEAT;
+    const esMia = seat === MI_ASIENTO;
+
+    add("rect", {
+      class: "asiento-caja" + (esGanador ? " ganador" : ""),
+      x: pos.x-46, y: pos.y-52, width:92, height:96, rx:8
+    });
+    add("text", {
+      class:"nombre-jugador", x:pos.x, y:pos.y-58, "text-anchor":"middle",
+      fill: seat%2===0 ? "#8fb0ff" : "#ffb385"
+    }, svg).textContent = NOMBRES[seat];
+
+    // Carta viajera (arranca invisible; se activa por JS al repartir).
+    // OJO: el grupo exterior (posición fija = mazo) y el interior (que la
+    // animación CSS anima) tienen que ser DOS <g> distintos. Si el mismo
+    // <g> tiene un atributo transform="translate(...)" Y una animación CSS
+    // que también anima `transform`, la animación CSS reemplaza por
+    // completo el atributo — no lo compone — y la carta arranca desde
+    // (0,0), la esquina superior izquierda del viewBox, en vez del mazo.
+    const cw=40, ch=58;
+    const tvgPos = add("g", { transform:`translate(${HOST_X-cw/2},${HOST_Y-ch/2})` });
+    const tvg = add("g", {
+      class:"carta-viajera", id:`viajera-${seat}`,
+      style:`--tx:${pos.x-HOST_X}px; --ty:${pos.y-HOST_Y}px; --tx-mid:${(pos.x-HOST_X)*0.6}px; --ty-mid:${(pos.y-HOST_Y)*0.6-30}px; --rot-mid: ${seat%2===0?540:-540}deg; --rot-final:${seat%2===0?720:-720}deg;`
+    }, tvgPos);
+    add("rect", { width:cw, height:ch, rx:5, fill:"#3d0e0e", stroke:"#c9a84c", "stroke-width":2 }, tvg);
+
+    // Carta asentada (dorso -> frente al hacer click)
+    const asentadaG = add("g", {
+      class:"carta-asiento" + (esMia?" mia":" ajena") + (vueltas.has(seat)?" dada-vuelta":""),
+      id:`asiento-${seat}`,
+      transform:`translate(${pos.x-cw/2},${pos.y-ch/2+6})`
+    });
+    if (esMia && !vueltas.has(seat)) {
+      // se agrega el pulso de "tocá acá" recién cuando la carta llega — ver JS
+    }
+    asentadaG.addEventListener("click", () => {
+      if (!esMia) return;
+      if (!asentadaG.classList.contains("llegada")) return;
+      vueltas.add(seat);
+      hint.textContent = vueltas.size < N_JUG
+        ? `Esperando a los demás… (${vueltas.size}/${N_JUG})`
+        : "";
+      render();
+      if (vueltas.size === N_JUG) {
+        setTimeout(() => {
+          document.querySelector(".leyenda-da")?.classList.add("visible");
+        }, 200);
+      }
+    });
+
+    const flipG = add("g", { class:"grupo-flip" }, asentadaG);
+    const dorsoG = add("g", { class:"cara-dorso" }, flipG);
+    add("rect", { class:"dorso", width:cw, height:ch, rx:5 }, dorsoG);
+    add("circle", { class:"dorso-patron", cx:cw/2, cy:ch/2, r:9 }, dorsoG);
+    const frenteG = add("g", { class:"cara-frente" }, flipG);
+    add("rect", { width:cw, height:ch, rx:5 }, frenteG);
+    add("text", {
+      class:"valor", x:cw/2, y:ch/2+6, "text-anchor":"middle", "font-size":18,
+      fill: seat%2===0 ? "#253a80" : "#8a3c1c"
+    }, frenteG).textContent = seat===GANADOR_SEAT ? "12" : String((seat*3+2)%12+1);
+  }
+
+  // leyenda ganador
+  const leyG = add("g", { class:"leyenda-da" });
+  add("text", { class:"etiqueta", x:CX, y:CY-6, "text-anchor":"middle" }, leyG).textContent = "DA";
+  add("text", {
+    class:"nombre", x:CX, y:CY+14, "text-anchor":"middle",
+    fill: GANADOR_SEAT%2===0 ? "#8fb0ff" : "#ffb385"
+  }, leyG).textContent = NOMBRES[GANADOR_SEAT];
+}
+
+function repartir() {
+  render();
+  for (let seat=0; seat<N_JUG; seat++) {
+    const delay = seat * 90;
+    setTimeout(() => {
+      document.getElementById(`viajera-${seat}`).classList.add("activa");
+      setTimeout(() => {
+        const asentada = document.getElementById(`asiento-${seat}`);
+        asentada.classList.add("llegada");
+        if (seat === MI_ASIENTO) {
+          // pulso "tocá acá" en mi propio asiento
+          const pos = posEnCirculo(seat, N_JUG);
+          const ns = "http://www.w3.org/2000/svg";
+          const pulso = document.createElementNS(ns,"circle");
+          pulso.setAttribute("class","pulso-toque");
+          pulso.setAttribute("cx", pos.x); pulso.setAttribute("cy", pos.y-6);
+          pulso.style.pointerEvents = "none";
+          svg.appendChild(pulso);
+        }
+      }, 620);
+    }, delay);
+  }
+  document.getElementById("mazo").classList.remove("repartiendo");
+}
+
+function reiniciar() {
+  vueltas = new Set();
+  hint.textContent = "Tocá tu carta cuando llegue a tu lugar para darla vuelta.";
+  render();
+  document.getElementById("mazo").classList.add("repartiendo");
+  setTimeout(repartir, 500);
+}
+
+reiniciar();
+</script>
+</body>
+</html>
