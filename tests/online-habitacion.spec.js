@@ -2,11 +2,11 @@ import { test, expect } from "@playwright/test";
 import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, jugarCartaDelTurnoActual } from "./helpers.js";
 
 // Piece G (batch overnight post-5r):
-//   1. El botón "Siguiente base" se movió de un <Btn> HTML debajo de la
+//   1. El botón "Llevar base" se movió de un <Btn> HTML debajo de la
 //      mesa a un botón SVG en la esquina inferior derecha de "la
 //      habitación" (el canvas cuadrado de MesaCircular, fuera de la elipse
 //      redonda de la mesa — hay espacio de sobra en las esquinas). Quien
-//      ganó la base ve el botón real (role=button, name="Siguiente base");
+//      ganó la base ve el botón real (role=button, name="Llevar base");
 //      el resto ve el mismo cartel pero como texto de espera.
 //   2. El indicador "LA ESTÁ HACIENDO" (quién va ganando la base en curso,
 //      mientras se juega) se sacó del todo — ya no debería aparecer nunca.
@@ -133,7 +133,7 @@ test("online: siguiente base vive en la esquina de la habitación, y LA ESTÁ HA
     for (let i = 0; i < 40 && !enResolving; i++) {
       for (const p of pages) await jugarCartaDelTurnoActual(p).catch(() => {});
       for (const p of pages) {
-        if (await p.getByRole("button", { name: "Siguiente base" }).isVisible().catch(() => false)) { enResolving = true; break; }
+        if (await p.getByRole("button", { name: "Llevar base" }).isVisible().catch(() => false)) { enResolving = true; break; }
         if (await p.getByText(/confirme…/).isVisible().catch(() => false)) { enResolving = true; break; }
       }
       if (!enResolving) await new Promise((r) => setTimeout(r, 300));
@@ -146,7 +146,7 @@ test("online: siguiente base vive en la esquina de la habitación, y LA ESTÁ HA
     let ganadorPage = null;
     for (let i = 0; i < 20 && !ganadorPage; i++) {
       for (const p of pages) {
-        if (await p.getByRole("button", { name: "Siguiente base" }).isVisible().catch(() => false)) { ganadorPage = p; break; }
+        if (await p.getByRole("button", { name: "Llevar base" }).isVisible().catch(() => false)) { ganadorPage = p; break; }
       }
       if (!ganadorPage) await new Promise((r) => setTimeout(r, 500));
     }
@@ -154,7 +154,7 @@ test("online: siguiente base vive en la esquina de la habitación, y LA ESTÁ HA
 
     for (const p of pages) {
       if (p === ganadorPage) continue;
-      await expect(p.getByRole("button", { name: "Siguiente base" })).toHaveCount(0);
+      await expect(p.getByRole("button", { name: "Llevar base" })).toHaveCount(0);
       await expect(p.getByText(/confirme…/)).toBeVisible();
     }
 
@@ -166,7 +166,7 @@ test("online: siguiente base vive en la esquina de la habitación, y LA ESTÁ HA
       await expect(p.getByText("LA HIZO")).toBeVisible();
     }
 
-    await ganadorPage.getByRole("button", { name: "Siguiente base" }).click();
+    await ganadorPage.getByRole("button", { name: "Llevar base" }).click();
     for (const p of pages) {
       await expect(p.getByText(/base 2\/2/)).toBeVisible({ timeout: 15000 });
     }

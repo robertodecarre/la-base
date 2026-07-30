@@ -86,14 +86,14 @@ test("online: el historial de manos vive detrás del ícono de libreta, no siemp
 
     // Piece T: la última base de la mano también pasa por 'resolving'
     // ahora (antes saltaba derecho a 'closing') — hace falta clickear
-    // "Siguiente base" una vez que aparece.
+    // "Llevar base" una vez que aparece.
     let enClosing = false;
     let sigBaseClickeado = false;
     for (let i = 0; i < 40 && !enClosing; i++) {
       for (const p of pages) await jugarCartaDelTurnoActual(p).catch(() => {});
       if (!sigBaseClickeado) {
         for (const p of pages) {
-          const btn = p.getByRole("button", { name: "Siguiente base" });
+          const btn = p.getByRole("button", { name: "Llevar base" });
           if (await btn.isVisible().catch(() => false)) {
             await btn.click({ timeout: 5000 }).catch(() => {});
             sigBaseClickeado = true;

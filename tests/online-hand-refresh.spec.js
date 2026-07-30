@@ -99,7 +99,7 @@ async function esperaBotonVisible(pages, regex, timeout = 30000) {
 // aborta solo porque seatIdx!==mySeat — ver MesaCircular's `puedeElegir`),
 // hasta que aparezca "Cerrar mano". Piece T: la última base de la mano
 // también pasa por 'resolving' ahora (antes saltaba derecho a 'closing'),
-// así que hace falta clickear "Siguiente base" una vez que aparece, antes
+// así que hace falta clickear "Llevar base" una vez que aparece, antes
 // de que "Cerrar mano" llegue a mostrarse.
 async function jugarBaseDeUnaCarta(pages) {
   let sigBaseClickeado = false;
@@ -109,7 +109,7 @@ async function jugarBaseDeUnaCarta(pages) {
     }
     if (!sigBaseClickeado) {
       for (const p of pages) {
-        const btn = p.getByRole("button", { name: "Siguiente base" });
+        const btn = p.getByRole("button", { name: "Llevar base" });
         if (await btn.isVisible().catch(() => false)) {
           await btn.click({ timeout: 5000 }).catch(() => {});
           sigBaseClickeado = true;

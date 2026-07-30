@@ -142,28 +142,31 @@ function ClockIcon({ x, y, abierta, onToggle }) {
   );
 }
 
-// "Siguiente base" (piece G, batch overnight post-5r) — antes vivía como
-// <Btn> HTML debajo de la mesa, en PantallaPartidaOnline.jsx; ahora se
-// planta en la esquina inferior derecha de "la habitación": el canvas
-// CUADRADO de este SVG (SIZE×SIZE) es más grande que la elipse redonda de
-// la mesa que contiene (outerRX/outerRY), así que las esquinas quedan con
-// espacio de sobra sin usar — ahí es "la habitación", fuera del círculo.
-// Mismo verde que el <Btn verde> que reemplaza (colors.positive, ver
-// #positivoG en <defs>). Mismo componente cubre las dos audiencias: quien
-// ganó la base ve el botón real, el resto ve el mismo cartel pero como
-// texto de espera con el nombre de quien tiene que confirmar.
+// "Llevar base" (piece G, batch overnight post-5r — renombrado y agrandado
+// 2x en piece W, mismo batch) — antes vivía como <Btn> HTML debajo de la
+// mesa, en PantallaPartidaOnline.jsx; ahora se planta en la esquina
+// inferior derecha de "la habitación": el canvas CUADRADO de este SVG
+// (SIZE×SIZE) es más grande que la elipse redonda de la mesa que contiene
+// (outerRX/outerRY), así que las esquinas quedan con espacio de sobra sin
+// usar — ahí es "la habitación", fuera del círculo. Mismo verde que el
+// <Btn verde> que reemplaza (colors.positive, ver #positivoG en <defs>).
+// Mismo componente cubre las dos audiencias: quien ganó la base ve el
+// botón real, el resto ve el mismo cartel pero como texto de espera con
+// el nombre de quien tiene que confirmar. Piece W: posición/gating sin
+// cambios (mismo anclaje x,y en la esquina inferior derecha) — solo
+// tamaño (w/h y todo lo de adentro, 2x el original 118x30) y label.
 function SiguienteBaseHabitacion({ x, y, esGanador, nombreGanador, enviando, onConfirmar }) {
   if (esGanador) {
-    const w = 118, h = 30;
+    const w = 236, h = 60;
     return (
       <g transform={`translate(${x - w},${y - h})`} style={{ cursor: enviando ? "default" : "pointer" }}
-         role="button" aria-label={enviando ? "Confirmando siguiente base" : "Siguiente base"}
+         role="button" aria-label={enviando ? "Confirmando llevar base" : "Llevar base"}
          onClick={(e) => { e.stopPropagation(); if (!enviando) onConfirmar(); }}>
         <rect x={0} y={0} width={w} height={h} rx={999}
           fill={enviando ? "rgba(30,40,80,0.6)" : "url(#positivoG)"}
-          stroke={enviando ? colors.panel.border : "#7ef0ae"} strokeWidth={1.4}/>
-        <text x={w / 2} y={h / 2 + 4} textAnchor="middle" fill={colors.text.primary} fontSize={10.5} fontFamily={fonts.display} fontWeight={800} fontStyle="italic" letterSpacing={0.5}>
-          {enviando ? "CONFIRMANDO…" : "SIGUIENTE BASE →"}
+          stroke={enviando ? colors.panel.border : "#7ef0ae"} strokeWidth={2.8}/>
+        <text x={w / 2} y={h / 2 + 8} textAnchor="middle" fill={colors.text.primary} fontSize={21} fontFamily={fonts.display} fontWeight={800} fontStyle="italic" letterSpacing={1}>
+          {enviando ? "CONFIRMANDO…" : "LLEVAR BASE →"}
         </text>
       </g>
     );
