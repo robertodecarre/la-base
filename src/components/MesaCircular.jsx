@@ -256,13 +256,23 @@ function CartaViajeraReparto({ destino, origen }) {
   );
 }
 
+// Tamaño del recuadro HTML embebido en el centro de la mesa durante
+// 'bidding' (piece S, batch overnight post-5r) — ver contenidoBidding más
+// abajo. Fijo para las dos variantes de GEOM (no depende de nJug): a
+// cx,cy=SIZE/2 con SIZE mínimo 680 (8p), un panel de 280x300 deja margen
+// de sobra antes de llegar a los asientos (que arrancan recién a
+// RX-boxW/2 ≈ 164px del centro en la variante default) sin tener que
+// escalarlo por variante.
+const CENTRO_BIDDING_W = 280;
+const CENTRO_BIDDING_H = 300;
+
 // `mySeat` es para la mesa online (pieza 5e): en hotseat es undefined y el
 // tablero se comporta como siempre (cualquier mano visible es jugable en su
 // turno, porque las cuatro manos son reales — un solo dispositivo compartido
 // no tiene nada que ocultar). Online, la única mano real es la propia; el
 // resto llega ya boca abajo desde el caller (ver PantallaPartidaOnline.jsx),
 // y acá alcanza con no dejar tirar cartas ajenas aunque sea su turno.
-export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases, tableroAbierto, onToggleTablero, onSiguienteBase, enviandoResolucion, hayReloj, relojAbierto, onToggleReloj, cartasViajandoReparto }) {
+export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases, tableroAbierto, onToggleTablero, onSiguienteBase, enviandoResolucion, hayReloj, relojAbierto, onToggleReloj, cartasViajandoReparto, contenidoBidding }) {
   const nJug = jugadores.length || 6;
   const G = GEOM[nJug] || GEOM.default;
   const { RX, RY, canvasSize: SIZE, cx: CX, cy: CY, outerRX, outerRY, mesaRX, mesaRY, cartaMesaRX, cartaMesaRY, boxW, boxH } = G;
@@ -273,7 +283,7 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
   const libretaPos = { x: (posCapLocal.x + posCapVisitante.x) / 2, y: (posCapLocal.y + posCapVisitante.y) / 2 };
   const clockPos = { x: libretaPos.x + 28, y: libretaPos.y };
 
-  return (
+  const svg = (
     <svg viewBox={`0 0 ${SIZE} ${SIZE}`} style={{width:"100%",userSelect:"none"}}>
       <defs>
         <radialGradient id="mesaFondo" cx="50%" cy="42%" r="65%">
@@ -399,4 +409,37 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
       )}
     </svg>
   );
+
+  // Piece S: el panel de pedir (mano/pie + declarar kamikaze) y sus
+  // variantes de solo-lectura ("esperando a...", "repartiendo tu mano…")
+  // vivían debajo de "la habitación", afuera de la mesa — ahora ocupan el
+  // centro vacío de la elipse. PanelPedir es HTML real (botones, inputs),
+  // no se reescribió en primitivas SVG; se overlaya con CSS position
+  // absolute en vez de <foreignObject> — probado en la práctica que
+  // foreignObject anidado en <svg> puede perder actualizaciones de layout
+  // bajo Chromium+Playwright cuando su contenido cambia de tamaño (el panel
+  // de pedir se vio "atascado" no-visible tras la confirmación de mano,
+  // reproducido 2/2 veces en tests\online-habitacion.spec.js aislado,
+  // desaparecía al volver a un <div> HTML normal). CX/CY son siempre
+  // SIZE/2 (mitad del canvas cuadrado) en las dos variantes de GEOM, así
+  // que el centro siempre cae en 50%/50% sin importar nJug — no hace falta
+  // leer RX/RY acá. PantallaPartidaOnline.jsx sigue siendo dueña de TODA
+  // la lógica de qué mostrar (turno propio, reparto en curso, kamikaze
+  // activo, etc.) — este componente solo lo centra, sin saber nada de
+  // bidding.
+  const contenido = (
+    <div style={{position:"relative",width:"100%"}}>
+      {svg}
+      {fase==="bidding" && contenidoBidding && (
+        <div style={{
+          position:"absolute", left:"50%", top:"50%", transform:"translate(-50%,-50%)",
+          width:CENTRO_BIDDING_W, maxWidth:"78%",
+          display:"flex", alignItems:"center", justifyContent:"center",
+        }}>
+          {contenidoBidding}
+        </div>
+      )}
+    </div>
+  );
+  return contenido;
 }

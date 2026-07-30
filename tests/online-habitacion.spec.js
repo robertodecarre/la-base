@@ -77,11 +77,25 @@ test("online: siguiente base vive en la esquina de la habitación, y LA ESTÁ HA
     async function confirmarUno(valorPreferido) {
       for (let intento = 1; intento <= 24; intento++) {
         let p = null;
+        // 500ms de poll (no 200ms) — mismo presupuesto que el resto de la
+        // suite usa para este mismo "buscar quién muestra CONFIRMA" (ver
+        // online-cierre-reparto-por-rol.spec.js).
         for (let i = 0; i < 30 && !p; i++) {
           for (const pg of pages) if (await panelConfirma(pg).isVisible().catch(() => false)) { p = pg; break; }
-          if (!p) await new Promise((r) => setTimeout(r, 200));
+          if (!p) await new Promise((r) => setTimeout(r, 500));
         }
-        expect(p, "ninguna sesión mostró el panel de pedir a tiempo").toBeTruthy();
+        // Bajo contención real (2 workers en paralelo, visto en la
+        // práctica) la transición mano→pie puede tardar más que una sola
+        // ventana de 15s en propagarse por Realtime a la sesión del
+        // capitán del pie — un `expect().toBeTruthy()` acá tiraba de
+        // inmediato y descartaba el resto del loop de `intento` (hasta 24
+        // intentos) que el propio código ya preveía para el paso de
+        // click/confirmar más abajo. `continue` en vez de tirar deja que
+        // ESTE MISMO presupuesto generoso también cubra la búsqueda, no
+        // solo el click — sin aflojar la aserción final: si las 24 vueltas
+        // se agotan sin encontrar nunca el panel, el throw del final del
+        // for sigue fallando el test igual.
+        if (!p) continue;
         const boton = valorPreferido != null && await p.getByRole("button", { name: valorPreferido, exact: true }).isVisible().catch(() => false)
           ? p.getByRole("button", { name: valorPreferido, exact: true })
           : p.getByRole("button", { name: /^\d+$/ }).first();

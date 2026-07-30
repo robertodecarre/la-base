@@ -692,6 +692,66 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     }
   };
 
+  // Piece S (batch overnight post-5r): contenido del centro de la mesa
+  // durante 'bidding' — antes vivía como bloque HTML debajo de "la
+  // habitación" (BloqueMesa), ahora MesaCircular lo embebe en el centro
+  // vacío de la elipse vía foreignObject (ver contenidoBidding en
+  // MesaCircular.jsx). La lógica de "qué mostrar" (PanelPedir real vs.
+  // EsperaPedido de solo lectura vs. los dos estados transitorios) no
+  // cambia, solo DÓNDE se monta. Declarado acá abajo (no junto a
+  // esMiTurno) a propósito: referencia onConfirmar, que recién se define
+  // más abajo — evaluarlo antes rompe con "Cannot access 'onConfirmar'
+  // before initialization" (TDZ real, visto en la práctica).
+  const contenidoBidding = requiredTeam===null ? (
+    <div style={{fontSize:11,color:"rgba(200,210,255,0.5)",fontStyle:"italic",textAlign:"center"}}>Cerrando el pedido…</div>
+  ) : esMiTurno && !repartoListoParaMi ? (
+    // Piece Q: aunque el server ya me habilitó a pedir, mi propio abanico
+    // todavía no terminó de llegar — mostrar el panel real acá sería
+    // pedirle a alguien que apueste sin haber visto toda su mano todavía.
+    // No depende de que las OTRAS sesiones también terminen su reparto
+    // (cada una se paces sola).
+    <div style={{fontSize:11,color:"rgba(200,210,255,0.5)",fontStyle:"italic",textAlign:"center"}}>Repartiendo tu mano…</div>
+  ) : esMiTurno ? (
+    <div style={{width:"100%",maxWidth:250}}>
+      {errorPedido && (
+        <div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",textAlign:"center",marginBottom:8}}>
+          {errorPedido}
+        </div>
+      )}
+      {/* PanelPedir no tiene noción propia de "enviando" — se bloquea la
+          interacción acá afuera mientras la RPC está en vuelo, para que
+          un doble click no dispare un segundo submit-bid. */}
+      <div style={{pointerEvents:enviando?"none":"auto",opacity:enviando?0.5:1}}>
+        <PanelPedir
+          totalBases={totalBases}
+          nombresMano={nombresMano}
+          nombresEq={nombresPie}
+          esManoEq0={teamMano===0}
+          onConfirmar={onConfirmar}
+          clock={CLOCK_ADAPTER_PANEL}
+          modoLento={false}
+          nombreCapMano={capitanMano?.name}
+          nombreCapPie={capitanPie?.name}
+          kamikazesDisp={gameState.kamikazes_remaining}
+          onKamikaze={()=>setKamikazeLocal(true)}
+          kamikazeActivo={kamikazeLocal}
+          onCancelarKamikaze={()=>setKamikazeLocal(false)}
+          pedidoManoInicial={requiredTeam===teamPie ? bidMano : null}
+          modoUnEquipo
+        />
+      </div>
+      {enviando && <div style={{fontSize:10,color:"rgba(201,168,76,0.5)",textAlign:"center",marginTop:6}}>Enviando…</div>}
+    </div>
+  ) : (
+    <EsperaPedido
+      totalBases={totalBases}
+      nombreCapitanTurno={requiredTeam===teamMano ? capitanMano?.name : capitanPie?.name}
+      colorTurno={requiredTeam===0 ? "#5b9bd5" : "#e07b54"}
+      bidMano={bidMano}
+      kamikazeDeclarado={gameState.kamikaze_declared}
+    />
+  );
+
   if (gameState.phase === "dealing") {
     // Solo quien va a repartir esta mano (el asiento que la mesa etiqueta
     // "PIE", pieIdx=dealer_seat en MesaCircular.jsx) puede tocar "Repartir
@@ -1142,59 +1202,10 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
             tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
             hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
             cartasViajandoReparto={viajandoReparto}
+            contenidoBidding={contenidoBidding}
           />
         </BloqueMesa>
       </div>
-
-      {requiredTeam===null ? (
-        <div style={{fontSize:11,color:"rgba(201,168,76,0.4)",fontStyle:"italic"}}>Cerrando el pedido…</div>
-      ) : esMiTurno && !repartoListoParaMi ? (
-        // Piece Q: aunque el server ya me habilitó a pedir, mi propio
-        // abanico todavía no terminó de llegar — mostrar el panel real
-        // acá sería pedirle a alguien que apueste sin haber visto toda su
-        // mano todavía. No depende de que las OTRAS sesiones también
-        // terminen su reparto (cada una se paces sola).
-        <div style={{fontSize:11,color:"rgba(201,168,76,0.4)",fontStyle:"italic"}}>Repartiendo tu mano…</div>
-      ) : esMiTurno ? (
-        <div style={{width:"100%",maxWidth:260}}>
-          {errorPedido && (
-            <div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",textAlign:"center",marginBottom:8}}>
-              {errorPedido}
-            </div>
-          )}
-          {/* PanelPedir no tiene noción propia de "enviando" — se bloquea la
-              interacción acá afuera mientras la RPC está en vuelo, para que
-              un doble click no dispare un segundo submit-bid. */}
-          <div style={{pointerEvents:enviando?"none":"auto",opacity:enviando?0.5:1}}>
-            <PanelPedir
-              totalBases={totalBases}
-              nombresMano={nombresMano}
-              nombresEq={nombresPie}
-              esManoEq0={teamMano===0}
-              onConfirmar={onConfirmar}
-              clock={CLOCK_ADAPTER_PANEL}
-              modoLento={false}
-              nombreCapMano={capitanMano?.name}
-              nombreCapPie={capitanPie?.name}
-              kamikazesDisp={gameState.kamikazes_remaining}
-              onKamikaze={()=>setKamikazeLocal(true)}
-              kamikazeActivo={kamikazeLocal}
-              onCancelarKamikaze={()=>setKamikazeLocal(false)}
-              pedidoManoInicial={requiredTeam===teamPie ? bidMano : null}
-              modoUnEquipo
-            />
-          </div>
-          {enviando && <div style={{fontSize:10,color:"rgba(201,168,76,0.5)",textAlign:"center",marginTop:6}}>Enviando…</div>}
-        </div>
-      ) : (
-        <EsperaPedido
-          totalBases={totalBases}
-          nombreCapitanTurno={requiredTeam===teamMano ? capitanMano?.name : capitanPie?.name}
-          colorTurno={requiredTeam===0 ? "#5b9bd5" : "#e07b54"}
-          bidMano={bidMano}
-          kamikazeDeclarado={gameState.kamikaze_declared}
-        />
-      )}
 
       <BotonSalir onSalir={onSalir}/>
       {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
