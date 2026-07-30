@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { crearYUnirseSalaOnline, alternarListoEnPantalla } from "./helpers.js";
+import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado } from "./helpers.js";
 
 // Piece I (batch overnight post-5r) — cuando un equipo declara kamikaze,
 // aparece un avioncito SVG (AvionKamikaze.jsx, no emoji) debajo de las
@@ -27,6 +27,7 @@ test("online: declarar kamikaze muestra el avión debajo de las estrellas del eq
   try {
     await crearYUnirseSalaOnline(pages, nombres, { nJug: 4, estructuraCustom: "3,3", sinAses: true });
     for (const p of pages) await alternarListoEnPantalla(p);
+    await pasarSorteoAnimado(pages);
     for (const p of pages) {
       await expect(p.getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
     }

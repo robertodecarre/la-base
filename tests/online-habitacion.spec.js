@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { crearYUnirseSalaOnline, alternarListoEnPantalla, jugarCartaDelTurnoActual } from "./helpers.js";
+import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, jugarCartaDelTurnoActual } from "./helpers.js";
 
 // Piece G (batch overnight post-5r):
 //   1. El botón "Siguiente base" se movió de un <Btn> HTML debajo de la
@@ -59,6 +59,7 @@ test("online: siguiente base vive en la esquina de la habitación, y LA ESTÁ HA
     }
 
     for (const p of pages) await alternarListoEnPantalla(p);
+    await pasarSorteoAnimado(pages);
     for (const p of pages) {
       await expect(p.getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
     }

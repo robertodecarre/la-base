@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { crearYUnirseSalaOnline, alternarListoEnPantalla } from "./helpers.js";
+import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado } from "./helpers.js";
 
 // Verifica el arranque "listo" por jugador (piece 5h) contra el proyecto
 // real de Supabase: reemplazó el botón único "Empezar partida" (cualquiera
@@ -92,6 +92,7 @@ test("online: arranque por \"listo\" individual, sin botón único", async ({ br
     // quedan listas — nadie clickea ningún botón de "arrancar".
     await alternarListoEnPantalla(pages[0]);
     await alternarListoEnPantalla(pages[3]);
+    await pasarSorteoAnimado(pages);
 
     // deal_hand corre solo (cada sesión lo intenta al ver todosListos, ver
     // PantallaOnlineSala.jsx) y las 4 pasan de la sala al tablero de la

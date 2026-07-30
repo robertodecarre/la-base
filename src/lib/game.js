@@ -13,6 +13,18 @@ export async function sortearRepartoInicial(roomId) {
   return data; // fila de rooms
 }
 
+// Piece H (batch overnight post-5r): marca que la propia sesión ya dio
+// vuelta su carta del sorteo — el asiento sale de la propia fila de
+// players server-side, no de un parámetro (estructuralmente imposible
+// marcar el flip de otro). Idempotente: llamarla de nuevo con el propio
+// asiento ya marcado no rompe nada.
+export async function marcarFlipSorteo(roomId) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("marcar_flip_sorteo", { p_room_id: roomId });
+  if (error) throw error;
+  return data; // fila de rooms
+}
+
 // Reparte la mano actual: la primera vez que se llama arranca la partida
 // (rooms.status "waiting" -> "playing", elige quién reparte al azar);
 // las siguientes veces reutiliza el hand_number/dealer_seat que haya

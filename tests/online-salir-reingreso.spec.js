@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { crearYUnirseSalaOnline, alternarListoEnPantalla } from "./helpers.js";
+import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado } from "./helpers.js";
 
 // Piece M (batch overnight post-5r): "Salir de la sala" ahora pide
 // confirmación (antes salía directo con un solo click, sin red), y
@@ -61,6 +61,7 @@ test("online: salir de la sala pide confirmación, y reingresar mid-game por có
   try {
     const code = await crearYUnirseSalaOnline(pages, nombres, { nJug: 4, estructuraCustom: "1,1", sinAses: true });
     for (const p of pages) await alternarListoEnPantalla(p);
+    await pasarSorteoAnimado(pages);
     for (const p of pages) {
       await expect(p.getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
     }

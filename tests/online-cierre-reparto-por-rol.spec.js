@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { crearYUnirseSalaOnline, alternarListoEnPantalla, jugarCartaDelTurnoActual } from "./helpers.js";
+import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, jugarCartaDelTurnoActual } from "./helpers.js";
 
 // Piece E (batch overnight post-5r) — jerarquía de botones de control de
 // sala por rol:
@@ -33,6 +33,7 @@ test("online: cerrar mano y repartir mano quedan gateados por rol (capitán / pr
   try {
     await crearYUnirseSalaOnline(pages, nombres, { nJug: 4, estructuraCustom: "1,1", sinAses: true });
     for (const p of pages) await alternarListoEnPantalla(p);
+    await pasarSorteoAnimado(pages);
     for (const p of pages) {
       await expect(p.getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
     }

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { jugarCartaDelTurnoActual, crearYUnirseSalaOnline, alternarListoEnPantalla } from "./helpers.js";
+import { jugarCartaDelTurnoActual, crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado } from "./helpers.js";
 
 // Regresión para el bug de producción: a partir de la mano 2, la pantalla de
 // "pedir bases" (bidding) online aparecía con la mano vacía en vez de
@@ -139,6 +139,7 @@ test("online: la mano 2 en bidding muestra la mano repartida, no vacía", async 
     for (const p of pages) {
       await alternarListoEnPantalla(p);
     }
+    await pasarSorteoAnimado(pages);
 
     for (const p of pages) {
       await expect(p.getByText("CONFIRMA")).toBeVisible({ timeout: 30000 }).catch(() => {});

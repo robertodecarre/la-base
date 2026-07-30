@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { crearYUnirseSalaOnline, alternarListoEnPantalla } from "./helpers.js";
+import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado } from "./helpers.js";
 
 // Piece C+D (batch overnight post-5r).
 //
@@ -70,6 +70,7 @@ test("online: el reloj corre de verdad durante el pedido de mano, y con 1 carta 
     }
 
     for (const p of pages) await alternarListoEnPantalla(p);
+    await pasarSorteoAnimado(pages);
     for (const p of pages) {
       await expect(p.getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
     }

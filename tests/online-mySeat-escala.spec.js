@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { crearYUnirseSalaOnline, alternarListoEnPantalla } from "./helpers.js";
+import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado } from "./helpers.js";
 
 // Piece K (batch overnight post-5r) — mySeat (el asiento propio, marcado
 // "VOS") renderiza a 1.5x el tamaño del resto de los asientos, no 1.4x
@@ -20,6 +20,7 @@ test("online: el asiento propio (VOS) mide 1.5x el resto de los asientos, no 1.4
   try {
     await crearYUnirseSalaOnline(pages, nombres, { nJug: 4, estructuraCustom: "1,1", sinAses: true });
     for (const p of pages) await alternarListoEnPantalla(p);
+    await pasarSorteoAnimado(pages);
     for (const p of pages) {
       await expect(p.getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
     }

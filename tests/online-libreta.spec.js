@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { crearYUnirseSalaOnline, alternarListoEnPantalla, jugarCartaDelTurnoActual } from "./helpers.js";
+import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, jugarCartaDelTurnoActual } from "./helpers.js";
 
 // Piece F (batch overnight post-5r) — el Tablero (historial de manos) deja
 // de estar siempre visible; ahora vive detrás de un ícono de "libreta"
@@ -28,6 +28,7 @@ test("online: el historial de manos vive detrás del ícono de libreta, no siemp
   try {
     await crearYUnirseSalaOnline(pages, nombres, { nJug: 4, estructuraCustom: "1,1", sinAses: true });
     for (const p of pages) await alternarListoEnPantalla(p);
+    await pasarSorteoAnimado(pages);
     for (const p of pages) {
       await expect(p.getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
     }
@@ -129,6 +130,7 @@ test("online: la libreta muestra las estrellas de la mano en curso antes de que 
   try {
     await crearYUnirseSalaOnline(pages, nombres, { nJug: 4, estructuraCustom: "2,2", sinAses: true });
     for (const p of pages) await alternarListoEnPantalla(p);
+    await pasarSorteoAnimado(pages);
     for (const p of pages) {
       await expect(p.getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
     }

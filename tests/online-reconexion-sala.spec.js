@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { crearYUnirseSalaOnline, alternarListoEnPantalla, jugarCartaDelTurnoActual } from "./helpers.js";
+import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, jugarCartaDelTurnoActual } from "./helpers.js";
 
 // Piece B (batch overnight post-5r) — auditoría de "reconexión a una sala
 // activa" (reload de página / relanzar la app / corte de red): el pedido
@@ -119,6 +119,7 @@ test("online: recargar la página en distintos momentos siempre devuelve al juga
     }
 
     for (const p of pages) await alternarListoEnPantalla(p);
+    await pasarSorteoAnimado(pages);
     for (const p of pages) {
       await expect(p.getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
     }

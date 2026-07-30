@@ -3,8 +3,7 @@ import { useSala } from "../hooks/useSala";
 import { sortearRepartoInicial, repartirMano } from "../lib/game";
 import { marcarListo, elegirEquipo } from "../lib/rooms";
 import { mensajeDeError } from "../lib/erroresSala";
-import { posEnCirculo } from "../engine/structures";
-import { CartaSVG } from "../components/cards/CartaSVG";
+import { SorteoAnimado } from "../components/SorteoAnimado";
 import { PantallaPartidaOnline } from "./PantallaPartidaOnline";
 import {
   FONTS_URL, colors, fonts, bevel, panelStyle, badgeStyle, tituloStyle, codigoStyle,
@@ -12,60 +11,6 @@ import {
   ctaStyle, secondaryBtnStyle, WORDMARK, diagonalWordmarkStyle,
 } from "../theme";
 
-// Sorteo de quién reparte primero — alimentado por rooms.sorteo_inicial
-// (piece 5l) en vez de un sorteo local como el que tenía PantallaSorteo.jsx
-// (hotseat, borrado en piece 5q). A propósito en el look viejo (Cinzel/
-// dorado) todavía, NO en el tema "chrome" de theme.js: el rediseño visual
-// de esta pantalla es una pieza aparte pendiente, esto solo pone el
-// mecanismo a funcionar. Adaptado del SVG que tenía PantallaSorteo.jsx,
-// sin el paso "tocar para revelar" (el sorteo ya viene resuelto del
-// servidor) ni botón de continuar (se encadena solo a repartirMano() por
-// timer, ver el useEffect más abajo).
-function SorteoOnline({ nJug, players, sorteo }) {
-  const cartaPorSeat = {};
-  for (const { seat, carta } of sorteo.cartas) cartaPorSeat[seat] = carta;
-  const ganador = players.find((p) => p.seat === sorteo.ganador_seat);
-
-  const SIZE=500,CX=250,CY=250;
-  const RX = nJug===8?200:190;
-  const RY = nJug===8?180:170;
-  return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12,padding:16}}>
-      <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SORTEO</div>
-      <div style={{fontSize:11,color:"rgba(201,168,76,0.45)",letterSpacing:2}}>¿QUIÉN REPARTE PRIMERO?</div>
-      <svg viewBox={`0 0 ${SIZE} ${SIZE}`} style={{width:"100%",maxWidth:500}}>
-        <ellipse cx={CX} cy={CY} rx={RX+40} ry={RY+35} fill="#1a3d2b" stroke="#c9a84c" strokeWidth={2}/>
-        {Array.from({length:nJug},(_,seat)=>{
-          const pos=posEnCirculo(seat,RX,RY,CX,CY,nJug);
-          const eqColor=seat%2===0?"#5b9bd5":"#e07b54";
-          const jugador=players.find(p=>p.seat===seat);
-          const carta=cartaPorSeat[seat];
-          const esG=seat===sorteo.ganador_seat;
-          const cw=36,ch=52;
-          return (
-            <g key={seat}>
-              <rect x={pos.x-45} y={pos.y-48} width={90} height={90} rx={8}
-                fill={esG?"rgba(201,168,76,0.2)":"rgba(0,0,0,0.5)"}
-                stroke={esG?"#c9a84c":"rgba(201,168,76,0.2)"} strokeWidth={esG?2:1}/>
-              <text x={pos.x} y={pos.y-32} textAnchor="middle" fill={eqColor} fontSize={11} fontFamily="Cinzel, Georgia, serif" fontWeight="bold">{jugador?.name ?? `#${seat}`}</text>
-              {carta
-                ?<g transform={`translate(${pos.x-cw/2},${pos.y-18})`}><CartaSVG carta={carta} w={cw} h={ch}/></g>
-                :<g transform={`translate(${pos.x-cw/2},${pos.y-18})`}>
-                  <rect width={cw} height={ch} rx={4} fill="#3d0808" stroke="#5a0f0a" strokeWidth={2}/>
-                </g>
-              }
-            </g>
-          );
-        })}
-        <g>
-          <text x={CX} y={CY-4} textAnchor="middle" fill="rgba(201,168,76,0.45)" fontSize={8} fontFamily="Cinzel, Georgia, serif" letterSpacing={1}>DA</text>
-          <text x={CX} y={CY+10} textAnchor="middle" fill="#f0d080" fontSize={13} fontFamily="Cinzel, Georgia, serif" fontWeight="bold">{ganador?.name ?? "—"}</text>
-        </g>
-      </svg>
-      <div style={{fontSize:10,color:"rgba(201,168,76,0.35)",fontStyle:"italic",textAlign:"center"}}>Repartiendo la primera mano…</div>
-    </div>
-  );
-}
 
 // Pantalla de selección de equipo (piece 5r) — se muestra a CADA jugador
 // apenas tiene un asiento reservado en la sala (join_room ya corrió) pero
@@ -76,7 +21,7 @@ function SorteoOnline({ nJug, players, sorteo }) {
 // LOCAL, impar para VISITANTE) es lo que mantiene la invariante
 // seat%2===team que submit_bid/close_hand/clock_expired siguen asumiendo
 // sin haber tenido que tocarlas (ver choose_team_rpc.sql). Montada como
-// sub-vista de PantallaOnlineSala, mismo patrón que SorteoOnline arriba —
+// sub-vista de PantallaOnlineSala, mismo patrón que SorteoAnimado —
 // reusa la instancia de useSala del padre, sin suscripción propia.
 function SeleccionEquipo({ roomId, nJug, players, onSalir, onElegido }) {
   const [enviando, setEnviando] = useState(false);
@@ -245,10 +190,6 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
   const salaCompleta = players.length === nJug;
   const todosListos = salaCompleta && players.length > 0 && players.every((p) => p.ready);
   const tieneSorteo = !!room?.sorteo_inicial;
-  // hand_number===0 (o gameState todavía ni existe) es la ventana en la
-  // que el sorteo sigue siendo relevante — a partir de la mano 1 es
-  // historia vieja, un reconnect ahí no debe revivirlo.
-  const enHandCero = !gameState || gameState.hand_number === 0;
 
   useEffect(() => {
     if (!todosListos || gameState || tieneSorteo) return;
@@ -264,21 +205,23 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
     return () => clearTimeout(t);
   }, [tieneSorteo, gameState, roomId]);
 
-  // Tiempo mínimo de "ya vi el sorteo" — LOCAL a esta sesión, arranca en
-  // cuanto ESTA sesión observa tieneSorteo, sin importar si gameState YA
-  // existía en ese mismo momento (sesión que monta/reconecta tarde,
-  // después de que otra sesión ya completó todo el ciclo sorteo→deal_hand
-  // en un puñado de segundos). Sin este gate, el render de abajo
-  // (`if (gameState) return <PantallaPartidaOnline>` antes que el chequeo
-  // de sorteo) dejaba a esa sesión saltar derecho a la mesa sin haber
-  // visto nunca el sorteo — bug real reportado en producción, reproducido
-  // con un reload a mitad del reparto en online-sorteo-inicial.spec.js.
+  // "Ya vi el sorteo" — LOCAL a esta sesión, sin importar si gameState YA
+  // existía apenas montó (sesión que reconecta tarde, después de que otra
+  // sesión ya completó todo el ciclo sorteo→deal_hand). Sin este gate, el
+  // render de abajo (`if (gameState) return <PantallaPartidaOnline>` antes
+  // que el chequeo de sorteo) dejaba a esa sesión saltar derecho a la
+  // mesa sin haber visto nunca el sorteo — bug real reportado en
+  // producción, reproducido con un reload a mitad del reparto en
+  // online-sorteo-inicial.spec.js. Piece H (batch overnight post-5r): ya
+  // no es un timer ciego de 3s desde tieneSorteo — SorteoAnimado llama a
+  // onCumplido() recién cuando los nJug asientos dieron vuelta su carta
+  // (Realtime-sincronizado, ver rooms.sorteo_inicial.flipped) más una
+  // gracia breve para que la leyenda del ganador se alcance a leer; una
+  // sesión que reconecta después de que todos ya flipearon ve el estado
+  // final de una, sin repetir la animación ni esperar de más (mismo
+  // patrón de "detectar el estado ya resuelto al montar" que sorteoCumplido
+  // siempre usó, ahora vive dentro de SorteoAnimado).
   const [sorteoCumplido, setSorteoCumplido] = useState(false);
-  useEffect(() => {
-    if (!tieneSorteo || sorteoCumplido || !enHandCero) return;
-    const t = setTimeout(() => setSorteoCumplido(true), 3000);
-    return () => clearTimeout(t);
-  }, [tieneSorteo, sorteoCumplido, enHandCero]);
 
   const alternarListo = async () => {
     setErrorListo(null);
@@ -362,11 +305,16 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
 
   // Sorteo ya resuelto server-side — todavía no se repartió la mano 0, o sí
   // se repartió pero esta sesión recién lo está viendo ahora (sorteoCumplido
-  // en camino, ver arriba). Reemplaza el lobby de "listo" por la vista del
-  // sorteo, misma lógica que el flujo hotseat pero sin click: acá nadie
-  // decide nada, solo se muestra el resultado.
+  // en camino, ver arriba). Reemplaza el lobby de "listo" por la animación
+  // de revelado (piece H) — cada asiento da vuelta su propia carta a su
+  // ritmo, ver SorteoAnimado.jsx.
   if (room.sorteo_inicial) {
-    return <SorteoOnline nJug={nJug} players={players} sorteo={room.sorteo_inicial} />;
+    return (
+      <SorteoAnimado
+        roomId={roomId} nJug={nJug} players={players} mySeat={mySeat}
+        sorteo={room.sorteo_inicial} onCumplido={() => setSorteoCumplido(true)}
+      />
+    );
   }
 
   // LOBBY

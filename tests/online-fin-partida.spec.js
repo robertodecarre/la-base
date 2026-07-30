@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { crearYUnirseSalaOnline, alternarListoEnPantalla, jugarCartaDelTurnoActual } from "./helpers.js";
+import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, jugarCartaDelTurnoActual } from "./helpers.js";
 
 // Piece L (batch overnight post-5r) — pantalla de fin de partida: anuncia
 // el equipo ganador con el texto exacto "GANÓ EQUIPO LOCAL" o "GANÓ EQUIPO
@@ -26,6 +26,7 @@ test("online: la pantalla de fin de partida anuncia el equipo ganador y sus juga
   try {
     await crearYUnirseSalaOnline(pages, nombres, { nJug: 4, estructuraCustom: "1", sinAses: true });
     for (const p of pages) await alternarListoEnPantalla(p);
+    await pasarSorteoAnimado(pages);
     for (const p of pages) {
       await expect(p.getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
     }

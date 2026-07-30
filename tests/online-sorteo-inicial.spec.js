@@ -8,17 +8,22 @@ import { crearYUnirseSalaOnline, alternarListoEnPantalla } from "./helpers.js";
 // carta al azar por asiento y escribe el resultado en
 // rooms.sorteo_inicial, las 4 sesiones lo ven vía Realtime (la misma
 // suscripción a `rooms` que ya usa useSala.js) mostrando la MISMA pantalla
-// de sorteo con el MISMO ganador, y recién unos segundos después arranca
-// la mano 0 con ese asiento repartiendo (dealer_seat) — verificado en la
-// mesa real una vez pasada la fase de bidding, que es donde MesaCircular
-// (y su label "PIE") se renderiza.
+// de sorteo con el MISMO ganador, y recién después de que las 4 dan
+// vuelta su propia carta arranca la mano 0 con ese asiento repartiendo
+// (dealer_seat) — verificado en la mesa real una vez pasada la fase de
+// bidding, que es donde MesaCircular (y su label "PIE") se renderiza.
 //
-// La comparación de "mismas cartas" se hace con el innerHTML completo del
-// <svg> del sorteo entre las 4 sesiones en vez de decodificar cada carta a
-// mano: SorteoOnline es una función pura de (nJug, players, sorteo) sin
-// ningún dato relativo al viewer (a diferencia de la mesa de juego, acá no
-// hay "(vos)" ni manos ocultas), así que si las 4 sesiones reciben el
-// mismo sorteo por Realtime, el markup tiene que ser byte-idéntico.
+// Piece H (batch overnight post-5r) reemplazó el revelado instantáneo por
+// viaje+giro+click-para-dar-vuelta (ver SorteoAnimado.jsx) — el markup ya
+// NO es viewer-agnóstico (cada sesión ve su propia carta como clickeable,
+// "mia"/"ajena"), así que la comparación de "mismo resultado" que antes
+// hacía esta prueba (innerHTML byte-idéntico entre las 4 sesiones) ya no
+// aplica. En su lugar: cada sesión da vuelta su propia carta de verdad
+// (ejercitando el click real + marcar_flip_sorteo + Realtime), y se
+// compara el NOMBRE DEL GANADOR que muestra la leyenda "DA" en las 4
+// sesiones entre sí y contra rooms.sorteo_inicial.ganador_seat leído
+// directo de la base — mismo nivel de garantía que antes, ahora pasando
+// por la interacción real en vez de solo el markup.
 
 function leerEnv() {
   const texto = fs.readFileSync(".env", "utf8");
@@ -96,13 +101,40 @@ test("online: sorteo inicial real, mismo resultado en las 4 sesiones y dealer co
       await expect(p.getByText("SORTEO", { exact: true })).toBeVisible({ timeout: 15000 });
     }
 
-    // Mismo sorteo, byte a byte, en las 4 sesiones.
-    const svgHtml = await Promise.all(pages.map((p) => p.locator("svg").first().innerHTML()));
-    expect(new Set(svgHtml).size, "el markup del sorteo no coincide entre sesiones").toBe(1);
+    // Cada sesión da vuelta SU PROPIA carta — el botón (role=button,
+    // aria-label "Dar vuelta tu carta") solo existe una vez que la carta
+    // de esa sesión llegó a su asiento (viaje 0.62s + stagger por
+    // asiento), Playwright espera solo hasta que aparece.
+    for (let i = 0; i < pages.length; i++) {
+      await pages[i].getByRole("button", { name: "Dar vuelta tu carta" }).click({ timeout: 10000 });
+    }
 
-    // El nombre del ganador (único texto con fill #f0d080 en esta pantalla)
-    // tiene que ser uno de los 4 jugadores.
-    const ganadorNombre = await pages[0].locator('svg text[fill="#f0d080"]').textContent();
+    // Esperar a que las 4 sesiones vean, cada una por su cuenta, que TODOS
+    // ya dieron vuelta — el hint desaparece recién ahí (ver SorteoAnimado.
+    // jsx). Necesario antes de leer la base directo: el click de arriba
+    // solo garantiza que ESTA sesión marcó su propio flip local; que las
+    // OTRAS 3 sesiones ya vean el flip de, por ejemplo, la última página
+    // clickeada depende de que marcar_flip_sorteo haya terminado de
+    // escribir Y de que Realtime ya lo haya propagado — sin esperar esto,
+    // el fetch a rooms.sorteo_inicial de más abajo puede correr antes de
+    // que ese último write llegue a la base, viendo un `flipped` todavía
+    // incompleto (visto en la práctica: pasaba justo con el último
+    // asiento clickeado).
+    for (const p of pages) {
+      await expect(p.getByText(/Tocá tu carta|Esperando a los demás/)).toHaveCount(0, { timeout: 15000 });
+    }
+
+    // Leyenda "DA -nombre-": mismo ganador en las 4 sesiones. El texto
+    // existe en el DOM desde el montaje (solo la opacidad lo revela), así
+    // que leerlo no depende de esperar la transición — lo que importa acá
+    // es que el CONTENIDO coincida entre sesiones.
+    const nombresGanador = await Promise.all(pages.map(async (p) => {
+      const etiquetaDA = p.locator("svg text", { hasText: "DA" }).first();
+      const nombreTxt = etiquetaDA.locator("xpath=following-sibling::*[local-name()='text'][1]");
+      return nombreTxt.textContent();
+    }));
+    expect(new Set(nombresGanador).size, "las 4 sesiones no coinciden en el ganador").toBe(1);
+    const ganadorNombre = nombresGanador[0];
     expect(NOMBRES).toContain(ganadorNombre);
 
     // Chequeo directo contra la base: sorteo_inicial.ganador_seat resuelve
@@ -119,11 +151,13 @@ test("online: sorteo inicial real, mismo resultado en las 4 sesiones y dealer co
     const { sorteo_inicial } = filas[0];
     expect(sorteo_inicial).toBeTruthy();
     expect(sorteo_inicial.cartas).toHaveLength(4);
+    expect(sorteo_inicial.flipped, "las 4 sesiones ya deberían haber marcado su flip").toEqual({ "0": true, "1": true, "2": true, "3": true });
     expect(NOMBRES[sorteo_inicial.ganador_seat]).toBe(ganadorNombre);
 
-    // Pasados los ~3s del timer de cada sesión, deal_hand reparte la mano 0
-    // usando ese asiento como dealer_seat — llega a bidding directo (no
-    // hay fase 'dealing' para la mano 0).
+    // Una vez las 4 dieron vuelta su carta (+ la gracia breve de la
+    // leyenda), deal_hand reparte la mano 0 usando ese asiento como
+    // dealer_seat — llega a bidding directo (no hay fase 'dealing' para
+    // la mano 0).
     for (const p of pages) {
       await expect(p.getByText("CONFIRMA")).toBeVisible({ timeout: 15000 }).catch(() => {});
     }
