@@ -28,6 +28,13 @@ import { colors, fonts, ctaStyle } from "../theme";
 // de asiento y no una regla geométrica de "lado de la mesa"), stagger
 // 90ms entre asientos, flip 0.5s cubic-bezier(.34,1.56,.64,1).
 const CW = 40, CH = 58;
+// Piece X (batch overnight post-5r): mismo factor 1.5x que MYSEAT_SCALE en
+// MesaCircular.jsx — el asiento propio ya se agranda así en la mesa real,
+// esto lo replica acá para que se reconozca por tamaño antes de leer el
+// nombre. No se reusa el push-out de posición (PUSH_OWN) de MesaCircular:
+// ahí compensa el mayor ancho de mano+cartas jugadas, acá solo hay una
+// carta por asiento y el espaciado del círculo de sorteo ya deja margen.
+const MYSEAT_SCALE = 1.5;
 const STAGGER_MS = 90;
 const VIAJE_MS = 620;
 const GRACIA_TARDIA_MS = 300; // sesión que reconecta con todo ya confirmado — sin esto, onCumplido() dispara en el mismo tick del mount y la pantalla de sorteo nunca llega a pintarse
@@ -64,7 +71,7 @@ const KEYFRAMES = `
 // cubic-bezier(.34,1.56,.64,1) de la referencia en ambas mitades. El
 // resultado visual difiere del giro 3D de la referencia, pero es el que
 // realmente se ve correctamente (una sola cara visible en todo momento).
-function CartaAsientoSorteo({ pos, carta, flipped, clickable, onClick }) {
+function CartaAsientoSorteo({ pos, carta, flipped, clickable, onClick, w, h }) {
   const [cara, setCara] = useState(flipped ? "frente" : "dorso");
   const [escalaX, setEscalaX] = useState(1);
   const yaAnimado = useRef(flipped);
@@ -82,7 +89,7 @@ function CartaAsientoSorteo({ pos, carta, flipped, clickable, onClick }) {
 
   return (
     <g
-      transform={`translate(${pos.x - CW / 2},${pos.y - CH / 2 + 6})`}
+      transform={`translate(${pos.x - w / 2},${pos.y - h / 2 + 6})`}
       style={{ cursor: clickable ? "pointer" : "default" }}
       onClick={clickable ? onClick : undefined}
       role={clickable ? "button" : undefined}
@@ -93,7 +100,7 @@ function CartaAsientoSorteo({ pos, carta, flipped, clickable, onClick }) {
         transition: "transform 0.25s cubic-bezier(.34,1.56,.64,1)",
         transform: `scaleX(${escalaX})`,
       }}>
-        {cara === "dorso" ? <CartaSVG bocaAbajo w={CW} h={CH} /> : <CartaSVG carta={carta} w={CW} h={CH} />}
+        {cara === "dorso" ? <CartaSVG bocaAbajo w={w} h={h} /> : <CartaSVG carta={carta} w={w} h={h} />}
       </g>
     </g>
   );
@@ -260,13 +267,15 @@ export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplid
 
           const tx = pos.x - CX, ty = pos.y - CY;
           const rotSigno = seat % 2 === 0 ? 1 : -1;
+          const escala = esMia ? MYSEAT_SCALE : 1;
+          const boxW = 92 * escala, boxH = 96 * escala;
 
           return (
             <g key={seat}>
-              <rect x={pos.x - 46} y={pos.y - 52} width={92} height={96} rx={8}
+              <rect x={pos.x - boxW / 2} y={pos.y - boxH / 2 - 4} width={boxW} height={boxH} rx={8}
                 fill={esGanador ? "rgba(255,140,60,0.12)" : "rgba(10,14,38,0.6)"}
                 stroke={esGanador ? "#ffab8a" : "rgba(120,140,220,0.25)"} strokeWidth={esGanador ? 2 : 1} />
-              <text x={pos.x} y={pos.y - 58} textAnchor="middle" fontFamily={fonts.body} fontWeight={600} fontSize={11} fill={colorEquipo(seat)}>
+              <text x={pos.x} y={pos.y - boxH / 2 - 10} textAnchor="middle" fontFamily={fonts.body} fontWeight={600} fontSize={11 * escala} fill={colorEquipo(seat)}>
                 {nombreJugador(seat)}
               </text>
 
@@ -295,11 +304,12 @@ export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplid
                 <CartaAsientoSorteo
                   pos={pos} carta={cartaPorSeat[seat]} flipped={flipped}
                   clickable={esMia && !flipped} onClick={esMia ? onClickPropia : undefined}
+                  w={CW * escala} h={CH * escala}
                 />
               )}
 
               {esMia && llegada && !flipped && (
-                <circle cx={pos.x} cy={pos.y} r={30} fill="none" stroke="rgba(255,171,138,0.65)" strokeWidth={1.5}
+                <circle cx={pos.x} cy={pos.y} r={30 * escala} fill="none" stroke="rgba(255,171,138,0.65)" strokeWidth={1.5}
                   style={{ animation: "lbSorteoPulso 1.4s ease-out infinite", pointerEvents: "none" }} />
               )}
             </g>
