@@ -180,6 +180,26 @@ test("online: sorteo inicial real, mismo resultado en las 4 sesiones y dealer co
     expect(sorteo_inicial.flipped, "las 4 sesiones ya deberían haber marcado su flip").toEqual({ "0": true, "1": true, "2": true, "3": true });
     expect(NOMBRES[sorteo_inicial.ganador_seat]).toBe(ganadorNombre);
 
+    // Piece CC: el ganador tiene que tener jerarquía ESTRICTAMENTE más
+    // alta que cualquier otro asiento — antes, un empate en la jerarquía
+    // más alta se resolvía a favor del asiento más bajo (sortear_reparto_
+    // inicial ya no puede devolver ese caso: redibuja la mesa entera hasta
+    // que el resultado escrito en rooms.sorteo_inicial ya no tenga empate,
+    // ver 20260706270000_sorteo_redraw_on_tie.sql). Un solo trial real no
+    // prueba el redraw en sí (la aleatoriedad puede no empatar esta vez),
+    // pero si el tiebreak viejo volviera, esta aserción eventualmente
+    // fallaría apenas el sorteo real empate — cobertura de regresión
+    // permanente sobre el mismo dato que ya lee este spec, en vez de un
+    // spec nuevo separado (ver también scripts/verify-sorteo-redraw-
+    // tie.mjs, que sí fuerza el escenario con muchos trials contra el
+    // proyecto real).
+    const jerarquiaDe = (carta) => (carta.valor === 1 && carta.palo.n === "Bastos" ? 100 : carta.valor);
+    const jerGanador = jerarquiaDe(sorteo_inicial.cartas[sorteo_inicial.ganador_seat].carta);
+    for (const { seat, carta } of sorteo_inicial.cartas) {
+      if (seat === sorteo_inicial.ganador_seat) continue;
+      expect(jerarquiaDe(carta), `asiento ${seat} no debería empatar/superar al ganador`).toBeLessThan(jerGanador);
+    }
+
     // Una vez las 4 confirmaron ARRANCAMOS, deal_hand reparte la mano 0
     // usando ese asiento como dealer_seat — llega a bidding directo (no
     // hay fase 'dealing' para la mano 0).
