@@ -1,20 +1,29 @@
-// Verifies piece T's fix end-to-end against the real linked Supabase
-// project: completing a hand's LAST base now goes through 'resolving'
-// (same as every other base) instead of skipping straight to 'closing'.
+// Verifies piece AA's behavior end-to-end against the real linked
+// Supabase project: completing a hand's LAST base goes DIRECTLY to
+// 'closing' (turn_seat handed to the winner, same as resolve_resolving
+// used to do) — no "Llevar base"/resolve_resolving step for the last
+// base. Every other (non-last) base is unchanged: still lands on
+// 'resolving' and needs the winner to call resolve_resolving.
 //
-// Before this fix, resolve_trick jumped straight to phase='closing' when
-// the just-completed trick was the hand's last base — the client's
-// 'closing' render always sends cartasMesa=[] to MesaCircular, so that
-// base's cards vanished immediately with no "Llevar base" confirmation
-// step, unlike every other base. Root-caused by reading resolve_trick/
-// resolve_resolving directly (20260706080000/20260706090000/20260706110000)
-// — this predates piece P and piece Q by three weeks, so it isn't a
-// regression from either.
+// This supersedes piece T's fix (20260706240000): piece T made the last
+// base land on 'resolving' too, specifically so its cards wouldn't vanish
+// before a confirmation click — at the time the only way to reach
+// 'closing' without an unconfirmed base was through the manual Llevar-base
+// step. Piece AA (20260706250000) removes that step for the last base
+// specifically (per product spec: no "Llevar base" for the last base, only
+// "Cerrar mano") and instead fixes cards-vanishing client-side (the
+// 'closing' render in PantallaPartidaOnline.jsx now shows the last base's
+// played cards + winner instead of clearing the table) — so resolve_trick
+// can go straight to 'closing' again for the last base without
+// reintroducing piece T's original bug.
 //
-// estructura=[2]: 2 bases in the one hand — base 0 exercises the
-// already-correct "not the last base" path (same as verify-resolving-
-// resolution.mjs), base 1 is the one this fix targets. ases all off to
-// avoid any copas_menu/oros_menu detour.
+// estructura=[2,2]: 2 bases in hand 0 — base 0 exercises the unchanged
+// "not the last base" path, base 1 is the one piece AA targets. A second
+// hand [2] is only there so close_hand's "not the last hand" branch
+// lands on phase='dealing' instead of 'finished', so this script can
+// assert close_hand succeeds right after the state resolve_trick now
+// leaves the last base in. ases all off to avoid any copas_menu/oros_menu
+// detour.
 //
 // Usage: node --env-file=.env scripts/verify-resolving-last-base.mjs
 import { createClient } from "@supabase/supabase-js";
@@ -30,7 +39,7 @@ const N_JUG = 4;
 const CONFIG = {
   nJug: N_JUG,
   dosMazos: false,
-  estructura: [2],
+  estructura: [2, 2],
   ases: { espadas: false, copas: false, oros: false },
   kamikazes: 0,
 };
@@ -97,9 +106,6 @@ async function main() {
   for (let i = 0; i < N_JUG; i++) {
     await rpc(sessions[i], "join_room", { p_code: room.code, p_name: `J${i}` });
   }
-  // join_room leaves seat/team null (piece 5r) — choose_team assigns both
-  // (LOCAL=team0/even seats, VISITANTE=team1/odd seats, first-to-choose-
-  // each-team becomes captain).
   const players = [];
   for (let i = 0; i < N_JUG; i++) {
     players.push(await rpc(sessions[i], "choose_team", { p_room_id: room.id, p_team: i % 2 }));
@@ -110,9 +116,6 @@ async function main() {
   const teamPie = 1 - teamMano;
   const captainMano = players.find((p) => p.team === teamMano && p.is_captain);
   const captainPie = players.find((p) => p.team === teamPie && p.is_captain);
-  // opcionesValidas(1, 2) = [0, 2] — la suma tiene que dar total-1 o
-  // total+1, así que pie NO puede pedir 1 igual que mano (ver
-  // src/engine/bidding.js). 0 es siempre una opción válida acá.
   await rpc(sessions[captainMano.seat], "submit_bid", { p_room_id: room.id, p_value: 1, p_kamikaze: false });
   gs = await rpc(sessions[captainPie.seat], "submit_bid", { p_room_id: room.id, p_value: 0, p_kamikaze: false });
 
@@ -128,24 +131,32 @@ async function main() {
   assertEq(gs.phase, "playing", "phase after resolve_resolving on a non-last base");
   assertEq(gs.turn_seat, winner0, "turn_seat handed to base 0's winner");
 
-  console.log("\n=== Base 1 of 2 (THE LAST BASE — piece T's actual fix) ===");
+  console.log("\n=== Base 1 of 2 (THE LAST BASE — piece AA) ===");
   gs = await playTrick(sessions, room, gs);
-  // Before the fix this was 'closing' already, with base 1's cards
-  // effectively invisible (the 'closing' render never shows cartasMesa).
-  assertEq(gs.phase, "resolving", "phase after the LAST base completes — must be 'resolving', not 'closing'");
+  assertEq(gs.phase, "closing", "phase after the LAST base completes — direct to 'closing', no 'resolving'/Llevar-base step");
   assertEq(gs.base_num, 2, "base_num advanced to 2 (== total_bases)");
   const winner1 = gs.last_trick_winner_seat;
+  assertEq(gs.turn_seat, winner1, "turn_seat handed to the last base's winner, same as resolve_resolving used to do");
   const trick1Cards = await playedCardsForTrick(sessions[0], room.id, gs.hand_number, 1);
-  assertEq(trick1Cards.length, N_JUG, "the last base's played_cards are queryable while still in 'resolving' — this is what the table renders during the Llevar-base wait");
+  assertEq(trick1Cards.length, N_JUG, "the last base's played_cards are queryable while already in 'closing' — this is what the client now renders instead of an empty table");
 
-  // Only the trick winner can confirm — same authorization as every other base.
-  const impostor = (winner1 + 1) % N_JUG;
-  const { error: impostorErr } = await sessions[impostor].rpc("resolve_resolving", { p_room_id: room.id });
-  if (!impostorErr) throw new Error("FAIL: a non-winner was able to call resolve_resolving on the last base");
-  console.log(`  ok: resolve_resolving still rejects a non-winner on the last base (${impostorErr.message})`);
+  // resolve_resolving is no longer the way to leave the last base's
+  // 'resolving' — it's never reached, so calling it here must fail
+  // (phase is already 'closing', not 'resolving').
+  const { error: staleResolvingErr } = await sessions[winner1].rpc("resolve_resolving", { p_room_id: room.id });
+  if (!staleResolvingErr) throw new Error("FAIL: resolve_resolving succeeded after the last base, but phase should already be 'closing'");
+  console.log(`  ok: resolve_resolving correctly rejected post-last-base (${staleResolvingErr.message})`);
 
-  gs = await rpc(sessions[winner1], "resolve_resolving", { p_room_id: room.id });
-  assertEq(gs.phase, "closing", "phase after resolve_resolving on the LAST base — now finally advances to 'closing'");
+  // Only a captain can close the hand — unchanged gate, now reachable
+  // straight from the last base's trick resolution with no extra step.
+  const nonCaptainSeat = players.find((p) => !p.is_captain).seat;
+  const { error: nonCaptainErr } = await sessions[nonCaptainSeat].rpc("close_hand", { p_room_id: room.id });
+  if (!nonCaptainErr) throw new Error("FAIL: a non-captain was able to close the hand");
+  console.log(`  ok: close_hand still rejects a non-captain (${nonCaptainErr.message})`);
+
+  const anyCaptain = players.find((p) => p.is_captain);
+  gs = await rpc(sessions[anyCaptain.seat], "close_hand", { p_room_id: room.id });
+  assertEq(gs.phase, "dealing", "close_hand succeeds directly from the state left by the last base's trick resolution");
 
   console.log("\nALL CHECKS PASSED against the real project.");
 }

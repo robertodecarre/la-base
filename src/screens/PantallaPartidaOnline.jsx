@@ -1055,6 +1055,18 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     // post-5r): duplicaba, en texto, los mismos números que ResumenMarcador
     // ya muestra arriba con estrellas (EstrellasPedido de pedLocal/
     // hechoLocal/pedVisitante/hechoVisitante, hoisteados más arriba).
+    //
+    // Piece AA: resolve_trick ahora manda la última base derecho a
+    // 'closing' (20260706250000_last_base_direct_closing.sql), sin pasar
+    // por 'resolving' — no hay "Llevar base" para esta base. Antes esta
+    // vista siempre mandaba cartasMesa=[] (piece T ya había documentado
+    // que eso hacía desaparecer las cartas de la última base sin
+    // confirmación); ahora en cambio muestra las cartas de esa última
+    // base tal cual, igual que 'resolviendo' lo hace para cualquier otra
+    // — quedan visibles hasta que el capitán realmente cierra la mano, en
+    // vez de requerir un click que ya no existe para este caso. fase
+    // sigue siendo "cerrada" (no "resolviendo"), así que MesaCircular NO
+    // dibuja el botón Llevar base acá aunque haya cartas y ganadorBase.
     return (
       <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
@@ -1063,9 +1075,9 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         <div style={{width:"100%",maxWidth:640}}>
           <BloqueMesa resumen={resumenProps}>
             <MesaCircular
-              jugadores={jugadoresMesa} cartasMesa={[]}
+              jugadores={jugadoresMesa} cartasMesa={cartasDeTrick(totalBases - 1)}
               turnoIdx={gameState.turn_seat} pieIdx={gameState.dealer_seat} manoIdx={gameState.mano_seat}
-              onTirar={()=>{}} fase="cerrada" ganadorBase={null}
+              onTirar={()=>{}} fase="cerrada" ganadorBase={gameState.last_trick_winner_seat}
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
