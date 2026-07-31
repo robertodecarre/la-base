@@ -280,7 +280,7 @@ const CENTRO_BIDDING_HK = 0.85;
 // no tiene nada que ocultar). Online, la única mano real es la propia; el
 // resto llega ya boca abajo desde el caller (ver PantallaPartidaOnline.jsx),
 // y acá alcanza con no dejar tirar cartas ajenas aunque sea su turno.
-export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases, tableroAbierto, onToggleTablero, onSiguienteBase, enviandoResolucion, hayReloj, relojAbierto, onToggleReloj, cartasViajandoReparto, contenidoBidding }) {
+export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases, tableroAbierto, onToggleTablero, onSiguienteBase, enviandoResolucion, hayReloj, relojAbierto, onToggleReloj, cartasViajandoReparto, contenidoBidding, resultadoMano }) {
   const nJug = jugadores.length || 6;
   const G = GEOM[nJug] || GEOM.default;
   const { RX, RY, canvasSize: SIZE, cx: CX, cy: CY, outerRX, outerRY, mesaRX, mesaRY, cartaMesaRX, cartaMesaRY, boxW, boxH } = G;
@@ -337,6 +337,23 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
         <g>
           <text x={CX} y={CY-2} textAnchor="middle" fill="rgba(170,182,242,0.55)" fontSize={9} letterSpacing={2} fontFamily={fonts.display} fontWeight={800} fontStyle="italic">LA HIZO</text>
           <text x={CX} y={CY+10} textAnchor="middle" fill={colors.team[ganadorBase%2===0?"local":"visitante"].readyBorder} fontSize={15} fontFamily={fonts.display} fontWeight={800} fontStyle="italic" filter="url(#glow)">{jugadores[ganadorBase]?.nombre}</text>
+        </g>
+      ) : null}
+
+      {/* Piece DD: anuncio del resultado de LA MANO (no de la base) en el
+          centro de la mesa cuando cierra — mismo tratamiento tipográfico/
+          de color por equipo que la pantalla de "FIN DE LA PARTIDA"
+          (colors.team.*.accent vía resultadoMano.color, itálica bold
+          fonts.display), para que se lean como screens hermanas en vez de
+          diseños sueltos. Se apila debajo de "LA HIZO" (que sigue
+          mostrando quién ganó la ÚLTIMA base, sin cambios) — dos datos
+          distintos, no se reemplazan entre sí. */}
+      {resultadoMano ? (
+        <g>
+          <text x={CX} y={CY+34} textAnchor="middle" fill={resultadoMano.color} fontSize={17} fontFamily={fonts.display} fontWeight={800} fontStyle="italic" letterSpacing={0.5} filter="url(#glow)">{resultadoMano.texto}</text>
+          {resultadoMano.nombres.length>0 && (
+            <text x={CX} y={CY+50} textAnchor="middle" fill="rgba(220,230,255,0.7)" fontSize={10} fontFamily={fonts.body} fontWeight={600}>{resultadoMano.nombres.join(" · ")}</text>
+          )}
         </g>
       ) : null}
 

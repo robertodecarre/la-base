@@ -1085,6 +1085,29 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     // vez de requerir un click que ya no existe para este caso. fase
     // sigue siendo "cerrada" (no "resolviendo"), así que MesaCircular NO
     // dibuja el botón Llevar base acá aunque haya cartas y ganadorBase.
+    //
+    // Piece DD: anuncio del resultado de la mano en el centro de la mesa
+    // — hand_results todavía no existe para esta mano acá (recién lo
+    // inserta close_hand, que es lo que saca de esta fase), así que el
+    // resultado se deriva client-side de los mismos pedLocal/pedVisitante/
+    // hechoLocal/hechoVisitante ya hoisteados para EstrellasPedido, con el
+    // MISMO criterio que close_hand usa server-side (hecho===pedido =
+    // "hizo la mano", ver 20260706200000_captain_dealer_gates.sql). Las
+    // reglas de pedido garantizan pedLocal+pedVisitante≠totalBases
+    // (opcionesValidas nunca deja elegir la suma exacta), y hechoLocal+
+    // hechoVisitante===totalBases siempre — así que "los dos hicieron" es
+    // matemáticamente imposible: exactamente uno de los tres casos abajo
+    // aplica siempre.
+    const localHizo = pedLocal != null && hechoLocal === pedLocal;
+    const visitanteHizo = pedVisitante != null && hechoVisitante === pedVisitante;
+    const nombresLocal = players.filter((p) => p.team === 0).map((p) => p.name);
+    const nombresVisitante = players.filter((p) => p.team === 1).map((p) => p.name);
+    const resultadoMano = localHizo
+      ? { texto: "GANÓ LOCAL", color: colors.team.local.accent, nombres: nombresLocal }
+      : visitanteHizo
+      ? { texto: "GANÓ VISITANTE", color: colors.team.visitante.accent, nombres: nombresVisitante }
+      : { texto: "PERDIMOS LOS DOS", color: colors.negative, nombres: [] };
+
     return (
       <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
@@ -1101,6 +1124,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
               tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
               hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
+              resultadoMano={resultadoMano}
             />
           </BloqueMesa>
         </div>

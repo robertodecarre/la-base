@@ -87,6 +87,24 @@ test("online: la última base de la mano no muestra Llevar base, y sus cartas qu
     const cartasEnMesa = await pages[0].locator("svg rect[width='37']").count();
     expect(cartasEnMesa, "las 4 cartas de la última base deberían seguir visibles en la mesa durante 'closing'").toBe(4);
 
+    // Piece DD: el centro de la mesa también anuncia el resultado DE LA
+    // MANO (no solo de la última base) — exactamente uno de "GANÓ LOCAL"/
+    // "GANÓ VISITANTE"/"PERDIMOS LOS DOS" (mutuamente excluyentes por
+    // regla de juego, ver comentario en PantallaPartidaOnline.jsx), y el
+    // MISMO texto en las 4 sesiones — no se predice cuál de los tres
+    // resultó (depende de qué mano tocó al azar), solo que haya uno solo
+    // y sea consistente entre sesiones, mismo criterio que ya usa este
+    // archivo de tests para el ganador del sorteo.
+    const posibles = ["GANÓ LOCAL", "GANÓ VISITANTE", "PERDIMOS LOS DOS"];
+    const resultadosVistos = await Promise.all(pages.map(async (p) => {
+      for (const texto of posibles) {
+        if (await p.getByText(texto, { exact: true }).isVisible().catch(() => false)) return texto;
+      }
+      return null;
+    }));
+    expect(resultadosVistos, "cada sesión debería mostrar uno de los tres resultados posibles").not.toContain(null);
+    expect(new Set(resultadosVistos).size, "las 4 sesiones no coinciden en el resultado de la mano").toBe(1);
+
     // Solo un capitán puede cerrarla — el resto ve el mensaje de espera,
     // nunca el botón (gate ya cubierto en detalle en online-cierre-
     // reparto-por-rol.spec.js; acá solo confirma que es alcanzable desde
