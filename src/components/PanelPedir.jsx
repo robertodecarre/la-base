@@ -113,7 +113,7 @@ export function PanelPedir({ totalBases, nombresMano, nombresEq, esManoEq0, onCo
   const btnNum = (n, seleccionado, onSelect, prohibido) => (
     <button key={n} onClick={() => !prohibido && onSelect(n)} style={{
       ...segmentedOptionStyle(seleccionado===n),
-      width: 40, height: 40, padding: 0, fontSize: 15,
+      width: 25, height: 25, padding: 0, fontSize: 12,
       display: "flex", alignItems: "center", justifyContent: "center",
       ...(prohibido ? {
         border: `1px solid ${colors.danger.border}`,
@@ -136,27 +136,30 @@ export function PanelPedir({ totalBases, nombresMano, nombresEq, esManoEq0, onCo
   const confirmBtnStyle = (habilitado, team) => ({
     ...filaStyle(team, { listo: habilitado }),
     width: "100%", textAlign: "center", justifyContent: "center",
-    fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 13, letterSpacing: 1,
+    padding: "5px 12px",
+    fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 12, letterSpacing: 1,
     color: colors.text.primary,
     opacity: habilitado ? 1 : 0.5,
     cursor: habilitado ? "pointer" : "not-allowed",
   });
 
+  // Piece Y (batch overnight post-5r): sin fondo/borde propio — este panel
+  // ahora vive adentro de la elipse "mesa" de MesaCircular.jsx
+  // (contenidoBidding), que ya tiene su propio borde/fondo; dibujar otro
+  // acá encima se leía como una caja pegada sobre la mesa en vez de parte
+  // de ella.
   return (
     <div style={{
-      background: colors.panel.bg,
-      border: `2px solid ${colors.team[teamActual].border}`,
-      borderRadius: 16, padding: "14px 16px", width: "100%",
-      boxShadow: `${bevel}, 0 0 24px rgba(0,0,0,0.5)`,
+      width: "100%", padding: "2px 4px",
     }}>
-      <div style={{ ...labelStyle, fontSize:10, color:colors.text.secondary, letterSpacing:2, marginBottom:8, textAlign:"center" }}>
+      <div style={{ ...labelStyle, fontSize:9, color:colors.text.secondary, letterSpacing:1.5, marginBottom:1, textAlign:"center" }}>
         {totalBases} BASE{totalBases!==1?"S":""} EN JUEGO
         {modoLento && <span style={{ color:colors.negative, marginLeft:8 }}>⚡ MODO RÁPIDO</span>}
       </div>
 
       {/* Countdown modo deportivo */}
       {modoLento && countdown!==null && (
-        <div style={{textAlign:"center",marginBottom:6}}>
+        <div style={{textAlign:"center",marginBottom:3}}>
           <span style={{
             fontSize:28,fontFamily:fonts.display,fontWeight:800,fontStyle:"italic",
             color:countdown<=3?colors.negative:countdown<=6?colors.cta.border:colors.text.primary,
@@ -167,35 +170,35 @@ export function PanelPedir({ totalBases, nombresMano, nombresEq, esManoEq0, onCo
 
       {subFase === "mano" ? (
         <>
-          <div style={{ fontFamily:fonts.display, fontWeight:800, fontStyle:"italic", fontSize:12, color:eqManoColor, marginBottom:2, textAlign:"center", letterSpacing:1 }}>
+          <div style={{ fontFamily:fonts.display, fontWeight:800, fontStyle:"italic", fontSize:11, color:eqManoColor, marginBottom:1, textAlign:"center", letterSpacing:1 }}>
             MANO — ¿CUÁNTAS PEDÍS?
           </div>
-          <div style={{ ...labelStyle, fontSize:10, color:colors.text.secondary, marginBottom:4, textAlign:"center" }}>
+          <div style={{ ...labelStyle, fontSize:8, color:colors.text.secondary, marginBottom:1, textAlign:"center" }}>
             {nombresMano.join(" · ")}
           </div>
-          <div style={{ ...labelStyle, fontSize:9, color:eqManoColor, marginBottom:8, textAlign:"center", letterSpacing:1 }}>
+          <div style={{ ...labelStyle, fontSize:8, color:eqManoColor, marginBottom:2, textAlign:"center", letterSpacing:1 }}>
             ★ Confirma: {nombreCapMano}
           </div>
           {kamikazesDisp>0&&!kamikazeActivo&&totalBases>2&&(
             <button onClick={onKamikaze} style={{
-              width:"100%",padding:"7px",fontFamily:fonts.display,fontWeight:700,fontStyle:"italic",fontSize:13,letterSpacing:1,
+              width:"100%",padding:"2px",fontFamily:fonts.display,fontWeight:700,fontStyle:"italic",fontSize:11,letterSpacing:1,
               borderRadius:999,
               border:`1px solid ${colors.danger.border}`,
               background:"rgba(255,90,90,0.1)",color:"#ff9a9a",
-              cursor:"pointer",marginBottom:6,transition:"all 0.15s",boxShadow:bevel,
+              cursor:"pointer",marginBottom:2,transition:"all 0.15s",boxShadow:bevel,
             }}>✈️ {kamikazesDisp}</button>
           )}
           {kamikazeActivo&&(
-            <div style={{marginBottom:6}}>
-              <div style={{textAlign:"center",fontSize:10,color:colors.text.primary,letterSpacing:1,padding:"5px 8px",borderRadius:999,border:`1px solid ${colors.danger.border}`,background:"rgba(255,90,90,0.14)",marginBottom:4,fontFamily:fonts.body,fontWeight:600,boxShadow:bevel}}>
+            <div style={{marginBottom:2}}>
+              <div style={{textAlign:"center",fontSize:8,color:colors.text.primary,letterSpacing:1,padding:"2px 5px",borderRadius:999,border:`1px solid ${colors.danger.border}`,background:"rgba(255,90,90,0.14)",marginBottom:2,fontFamily:fonts.body,fontWeight:600,boxShadow:bevel}}>
                 ✈️ KAMIKAZE — elegí 0 o {totalBases}
               </div>
               <button onClick={()=>{setPedidoMano(null);onCancelarKamikaze();}} style={{
-                ...secondaryBtnStyle({ full: true }), padding:"4px", fontSize:10, letterSpacing:1,
+                ...secondaryBtnStyle({ full: true }), padding:"2px", fontSize:8, letterSpacing:1,
               }}>✕ cancelar kamikaze</button>
             </div>
           )}
-          <div style={{ display:"flex", gap:5, flexWrap:"wrap", justifyContent:"center", marginBottom:10 }}>
+          <div style={{ display:"flex", gap:3, flexWrap:"wrap", justifyContent:"center", marginBottom:3 }}>
             {(kamikazeActivo?[0,totalBases]:Array.from({length:totalBases+1},(_,i)=>i)).map(n => btnNum(n, pedidoMano, setPedidoMano, false))}
           </div>
           <button onClick={confirmarMano} disabled={pedidoMano===null} style={confirmBtnStyle(pedidoMano!==null, teamMano)}>
@@ -204,19 +207,19 @@ export function PanelPedir({ totalBases, nombresMano, nombresEq, esManoEq0, onCo
         </>
       ) : (
         <>
-          <div style={{ ...labelStyle, fontSize:11, color:colors.text.secondary, marginBottom:4, textAlign:"center" }}>
-            Mano pidió <b style={{color:colors.text.primary,fontSize:15}}>{pedidoMano}</b>
+          <div style={{ ...labelStyle, fontSize:9, color:colors.text.secondary, marginBottom:1, textAlign:"center" }}>
+            Mano pidió <b style={{color:colors.text.primary,fontSize:12}}>{pedidoMano}</b>
           </div>
-          <div style={{ fontFamily:fonts.display, fontWeight:800, fontStyle:"italic", fontSize:12, color:eqPieColor, marginBottom:2, textAlign:"center", letterSpacing:1 }}>
+          <div style={{ fontFamily:fonts.display, fontWeight:800, fontStyle:"italic", fontSize:11, color:eqPieColor, marginBottom:1, textAlign:"center", letterSpacing:1 }}>
             PIE — ¿CUÁNTAS PEDÍS?
           </div>
-          <div style={{ ...labelStyle, fontSize:10, color:colors.text.secondary, marginBottom:4, textAlign:"center" }}>
+          <div style={{ ...labelStyle, fontSize:8, color:colors.text.secondary, marginBottom:1, textAlign:"center" }}>
             {nombresEq.join(" · ")}
           </div>
-          <div style={{ ...labelStyle, fontSize:9, color:eqPieColor, marginBottom:8, textAlign:"center", letterSpacing:1 }}>
+          <div style={{ ...labelStyle, fontSize:8, color:eqPieColor, marginBottom:2, textAlign:"center", letterSpacing:1 }}>
             ★ Confirma: {nombreCapPie}
           </div>
-          <div style={{ display:"flex", gap:5, flexWrap:"wrap", justifyContent:"center", marginBottom:10 }}>
+          <div style={{ display:"flex", gap:3, flexWrap:"wrap", justifyContent:"center", marginBottom:3 }}>
             {opsPie.map(n => btnNum(n, pedidoPie, setPedidoPie, false))}
           </div>
           <button onClick={confirmarPie} disabled={pedidoPie===null} style={confirmBtnStyle(pedidoPie!==null, teamPie)}>

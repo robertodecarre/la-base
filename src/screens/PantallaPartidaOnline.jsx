@@ -96,9 +96,12 @@ function MiMano({ cartas, error }) {
 
 // Panel de solo lectura para todos menos el capitán a quien le toca pedir
 // ahora mismo — mirror informativo de lo que submit_bid ya validó server-side.
+// Piece Y (batch overnight post-5r): sin fondo/borde propio, mismo motivo
+// que PanelPedir.jsx — este slot vive adentro de la elipse "mesa" de
+// MesaCircular.jsx, que ya aporta su propio borde/fondo.
 function EsperaPedido({ totalBases, nombreCapitanTurno, colorTurno, bidMano, kamikazeDeclarado }) {
   return (
-    <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:340,display:"flex",flexDirection:"column",gap:6,alignItems:"center"}}>
+    <div style={{width:"100%",display:"flex",flexDirection:"column",gap:4,alignItems:"center",textAlign:"center"}}>
       <div style={{fontSize:10,color:"rgba(201,168,76,0.4)",letterSpacing:2}}>
         {totalBases} BASE{totalBases!==1?"S":""} EN JUEGO{kamikazeDeclarado&&<span style={{color:"#e05555",marginLeft:8}}>✈️ KAMIKAZE</span>}
       </div>

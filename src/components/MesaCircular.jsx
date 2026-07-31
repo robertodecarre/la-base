@@ -259,15 +259,20 @@ function CartaViajeraReparto({ destino, origen }) {
   );
 }
 
-// Tamaño del recuadro HTML embebido en el centro de la mesa durante
-// 'bidding' (piece S, batch overnight post-5r) — ver contenidoBidding más
-// abajo. Fijo para las dos variantes de GEOM (no depende de nJug): a
-// cx,cy=SIZE/2 con SIZE mínimo 680 (8p), un panel de 280x300 deja margen
-// de sobra antes de llegar a los asientos (que arrancan recién a
-// RX-boxW/2 ≈ 164px del centro en la variante default) sin tener que
-// escalarlo por variante.
-const CENTRO_BIDDING_W = 280;
-const CENTRO_BIDDING_H = 300;
+// Fracción del semieje de la elipse "mesa" (mesaRX/mesaRY) que ocupa el
+// recuadro del centro durante 'bidding' — piece Y (batch overnight post-5r,
+// reemplaza el recuadro fijo 280x300 de piece S, que sobresalía de la
+// elipse interna y tapaba la mesa). Ancho/alto en fracciones DISTINTAS (no
+// un único k): la elipse mesa es bastante más ancha que alta (mesaRX>mesaRY
+// en las dos variantes de GEOM), así que un rectángulo con las esquinas
+// estrictamente adentro (fórmula (a/mesaRX)²+(b/mesaRY)²≤1) fuerza un alto
+// muy chico para caber. El panel ya no dibuja su propio fondo/borde (piece
+// Y): lo único que se ve son los controles (chips de número, texto)
+// centrados adentro, así que un poco de margen matemático de sobra en las
+// esquinas del rectángulo invisible no se nota — verificado con captura
+// contra el óvalo real, no asumido.
+const CENTRO_BIDDING_WK = 0.78;
+const CENTRO_BIDDING_HK = 0.85;
 
 // `mySeat` es para la mesa online (pieza 5e): en hotseat es undefined y el
 // tablero se comporta como siempre (cualquier mano visible es jugable en su
@@ -430,14 +435,24 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
   // la lógica de qué mostrar (turno propio, reparto en curso, kamikaze
   // activo, etc.) — este componente solo lo centra, sin saber nada de
   // bidding.
+  // Ancho/alto en % del contenedor (que es 1:1 con SIZE, ver comentario de
+  // CENTRO_BIDDING_K): así el recuadro escala exactamente igual que el SVG
+  // bajo cualquier reflow/resize, en vez de un tamaño en px fijo que se
+  // desincroniza del <svg> (que sí escala fluido por su viewBox) — overflow
+  // "auto" es una red de seguridad para pedidos con muchas bases (más
+  // filas de números) en vez de volver a sobresalir de la elipse.
+  const biddingWPct = (2 * mesaRX * CENTRO_BIDDING_WK / SIZE) * 100;
+  const biddingHPct = (2 * mesaRY * CENTRO_BIDDING_HK / SIZE) * 100;
+
   const contenido = (
     <div style={{position:"relative",width:"100%"}}>
       {svg}
       {fase==="bidding" && contenidoBidding && (
         <div style={{
           position:"absolute", left:"50%", top:"50%", transform:"translate(-50%,-50%)",
-          width:CENTRO_BIDDING_W, maxWidth:"78%",
-          display:"flex", alignItems:"center", justifyContent:"center",
+          width:`${biddingWPct}%`, height:`${biddingHPct}%`,
+          display:"flex", alignItems:"flex-start", justifyContent:"center",
+          overflow:"auto",
         }}>
           {contenidoBidding}
         </div>
