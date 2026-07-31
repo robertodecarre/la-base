@@ -10,7 +10,7 @@ import { Btn } from "../components/Btn";
 import { BotonDar } from "../components/BotonDar";
 import {
   enviarPedido, jugarCarta, siguienteBase, resolverCopas, resolverOros,
-  repartirMano, cerrarMano, reclamarTiempo,
+  repartirMano, cerrarMano, reclamarTiempo, revanchaPartida,
 } from "../lib/game";
 import { mensajeDeError } from "../lib/erroresSala";
 import { colors, fonts, panelStyle } from "../theme";
@@ -285,6 +285,8 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   const [errorCierre, setErrorCierre] = useState(null);
   const [enviandoReparto, setEnviandoReparto] = useState(false);
   const [errorReparto, setErrorReparto] = useState(null);
+  const [enviandoRevancha, setEnviandoRevancha] = useState(false);
+  const [errorRevancha, setErrorRevancha] = useState(null);
   const [ahora, setAhora] = useState(() => Date.now());
   const [reclamandoTiempo, setReclamandoTiempo] = useState(false);
   // Piece F: preferencia del jugador, no estado de la mano — a propósito
@@ -683,6 +685,22 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       setErrorCierre(await mensajeDeError(err));
     } finally {
       setEnviandoCierre(false);
+    }
+  };
+
+  // Piece BB: sin restricción de capitán — igual criterio que onCerrarMano
+  // (ver revancha_partida, ungated a propósito), cualquier sesión de la
+  // sala puede pedir revancha. Ungated en el cliente Y en la RPC (defensa
+  // en profundidad, mismo patrón que el resto de las acciones de sala).
+  const onRevancha = async () => {
+    setEnviandoRevancha(true);
+    setErrorRevancha(null);
+    try {
+      await revanchaPartida(roomId);
+    } catch (err) {
+      setErrorRevancha(await mensajeDeError(err));
+    } finally {
+      setEnviandoRevancha(false);
     }
   };
 
@@ -1175,6 +1193,18 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           </table>
         </div>
 
+        {errorRevancha && (
+          <div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",textAlign:"center",maxWidth:340}}>
+            {errorRevancha}
+          </div>
+        )}
+        {/* Piece BB: mismos jugadores/equipos/asientos, hand_number/
+            puntajes a cero — sin volver a pasar por "elegí tu equipo".
+            Ungated (cualquiera de la sala), no solo capitanes — ver
+            comentario de revancha_partida sobre por qué. */}
+        <Btn verde onClick={onRevancha} disabled={enviandoRevancha}>
+          {enviandoRevancha ? "Armando revancha…" : "REVANCHA"}
+        </Btn>
         <BotonSalir onSalir={onSalir}/>
       </div>
     );

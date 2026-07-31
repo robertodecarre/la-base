@@ -133,6 +133,20 @@ export async function cerrarMano(roomId) {
   return data; // fila de game_state
 }
 
+// Piece BB (batch overnight post-5r): "REVANCHA" en la pantalla de fin de
+// partida. Válido para cualquier miembro de la sala (sin restricción de
+// capitán, ver comentario de la RPC) mientras phase='finished'. Reinicia
+// hand_number/puntajes/historial dejando la sala en 'dealing' lista para
+// la mano 0 de un partido nuevo, sin volver a pasar por elegir equipo.
+export async function revanchaPartida(roomId) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("revancha_partida", {
+    p_room_id: roomId,
+  });
+  if (error) throw error;
+  return data; // fila de game_state
+}
+
 // Válido para cualquier miembro de la sala, en fase 'bidding', mientras la
 // sala tenga reloj activado en modo "muerte" y el tiempo del equipo que le
 // toca pedir ya se haya agotado (el chequeo lo hace el servidor al
