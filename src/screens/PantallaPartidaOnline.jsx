@@ -1150,15 +1150,45 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     const manosOrdenadas = [...handResults].sort((a, b) => a.hand_number - b.hand_number);
     const totalLocal = manosOrdenadas.reduce((s, h) => s + h.delta_team0, 0);
     const totalVisitante = manosOrdenadas.reduce((s, h) => s + h.delta_team1, 0);
+    // Piece NN: muerte súbita (clock_expired) tiene que declarar un
+    // perdedor de verdad, nunca un empate — antes, equipoGanador salía
+    // siempre de comparar totalLocal/totalVisitante sin mirar end_cause
+    // para nada, así que un clock_expired con el puntaje empatado caía
+    // en "¡EMPATE!" a pesar de que un equipo concreto se quedó sin
+    // tiempo. game_state.clock.running queda congelado en el equipo que
+    // estaba corriendo (y por lo tanto perdió) justo cuando claim_timeout
+    // corre — ver el comentario de diseño en clock_expired.sql ("leaving
+    // it frozen with running still pointing at the losing team is the
+    // entire 'who lost' record"), así que ya existe sin tocar el RPC.
+    // Generaliza el caso reportado ("con el puntaje empatado") a TODO
+    // final por clock_expired: quedarse sin tiempo es una derrota en sí
+    // misma, no solo cuando además empata en puntos — dejar el resultado
+    // atado al puntaje en los demás casos sería una regla inconsistente
+    // (¿por qué el reloj decide solo a veces?).
+    const equipoPerdioPorTiempo = gameState.end_cause === "clock_expired" && gameState.clock?.running != null
+      ? gameState.clock.running
+      : null;
+    const esTimeoutSubito = equipoPerdioPorTiempo !== null;
     // Piece L (batch overnight post-5r): texto exacto "GANÓ EQUIPO LOCAL"/
     // "GANÓ EQUIPO VISITANTE", más los nombres del equipo ganador — no hay
     // equipo ganador en un empate, así que ahí queda en null.
-    const equipoGanador = totalLocal === totalVisitante ? null : (totalLocal > totalVisitante ? 0 : 1);
-    const resultado = equipoGanador === null ? "¡EMPATE!" : equipoGanador === 0 ? "GANÓ EQUIPO LOCAL" : "GANÓ EQUIPO VISITANTE";
+    const equipoGanador = esTimeoutSubito
+      ? 1 - equipoPerdioPorTiempo
+      : (totalLocal === totalVisitante ? null : (totalLocal > totalVisitante ? 0 : 1));
+    // Piece NN: mensaje específico por perspectiva (no el "GANÓ EQUIPO
+    // X"/"¡EMPATE!" de siempre) cuando el final fue por tiempo — texto
+    // pedido tal cual, sin suavizar (mismo criterio de voz irreverente
+    // que piece V/ConfirmarSalirOverlay).
+    const perdiPorTiempo = esTimeoutSubito && myTeam === equipoPerdioPorTiempo;
+    const resultado = esTimeoutSubito
+      ? (perdiPorTiempo ? "Hahahah se quedaron sin tiempo" : "Ganaron porque los otros virgos se quedaron sin tiempo")
+      : (equipoGanador === null ? "¡EMPATE!" : equipoGanador === 0 ? "GANÓ EQUIPO LOCAL" : "GANÓ EQUIPO VISITANTE");
     const nombresGanadores = equipoGanador === null ? [] : players.filter((p) => p.team === equipoGanador).map((p) => p.name);
     const causaTexto = {
       kamikaze: "El equipo mano perdió la partida por no declarar kamikaze y quedar 2 o más abajo de lo pedido.",
-      clock_expired: "Un equipo se quedó sin tiempo.",
+      // clock_expired ya no tiene subtítulo genérico acá — el mensaje
+      // principal (arriba) ya es específico por perspectiva y lo explica
+      // solo, sin necesitar una segunda línea aparte.
     }[gameState.end_cause] ?? null;
 
     // Piece HH: restyle hacia una estética más "impacto de juego deportivo"
@@ -1169,8 +1199,15 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     // por ser la pantalla de cierre de TODA la partida. Tabla de historial
     // por mano eliminada (piece HH): es una copia exacta de lo que ya
     // muestra el ícono de libreta durante la partida, sin agregar nada acá.
-    const colorResultado = equipoGanador === null ? colors.text.secondary : colors.team[equipoGanador===0?"local":"visitante"].accent;
-    const glowResultado = equipoGanador === null ? "rgba(220,230,255,0.5)" : colors.team[equipoGanador===0?"local":"visitante"].readyGlow;
+    // Piece NN: rojo/verde universales (no colores de equipo) para el
+    // caso de timeout — pedido tal cual ("en rojo"/"en verde"), a
+    // propósito distinto del tratamiento por-equipo de un final normal.
+    const colorResultado = esTimeoutSubito
+      ? (perdiPorTiempo ? colors.negative : colors.positive.border)
+      : (equipoGanador === null ? colors.text.secondary : colors.team[equipoGanador===0?"local":"visitante"].accent);
+    const glowResultado = esTimeoutSubito
+      ? (perdiPorTiempo ? "rgba(255,106,106,0.55)" : colors.positive.glow)
+      : (equipoGanador === null ? "rgba(220,230,255,0.5)" : colors.team[equipoGanador===0?"local":"visitante"].readyGlow);
     return (
       <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
         <style>{`
