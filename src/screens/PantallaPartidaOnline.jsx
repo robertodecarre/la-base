@@ -1194,51 +1194,39 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       clock_expired: "Un equipo se quedó sin tiempo.",
     }[gameState.end_cause] ?? null;
 
+    // Piece HH: restyle hacia una estética más "impacto de juego deportivo"
+    // (tipografía chunky/italic de fonts.display a gran escala, glow por
+    // equipo, pop-in de entrada) — mismo lenguaje de color que el anuncio
+    // de resultado de mano en el centro de la mesa (piece DD, ver
+    // resultadoMano en MesaCircular.jsx), llevado más grande/festivo acá
+    // por ser la pantalla de cierre de TODA la partida. Tabla de historial
+    // por mano eliminada (piece HH): es una copia exacta de lo que ya
+    // muestra el ícono de libreta durante la partida, sin agregar nada acá.
+    const colorResultado = equipoGanador === null ? colors.text.secondary : colors.team[equipoGanador===0?"local":"visitante"].accent;
+    const glowResultado = equipoGanador === null ? "rgba(220,230,255,0.5)" : colors.team[equipoGanador===0?"local":"visitante"].readyGlow;
     return (
-      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
-        <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>FIN DE LA PARTIDA</div>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
+        <style>{`
+          @keyframes lbGanadorPop { 0% { transform:scale(0.6); opacity:0; } 60% { transform:scale(1.08); opacity:1; } 100% { transform:scale(1); opacity:1; } }
+          @keyframes lbGanadorGlow { 0%,100% { filter:drop-shadow(0 0 6px var(--glow)); } 50% { filter:drop-shadow(0 0 22px var(--glow)); } }
+        `}</style>
+        <div style={{fontSize:18,color:"#f0d080",letterSpacing:3,fontFamily:fonts.display,fontWeight:800,fontStyle:"italic"}}>FIN DE LA PARTIDA</div>
         {causaTexto && <div style={{fontSize:11,color:"rgba(201,168,76,0.5)",fontStyle:"italic",textAlign:"center",maxWidth:340}}>{causaTexto}</div>}
-        <div style={{fontSize:22,color:totalLocal>totalVisitante?"#7ecf9e":totalLocal<totalVisitante?"#e05555":"#f0d080",fontFamily:"Cinzel, Georgia, serif"}}>{resultado}</div>
+        <div style={{
+          "--glow": glowResultado,
+          fontSize:38, color:colorResultado, fontFamily:fonts.display, fontWeight:800, fontStyle:"italic",
+          letterSpacing:1.5, textAlign:"center", lineHeight:1.1,
+          animation:"lbGanadorPop 0.5s cubic-bezier(0.2,1.4,0.4,1) both, lbGanadorGlow 2.2s ease-in-out 0.5s infinite",
+        }}>{resultado}</div>
         {nombresGanadores.length > 0 && (
-          <div style={{fontSize:13,color:colors.team[equipoGanador===0?"local":"visitante"].accent,fontFamily:fonts.body,fontWeight:600,textAlign:"center"}}>
+          <div style={{fontSize:15,color:colorResultado,fontFamily:fonts.body,fontWeight:600,textAlign:"center",letterSpacing:0.5}}>
             {nombresGanadores.join(" · ")}
           </div>
         )}
-        <div style={{fontSize:14,color:"rgba(201,168,76,0.7)"}}>Local: {totalLocal} · Visitante: {totalVisitante}</div>
-
-        <div style={{overflowX:"auto",width:"100%",maxWidth:480}}>
-          <table style={{borderCollapse:"collapse",width:"100%",fontSize:11,fontFamily:"Crimson Text, Georgia, serif",color:"rgba(201,168,76,0.7)"}}>
-            <thead>
-              <tr style={{borderBottom:"1px solid rgba(201,168,76,0.22)"}}>
-                <th style={{padding:"4px 6px",textAlign:"center"}}>Mano</th>
-                <th style={{padding:"4px 6px",textAlign:"center"}}>Cartas</th>
-                <th style={{padding:"4px 6px",textAlign:"center",color:colors.team.local.accent}}>Ped.</th>
-                <th style={{padding:"4px 6px",textAlign:"center",color:colors.team.local.accent}}>Hecho</th>
-                <th style={{padding:"4px 6px",textAlign:"center",color:colors.team.local.accent}}>Δ</th>
-                <th style={{padding:"4px 6px",textAlign:"center",color:colors.team.visitante.accent}}>Ped.</th>
-                <th style={{padding:"4px 6px",textAlign:"center",color:colors.team.visitante.accent}}>Hecho</th>
-                <th style={{padding:"4px 6px",textAlign:"center",color:colors.team.visitante.accent}}>Δ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {manosOrdenadas.map((h) => {
-                const local = { bid: h.bid_team0, hecho: h.tricks_team0, delta: h.delta_team0 };
-                const visitante = { bid: h.bid_team1, hecho: h.tricks_team1, delta: h.delta_team1 };
-                return (
-                  <tr key={h.hand_number}>
-                    <td style={{padding:"4px 6px",textAlign:"center"}}>{h.hand_number+1}</td>
-                    <td style={{padding:"4px 6px",textAlign:"center"}}>{h.cards_dealt}</td>
-                    <td style={{padding:"4px 6px",textAlign:"center"}}>{local.bid}</td>
-                    <td style={{padding:"4px 6px",textAlign:"center"}}>{local.hecho}</td>
-                    <td style={{padding:"4px 6px",textAlign:"center",color:local.delta<0?"#e05555":"#f0d080"}}>{local.delta}</td>
-                    <td style={{padding:"4px 6px",textAlign:"center"}}>{visitante.bid}</td>
-                    <td style={{padding:"4px 6px",textAlign:"center"}}>{visitante.hecho}</td>
-                    <td style={{padding:"4px 6px",textAlign:"center",color:visitante.delta<0?"#e05555":"#f0d080"}}>{visitante.delta}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div style={{fontSize:14,fontFamily:fonts.body,fontWeight:600,display:"flex",alignItems:"center",gap:10}}>
+          <span style={{color:colors.team.local.accent}}>LOCAL {totalLocal}</span>
+          <span style={{color:"rgba(201,168,76,0.4)"}}>·</span>
+          <span style={{color:colors.team.visitante.accent}}>VISITANTE {totalVisitante}</span>
         </div>
 
         {errorRevancha && (

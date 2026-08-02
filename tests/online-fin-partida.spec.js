@@ -117,6 +117,15 @@ test("online: la pantalla de fin de partida anuncia el equipo ganador y sus juga
       }
     }
 
+    // Piece HH: la pantalla de fin de partida ya no trae su propia tabla
+    // de historial por mano (el ícono de libreta durante la partida ya
+    // cubre eso) — solo el anuncio + nombres + totales + REVANCHA.
+    for (const p of pages) {
+      await expect(p.locator("table")).toHaveCount(0);
+      await expect(p.getByText(/^LOCAL /)).toBeVisible();
+      await expect(p.getByText(/^VISITANTE /)).toBeVisible();
+    }
+
     expect(erroresConsola, `errores de consola:\n${erroresConsola.join("\n")}`).toEqual([]);
   } finally {
     for (const c of contexts) await c.close();
