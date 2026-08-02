@@ -42,6 +42,15 @@ export function useSala(roomId) {
   const [error, setError] = useState(null);
 
   const channelRef = useRef(null);
+  // Espejo de gameState en un ref — el handler de Realtime de más abajo
+  // se registra una sola vez (dentro del useEffect con [roomId]) y
+  // necesita comparar el estado ANTERIOR contra cada UPDATE entrante para
+  // detectar una revancha; leer `gameState` directo ahí capturaría el
+  // valor de cuando el efecto corrió (closure vieja), nunca el más
+  // reciente. El ref siempre está al día porque el efecto de abajo lo
+  // sincroniza en cada render.
+  const gameStateRef = useRef(null);
+  useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
   // Piece RR (batch overnight post-EE, follow-up a piece KK): re-fetch
   // manual de las 5 tablas, para usar después de una operación que
@@ -128,7 +137,33 @@ export function useSala(roomId) {
           .on(
             "postgres_changes",
             { event: "*", schema: "public", table: "game_state", filter: `room_id=eq.${roomId}` },
-            (payload) => setGameState(payload.eventType === "DELETE" ? null : payload.new)
+            (payload) => {
+              if (payload.eventType === "DELETE") { setGameState(null); return; }
+              const anterior = gameStateRef.current;
+              const nuevo = payload.new;
+              setGameState(nuevo);
+              // Piece RR (extend): esto ya NO alcanza para la sesión que
+              // clickeó REVANCHA (esa se re-sincroniza sola en
+              // onRevancha, ver PantallaPartidaOnline.jsx) — hace falta
+              // para las OTRAS 3, que hasta ahora dependían enteramente
+              // de que ESTE mismo delta (y los de played_cards, aparte)
+              // llegaran completos y en orden. 'finished'->'dealing' con
+              // hand_number vuelto a 0 es una combinación que SOLO puede
+              // pasar por revancha_partida (el primer hand_number=0 de
+              // una sala nueva entra por un INSERT directo a 'bidding',
+              // nunca por un UPDATE a 'dealing' — ver deal_hand_rpc.sql)
+              // así que es una señal inequívoca de "acaba de haber una
+              // revancha", no un heurístico aproximado. Fuerza un
+              // re-fetch completo de las 5 tablas en cuanto se detecta,
+              // en vez de confiar en que ESTE delta puntual (uno de
+              // varios del mismo reset) haya llegado sano y que los demás
+              // (los DELETE de played_cards de la partida anterior)
+              // también lleguen todos — la causa raíz que piece KK
+              // diagnosticó.
+              if (anterior?.phase === "finished" && nuevo.phase === "dealing" && nuevo.hand_number === 0) {
+                recargarEstado().catch(() => {});
+              }
+            }
           )
           .on(
             "postgres_changes",

@@ -13,7 +13,15 @@ import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, ju
 //
 // Piece RR implementó el fix sugerido: recargarEstado() (useSala.js) se
 // llama explícitamente en onRevancha justo después de que la RPC
-// resuelve, en vez de confiar solo en los deltas.
+// resuelve, en vez de confiar solo en los deltas. Piece RR (extend):
+// eso solo cubría a quien CLICKEA el botón — las otras 3 sesiones de la
+// sala seguían dependiendo enteramente de Realtime. Ahora el propio
+// handler de game_state en useSala.js detecta la combinación
+// 'finished'->'dealing' con hand_number vuelto a 0 (alcanzable SOLO vía
+// revancha_partida — la mano 0 de una sala nueva entra por un INSERT
+// directo a 'bidding', nunca por un UPDATE a 'dealing', ver
+// deal_hand_rpc.sql) y dispara recargarEstado() ahí mismo, para
+// CUALQUIER sesión que reciba ese delta, no solo la que clickeó.
 //
 // Mismo flujo probado que online-revancha.spec.js (piece BB) — estructura
 // "1", el camino más corto y confiable a 'finished' — con el chequeo
@@ -118,6 +126,89 @@ test("online: REVANCHA no deja cartas de la mano anterior pegadas en la mesa", a
     expect(manoPage2, "ninguna sesión mostró el panel de pedir del partido nuevo a tiempo").toBeTruthy();
     await host.waitForTimeout(500);
     expect(await cartasEnMesa(), "no debería haber cartas jugadas en la mesa al arrancar la mano 0 del revancha").toBe(0);
+  } finally {
+    for (const c of contexts) await c.close();
+  }
+});
+
+test("online: REVANCHA deja limpias a las 4 sesiones, no solo a la que clickeó el botón", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const nombres = ["P0", "P1", "P2", "P3"];
+  const contexts = await Promise.all(nombres.map(() => browser.newContext()));
+  const pages = await Promise.all(contexts.map((c) => c.newPage()));
+
+  const cartasEnMesa = (p) => p.evaluate(() =>
+    document.querySelectorAll('svg rect[width="37"][height="55"]').length
+  );
+
+  try {
+    await crearYUnirseSalaOnline(pages, nombres, { nJug: 4, estructuraCustom: "1", sinAses: true });
+    for (const p of pages) await alternarListoEnPantalla(p);
+    await pasarSorteoAnimado(pages);
+    for (const p of pages) {
+      await expect(p.getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
+    }
+
+    const panelConfirma = (page) => page.getByRole("button", { name: /CONFIRMA/ });
+    let manoPage = null;
+    for (let intento = 0; intento < 30 && !manoPage; intento++) {
+      for (const p of pages) {
+        if (await panelConfirma(p).isVisible().catch(() => false)) { manoPage = p; break; }
+      }
+      if (!manoPage) await new Promise((r) => setTimeout(r, 500));
+    }
+    expect(manoPage).toBeTruthy();
+    let confirmado = false;
+    for (let intento = 0; intento < 12 && !confirmado; intento++) {
+      const ok = await manoPage.getByRole("button", { name: /^\d+$/ }).first().click({ timeout: 5000 }).then(() => true).catch(() => false);
+      if (ok) {
+        const btn = panelConfirma(manoPage);
+        if (await btn.isEnabled({ timeout: 3000 }).catch(() => false)) await btn.click({ timeout: 5000 }).catch(() => {});
+      }
+      confirmado = !(await panelConfirma(manoPage).isVisible().catch(() => false));
+      if (!confirmado) await new Promise((r) => setTimeout(r, 500));
+    }
+    expect(confirmado).toBe(true);
+
+    let enClosing = false;
+    for (let i = 0; i < 40 && !enClosing; i++) {
+      for (const p of pages) await jugarCartaDelTurnoActual(p).catch(() => {});
+      for (const p of pages) {
+        if (await p.getByText(/terminada/).isVisible().catch(() => false)) { enClosing = true; break; }
+      }
+      if (!enClosing) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(enClosing, "la mano no llegó a 'closing' a tiempo").toBe(true);
+
+    await cerrarManoAmbosCapitanes(pages);
+    for (const p of pages) {
+      await expect(p.getByText("FIN DE LA PARTIDA")).toBeVisible({ timeout: 20000 });
+    }
+
+    // pages[2] (NO capitán) clickea REVANCHA — ninguna de las OTRAS 3
+    // sesiones (incluida pages[0], que ni siquiera es quien la pide)
+    // llama a onRevancha ella misma; si el fix estuviera acotado solo a
+    // quien clickea, estas 3 seguirían dependiendo de Realtime sin red.
+    await pages[2].getByRole("button", { name: "REVANCHA" }).click();
+
+    let repartidorPage = null;
+    for (let intento = 0; intento < 20 && !repartidorPage; intento++) {
+      for (const p of pages) {
+        if (await p.getByRole("button", { name: "DAR" }).isVisible().catch(() => false)) { repartidorPage = p; break; }
+      }
+      if (!repartidorPage) await new Promise((r) => setTimeout(r, 500));
+    }
+    expect(repartidorPage, "ninguna sesión mostró el botón de repartir (DAR) tras la revancha").toBeTruthy();
+    await repartidorPage.getByRole("button", { name: "DAR" }).click();
+
+    for (const p of pages) {
+      await expect(p.getByText(/Mano 1/)).toBeVisible({ timeout: 20000 });
+    }
+    await pages[0].waitForTimeout(800);
+
+    for (let i = 0; i < pages.length; i++) {
+      expect(await cartasEnMesa(pages[i]), `sesión ${i} (${i === 2 ? "clickeó" : "no clickeó"} REVANCHA) no debería tener cartas viejas en la mesa`).toBe(0);
+    }
   } finally {
     for (const c of contexts) await c.close();
   }
