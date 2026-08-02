@@ -43,6 +43,43 @@ export function useSala(roomId) {
 
   const channelRef = useRef(null);
 
+  // Piece RR (batch overnight post-EE, follow-up a piece KK): re-fetch
+  // manual de las 5 tablas, para usar después de una operación que
+  // resetea un montón de estado de golpe (REVANCHA) en vez de confiar en
+  // que cada delta de Realtime individual (potencialmente decenas de
+  // DELETEs de played_cards de la partida anterior, más el UPDATE de
+  // game_state) llegue entero y en orden — piece KK ya diagnosticó que no
+  // hay ninguna garantía de eso acá (ver useSala.js's propio comentario
+  // sobre "postgres_changes nunca hace backfill": eso cubre el caso de
+  // una sesión que se suscribe tarde, pero una sesión YA suscripta que
+  // simplemente pierde/reordena un evento puntual bajo carga no tiene
+  // ninguna red — exactamente el mismo síntoma, causa distinta). Mismas
+  // 5 queries que la carga inicial, factorizadas para no duplicar el
+  // cuerpo. No toca la suscripción de Realtime — sigue viva, esto solo
+  // pisa el snapshot local con el estado real del servidor en un punto
+  // conocido.
+  const recargarEstado = useCallback(async () => {
+    if (!roomId) return;
+    const [rooms_, players_, gameStates_, playedCards_, handResults_] = await Promise.all([
+      supabase.from("rooms").select("*").eq("id", roomId).maybeSingle(),
+      supabase.from("players").select("*").eq("room_id", roomId),
+      supabase.from("game_state").select("*").eq("room_id", roomId).maybeSingle(),
+      supabase.from("played_cards").select("*").eq("room_id", roomId),
+      supabase.from("hand_results").select("*").eq("room_id", roomId),
+    ]);
+    if (rooms_.error) throw rooms_.error;
+    if (players_.error) throw players_.error;
+    if (gameStates_.error) throw gameStates_.error;
+    if (playedCards_.error) throw playedCards_.error;
+    if (handResults_.error) throw handResults_.error;
+
+    setRoom(rooms_.data ?? null);
+    setPlayers(players_.data ?? []);
+    setGameState(gameStates_.data ?? null);
+    setPlayedCards(playedCards_.data ?? []);
+    setHandResults(handResults_.data ?? []);
+  }, [roomId]);
+
   useEffect(() => {
     if (!roomId) return;
     let cancelado = false;
@@ -155,5 +192,6 @@ export function useSala(roomId) {
     ready,
     error,
     fetchMyHand,
+    recargarEstado,
   };
 }

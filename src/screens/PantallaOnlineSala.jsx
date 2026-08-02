@@ -165,7 +165,7 @@ function FilaAsiento({ seat, jugador, mySeat, team }) {
 // (deal_hand sigue gateado por rooms.status<>'waiting'), el resto recibe
 // 'room_not_open' sin romper nada.
 export function PantallaOnlineSala({ roomId, onSalir }) {
-  const { room, players, gameState, playedCards, handResults, userId, mySeat, myTeam, isCaptain, ready, error, fetchMyHand } = useSala(roomId);
+  const { room, players, gameState, playedCards, handResults, userId, mySeat, myTeam, isCaptain, ready, error, fetchMyHand, recargarEstado } = useSala(roomId);
   const [enviandoListo, setEnviandoListo] = useState(false);
   const [errorListo, setErrorListo] = useState(null);
   // Espejo local de "ya elegí equipo" — no depende del eco de Realtime
@@ -310,6 +310,7 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
         myTeam={myTeam}
         isCaptain={isCaptain}
         fetchMyHand={fetchMyHand}
+        recargarEstado={recargarEstado}
         onSalir={onSalir}
       />
     );

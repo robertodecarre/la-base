@@ -208,7 +208,7 @@ function RelojOverlay({ tiempoLocal, tiempoVisitante, corriendo, agotadoLocal, a
 // 'bidding' (5d), 'playing'/'resolving' (5e), 'copas_menu'/'oros_menu' (5f)
 // y ahora 'closing'/'finished' + el reloj real de 'bidding' (5g) — con esto
 // la pantalla cubre todas las fases del juego.
-export function PantallaPartidaOnline({ roomId, room, players, gameState, playedCards, handResults, mySeat, myTeam, isCaptain, fetchMyHand, onSalir }) {
+export function PantallaPartidaOnline({ roomId, room, players, gameState, playedCards, handResults, mySeat, myTeam, isCaptain, fetchMyHand, recargarEstado, onSalir }) {
   const [misCartas, setMisCartas] = useState(null);
   const [errorMano, setErrorMano] = useState(null);
   const [kamikazeLocal, setKamikazeLocal] = useState(false);
@@ -640,6 +640,19 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     setErrorRevancha(null);
     try {
       await revanchaPartida(roomId);
+      // Piece RR (follow-up a piece KK): re-fetch explícito en vez de
+      // confiar solo en los deltas de Realtime para absorber el reset —
+      // revancha_partida borra potencialmente decenas de filas de
+      // played_cards de un roomazo y pisa game_state entero en una sola
+      // transacción; esperar que CADA delta individual llegue entero y
+      // en orden (sin ninguna garantía real de eso, ver useSala.js) dejaba
+      // cartas de la mano anterior pegadas en la mesa y, más grave,
+      // permitía que un snapshot de game_state viejo/demorado (fase
+      // copas_menu, o un reloj ya vencido de la partida anterior) pisara
+      // el estado recién reseteado. No hace falta esperar a que resuelva
+      // para no bloquear el botón — un fallo acá se corrige solo con el
+      // próximo evento de Realtime que sí llegue, igual que antes.
+      recargarEstado?.().catch(() => {});
     } catch (err) {
       setErrorRevancha(await mensajeDeError(err));
     } finally {
