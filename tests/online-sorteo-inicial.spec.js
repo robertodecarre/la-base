@@ -230,3 +230,54 @@ test("online: sorteo inicial real, mismo resultado en las 4 sesiones y dealer co
     for (const c of contexts) await c.close();
   }
 });
+
+// Piece OO (batch overnight post-EE) — confirma que el sorteo NO impone
+// un orden de turnos: cualquier jugador puede dar vuelta su propia carta
+// en cualquier momento. Server-side (marcar_flip_sorteo,
+// 20260706220000_marcar_flip_sorteo.sql) nunca chequea el estado de
+// ningún OTRO asiento — solo que el asiento que llama sea el propio (vía
+// auth.uid()) y no haya flipeado ya. Client-side (SorteoAnimado.jsx),
+// `clickable={esMia && !flipped}` tampoco depende de si otros asientos ya
+// dieron vuelta la suya. El resto de esta suite (pasarSorteoAnimado en
+// helpers.js, y el test de arriba) siempre flipea en orden de asiento
+// (0,1,2,3), lo que de por sí NO demuestra la ausencia de un orden
+// forzado — este test flipea a propósito en un orden salteado/inverso
+// (2,0,3,1) para probarlo de verdad.
+test("online: en el sorteo, cualquier jugador puede dar vuelta su carta en cualquier momento (sin orden forzado)", async ({ browser }) => {
+  test.setTimeout(90_000);
+  const contexts = await Promise.all(NOMBRES.map(() => browser.newContext()));
+  const pages = await Promise.all(contexts.map((c) => c.newPage()));
+
+  const erroresConsola = [];
+  for (const p of pages) {
+    p.on("pageerror", (err) => erroresConsola.push(err.message));
+  }
+
+  try {
+    await crearYUnirseSalaOnline(pages, NOMBRES, { nJug: 4, estructuraCustom: "1", sinAses: true });
+    for (const p of pages) await alternarListoEnPantalla(p);
+    for (const p of pages) {
+      await expect(p.getByText("SORTEO", { exact: true })).toBeVisible({ timeout: 15000 });
+    }
+
+    // Orden deliberadamente NO secuencial: si hubiera un turno forzado
+    // (p.ej. "solo el asiento 0 puede flipear primero"), el segundo click
+    // de esta lista (asiento 0, después de que el asiento 2 ya flipeó)
+    // fallaría o quedaría deshabilitado.
+    const ordenSalteado = [2, 0, 3, 1];
+    for (const seat of ordenSalteado) {
+      await pages[seat].getByRole("button", { name: "Dar vuelta tu carta" }).click({ timeout: 10000 });
+    }
+
+    // Las 4 lograron flipear en este orden salteado — confirmado porque
+    // ARRANCAMOS (que solo aparece cuando sorteo_inicial.flipped tiene
+    // las 4 entradas en true) queda visible para todos.
+    for (const p of pages) {
+      await expect(p.getByRole("button", { name: "ARRANCAMOS" })).toBeVisible({ timeout: 15000 });
+    }
+
+    expect(erroresConsola, `errores de consola:\n${erroresConsola.join("\n")}`).toEqual([]);
+  } finally {
+    for (const c of contexts) await c.close();
+  }
+});
