@@ -801,7 +801,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           <BotonDar onClick={onRepartir} disabled={enviandoReparto} enviando={enviandoReparto}/>
         ) : (
           <div style={{fontSize:12,color:"rgba(201,168,76,0.5)"}}>
-            Esperando a que <b style={{color:"#f0d080"}}>{nombreProximoRepartidor}</b> reparta la mano…
+            Esperando a que <b style={{color:"#f0d080"}}>{nombreProximoRepartidor}</b> reparta…
           </div>
         )}
         <BotonSalir onSalir={onSalir}/>

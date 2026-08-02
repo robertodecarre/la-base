@@ -116,7 +116,7 @@ test("online: cerrar mano y repartir mano quedan gateados por rol (capitán / pr
     for (const p of pages) {
       if (p === repartidorPage) continue;
       await expect(botonRepartir(p)).toHaveCount(0);
-      await expect(p.getByText(/Esperando a que .* reparta la mano/)).toBeVisible();
+      await expect(p.getByText(/Esperando a que .* reparta/)).toBeVisible();
     }
 
     await botonRepartir(repartidorPage).click();
