@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, jugarCartaDelTurnoActual } from "./helpers.js";
+import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, jugarCartaDelTurnoActual, cerrarManoAmbosCapitanes } from "./helpers.js";
 
 // Piece AA (batch overnight post-5r) — en la ÚLTIMA base de una mano no
 // tiene que aparecer "Llevar base" en absoluto: solo "Cerrar mano"
@@ -105,17 +105,11 @@ test("online: la última base de la mano no muestra Llevar base, y sus cartas qu
     expect(resultadosVistos, "cada sesión debería mostrar uno de los tres resultados posibles").not.toContain(null);
     expect(new Set(resultadosVistos).size, "las 4 sesiones no coinciden en el resultado de la mano").toBe(1);
 
-    // Solo un capitán puede cerrarla — el resto ve el mensaje de espera,
-    // nunca el botón (gate ya cubierto en detalle en online-cierre-
-    // reparto-por-rol.spec.js; acá solo confirma que es alcanzable desde
-    // este estado sin pasos intermedios).
-    const botonCerrar = (p) => p.getByRole("button", { name: /^Cerrar mano/ });
-    let capitanPage = null;
-    for (const p of pages) {
-      if (await botonCerrar(p).isVisible().catch(() => false)) { capitanPage = p; break; }
-    }
-    expect(capitanPage, "ningún capitán vio el botón de cerrar mano").toBeTruthy();
-    await botonCerrar(capitanPage).click();
+    // Piece LL: hacen falta los dos capitanes para cerrarla — el resto ve
+    // el mensaje de espera, nunca el botón (gate ya cubierto en detalle
+    // en online-cierre-reparto-por-rol.spec.js; acá solo confirma que es
+    // alcanzable desde este estado sin pasos intermedios).
+    await cerrarManoAmbosCapitanes(pages);
     for (const p of pages) {
       await expect(p.getByText(/Mano 2/)).toBeVisible({ timeout: 20000 });
     }

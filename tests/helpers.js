@@ -161,3 +161,31 @@ export async function pasarSorteoAnimado(pages) {
     if (!confirmado) throw new Error("no se pudo confirmar ARRANCAMOS tras varios intentos");
   }
 }
+
+// Piece LL (batch overnight post-EE): cerrar una mano ahora requiere
+// confirmación de UN capitán de CADA equipo (close_hand_confirmed_team0/1,
+// 20260706290000_close_hand_dual_captain_confirm.sql) — un solo click ya
+// no alcanza. Encuentra hasta 2 sesiones distintas mostrando el botón
+// "Cerrar mano" (los dos capitanes, cada uno viendo su propio botón
+// mientras su equipo no confirmó todavía) y clickea cada una una vez,
+// con reintento acotado por el mismo motivo que el resto de esta suite
+// (el tick del reloj puede desmontar/remontar botones a mitad de un
+// click). Devuelve una vez que 2 sesiones distintas lograron clickear.
+export async function cerrarManoAmbosCapitanes(pages) {
+  const boton = (p) => p.getByRole("button", { name: /^Cerrar mano/ });
+  const clickeados = new Set();
+  for (let intento = 0; intento < 40 && clickeados.size < 2; intento++) {
+    for (const p of pages) {
+      if (clickeados.has(p)) continue;
+      if (await boton(p).isVisible().catch(() => false)) {
+        const ok = await boton(p).click({ timeout: 5000 }).then(() => true).catch(() => false);
+        if (ok) clickeados.add(p);
+      }
+    }
+    if (clickeados.size >= 2) break;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  if (clickeados.size < 2) {
+    throw new Error(`solo ${clickeados.size} capitán(es) pudieron cerrar la mano (se necesitan 2)`);
+  }
+}

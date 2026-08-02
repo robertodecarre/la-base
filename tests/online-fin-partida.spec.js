@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, jugarCartaDelTurnoActual } from "./helpers.js";
+import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, jugarCartaDelTurnoActual, cerrarManoAmbosCapitanes } from "./helpers.js";
 
 // Piece L (batch overnight post-5r) — pantalla de fin de partida: anuncia
 // el equipo ganador con el texto exacto "GANÓ EQUIPO LOCAL" o "GANÓ EQUIPO
@@ -77,14 +77,10 @@ test("online: la pantalla de fin de partida anuncia el equipo ganador y sus juga
     }
     expect(enClosing, "la mano no llegó a 'closing' a tiempo").toBe(true);
 
-    // Un capitán cierra — con una sola mano en la estructura, close_hand
-    // salta derecho a 'finished' (no hay 'dealing' de una mano 2).
-    let capitanPage = null;
-    for (const p of pages) {
-      if (await p.getByRole("button", { name: /^Cerrar mano/ }).isVisible().catch(() => false)) { capitanPage = p; break; }
-    }
-    expect(capitanPage, "ninguna sesión mostró el botón de cerrar mano").toBeTruthy();
-    await capitanPage.getByRole("button", { name: /^Cerrar mano/ }).click();
+    // Piece LL: los dos capitanes tienen que confirmar — con una sola
+    // mano en la estructura, una vez que ambos confirman close_hand salta
+    // derecho a 'finished' (no hay 'dealing' de una mano 2).
+    await cerrarManoAmbosCapitanes(pages);
 
     for (const p of pages) {
       await expect(p.getByText("FIN DE LA PARTIDA")).toBeVisible({ timeout: 20000 });

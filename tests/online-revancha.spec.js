@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, jugarCartaDelTurnoActual } from "./helpers.js";
+import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, jugarCartaDelTurnoActual, cerrarManoAmbosCapitanes } from "./helpers.js";
 
 // Piece BB (batch overnight post-5r) — "REVANCHA" en la pantalla de fin de
 // partida reinicia un partido nuevo en la MISMA sala: mismos jugadores/
@@ -59,12 +59,8 @@ test("online: REVANCHA reinicia la partida en la misma sala sin volver a elegir 
     }
     expect(enClosing, "la mano no llegó a 'closing' a tiempo").toBe(true);
 
-    let capitanPage = null;
-    for (const p of pages) {
-      if (await p.getByRole("button", { name: /^Cerrar mano/ }).isVisible().catch(() => false)) { capitanPage = p; break; }
-    }
-    expect(capitanPage, "ninguna sesión mostró el botón de cerrar mano").toBeTruthy();
-    await capitanPage.getByRole("button", { name: /^Cerrar mano/ }).click();
+    // Piece LL: hacen falta los dos capitanes para cerrar la mano.
+    await cerrarManoAmbosCapitanes(pages);
 
     for (const p of pages) {
       await expect(p.getByText("FIN DE LA PARTIDA")).toBeVisible({ timeout: 20000 });
@@ -72,8 +68,9 @@ test("online: REVANCHA reinicia la partida en la misma sala sin volver a elegir 
 
     // Click REVANCHA desde CUALQUIER sesión (no solo capitán — ver
     // comentario de onRevancha/revancha_partida) lleva a las 4 de vuelta a
-    // 'dealing' de la mano 0, sin pasar por "ELEGÍ TU EQUIPO".
-    const noCapitanPage = pages.find((p) => p !== capitanPage);
+    // 'dealing' de la mano 0, sin pasar por "ELEGÍ TU EQUIPO". P0/P1 son
+    // siempre los capitanes (choose_team_rpc.sql); P2 no lo es.
+    const noCapitanPage = pages[2];
     await expect(noCapitanPage.getByRole("button", { name: "REVANCHA" })).toBeVisible();
     await noCapitanPage.getByRole("button", { name: "REVANCHA" }).click();
 

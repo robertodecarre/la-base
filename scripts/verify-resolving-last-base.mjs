@@ -154,9 +154,16 @@ async function main() {
   if (!nonCaptainErr) throw new Error("FAIL: a non-captain was able to close the hand");
   console.log(`  ok: close_hand still rejects a non-captain (${nonCaptainErr.message})`);
 
-  const anyCaptain = players.find((p) => p.is_captain);
-  gs = await rpc(sessions[anyCaptain.seat], "close_hand", { p_room_id: room.id });
-  assertEq(gs.phase, "dealing", "close_hand succeeds directly from the state left by the last base's trick resolution");
+  // Piece LL: close_hand now needs a captain of EACH team to confirm —
+  // the first call marks only that captain's team and leaves phase
+  // untouched at 'closing'; only the second (the other team's captain)
+  // actually runs the transition.
+  const captains = players.filter((p) => p.is_captain);
+  assertEq(captains.length, 2, "exactly 2 captains (one per team)");
+  gs = await rpc(sessions[captains[0].seat], "close_hand", { p_room_id: room.id });
+  assertEq(gs.phase, "closing", "phase stays 'closing' after only one captain confirms");
+  gs = await rpc(sessions[captains[1].seat], "close_hand", { p_room_id: room.id });
+  assertEq(gs.phase, "dealing", "close_hand succeeds once BOTH captains confirm, directly from the state left by the last base's trick resolution");
 
   console.log("\nALL CHECKS PASSED against the real project.");
 }

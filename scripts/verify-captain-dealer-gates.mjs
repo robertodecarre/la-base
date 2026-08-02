@@ -94,13 +94,16 @@ async function main() {
   gs = await playOneTrick(clients, { [0]: clientOfSeat(0), [1]: clientOfSeat(1), [2]: clientOfSeat(2), [3]: clientOfSeat(3) }, room, gs);
   assertEq(gs.phase, "closing", "phase after the hand's only trick");
 
-  console.log("\nclose_hand: non-captain rejected, captain succeeds");
+  console.log("\nclose_hand: non-captain rejected, needs BOTH captains (piece LL)");
   const players2 = await playersForRoom(clients[0], room.id);
   const nonCaptainSeat = players2.find((p) => !p.is_captain).seat;
-  const someCaptainSeat = players2.find((p) => p.is_captain).seat;
+  const captainSeats = players2.filter((p) => p.is_captain).map((p) => p.seat);
+  assertEq(captainSeats.length, 2, "exactly 2 captains (one per team)");
   await rpcExpectError(clientOfSeat(nonCaptainSeat), "close_hand", { p_room_id: room.id }, "close_hand_captain_only");
-  const afterClose = await rpc(clientOfSeat(someCaptainSeat), "close_hand", { p_room_id: room.id });
-  assertEq(afterClose.phase, "dealing", "close_hand succeeded for a captain, phase is dealing for hand 2");
+  const afterFirst = await rpc(clientOfSeat(captainSeats[0]), "close_hand", { p_room_id: room.id });
+  assertEq(afterFirst.phase, "closing", "phase stays 'closing' after only one captain confirms");
+  const afterClose = await rpc(clientOfSeat(captainSeats[1]), "close_hand", { p_room_id: room.id });
+  assertEq(afterClose.phase, "dealing", "close_hand succeeded once both captains confirmed, phase is dealing for hand 2");
 
   console.log("\ndeal_hand (next-hand branch): non-dealer rejected, the actual next dealer succeeds");
   const nextDealerSeat = afterClose.dealer_seat;

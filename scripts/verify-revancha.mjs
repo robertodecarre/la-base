@@ -93,8 +93,10 @@ async function playOneHandToFinished(sessions, room, players, dealerSeat = 0) {
   gs = await playTrick(sessions, room, gs);
   assertEq(gs.phase, "closing", "phase after the only/last base of hand 0");
 
-  const anyCaptain = players.find((p) => p.is_captain);
-  gs = await rpc(sessions[anyCaptain.seat], "close_hand", { p_room_id: room.id });
+  // Piece LL: close_hand now needs a captain of EACH team to confirm.
+  const captains = players.filter((p) => p.is_captain);
+  await rpc(sessions[captains[0].seat], "close_hand", { p_room_id: room.id });
+  gs = await rpc(sessions[captains[1].seat], "close_hand", { p_room_id: room.id });
   assertEq(gs.phase, "finished", "phase after closing the match's only hand");
   return gs;
 }

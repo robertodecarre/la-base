@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { jugarCartaDelTurnoActual, crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado } from "./helpers.js";
+import { jugarCartaDelTurnoActual, crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, cerrarManoAmbosCapitanes } from "./helpers.js";
 
 // Regresión para el bug de producción: a partir de la mano 2, la pantalla de
 // "pedir bases" (bidding) online aparecía con la mano vacía en vez de
@@ -65,22 +65,6 @@ async function confirmarPedidoEnQuienCorresponda(pages) {
     if (!(await panelConfirma(p).isVisible().catch(() => false))) return;
   }
   throw new Error("el pedido no se confirmó tras varios intentos");
-}
-
-// Mismo patrón de click acotado + reintento que confirmarPedidoEnQuienCorresponda
-// (líneas 53/63) — piece E lo aplicó a los clicks de bidding pero no a este,
-// porque cuando se escribió esa pieza el reloj (piece C+D) no corría en esta
-// pantalla. Un click sin timeout puede quedar esperando para siempre si el
-// elemento se desmonta/remonta a mitad del click, colgando el test entero.
-async function clickearCerrarMano(pages) {
-  for (let intento = 1; intento <= 10; intento++) {
-    const p = await esperaBotonVisible(pages, /^Cerrar mano/);
-    const ok = await p.getByRole("button", { name: /^Cerrar mano/ }).click({ timeout: 5000 }).then(() => true).catch(() => false);
-    if (!ok) continue;
-    await new Promise((r) => setTimeout(r, 1500));
-    if (!(await p.getByRole("button", { name: /^Cerrar mano/ }).isVisible().catch(() => false))) return;
-  }
-  throw new Error("no se pudo cerrar la mano tras varios intentos");
 }
 
 async function esperaBotonVisible(pages, regex, timeout = 30000) {
@@ -170,7 +154,8 @@ test("online: la mano 2 en bidding muestra la mano repartida, no vacía", async 
     await confirmarPedidoEnQuienCorresponda(pages); // mano (y pie, auto-resuelto)
     await jugarBaseDeUnaCarta(pages);
 
-    await clickearCerrarMano(pages);
+    // Piece LL: cerrar la mano ahora requiere confirmación de los dos capitanes.
+    await cerrarManoAmbosCapitanes(pages);
 
     // Esto dispara close_hand: hand_number pasa a 1 con phase='dealing' —
     // el punto exacto donde el bug pre-fix ya deja misCartas cacheado en [].

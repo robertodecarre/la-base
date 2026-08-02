@@ -1159,15 +1159,39 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           </div>
         )}
 
-        {isCaptain ? (
-          <Btn verde onClick={onCerrarMano} disabled={enviandoCierre}>
-            {enviandoCierre ? "Cerrando…" : "Cerrar mano"}
-          </Btn>
-        ) : (
-          <div style={{fontSize:12,color:"rgba(201,168,76,0.5)"}}>
-            Esperando a que un capitán cierre la mano…
-          </div>
-        )}
+        {/* Piece LL: cerrar la mano ahora requiere confirmación de UN
+            capitán de CADA equipo — close_hand marca solo el equipo del
+            capitán que llama y recién ejecuta el cierre de verdad cuando
+            los dos flags quedan en true (ver close_hand_confirmed_team0/1,
+            20260706290000_close_hand_dual_captain_confirm.sql). Mientras
+            falte alguno, la fase sigue en 'closing' — el próximo
+            repartidor no puede actuar hasta que el cierre real ocurra. */}
+        {(() => {
+          const team0Confirmado = !!gameState.close_hand_confirmed_team0;
+          const team1Confirmado = !!gameState.close_hand_confirmed_team1;
+          const faltantes = [!team0Confirmado && "LOCAL", !team1Confirmado && "VISITANTE"].filter(Boolean);
+          if (!isCaptain) {
+            return (
+              <div style={{fontSize:12,color:"rgba(201,168,76,0.5)"}}>
+                Esperando a que {faltantes.join(" y ")} confirme{faltantes.length>1?"n":""} el cierre de la mano…
+              </div>
+            );
+          }
+          const miConfirmacion = myTeam===0 ? team0Confirmado : team1Confirmado;
+          if (miConfirmacion) {
+            const otroEquipo = myTeam===0 ? "VISITANTE" : "LOCAL";
+            return (
+              <div style={{fontSize:12,color:"rgba(201,168,76,0.5)"}}>
+                Ya confirmaste — esperando a que {otroEquipo} confirme el cierre de la mano…
+              </div>
+            );
+          }
+          return (
+            <Btn verde onClick={onCerrarMano} disabled={enviandoCierre}>
+              {enviandoCierre ? "Cerrando…" : "Cerrar mano"}
+            </Btn>
+          );
+        })()}
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
         {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}

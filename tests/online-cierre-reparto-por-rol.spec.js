@@ -85,8 +85,10 @@ test("online: cerrar mano y repartir mano quedan gateados por rol (capitán / pr
     }
     expect(enClosing, "la mano no llegó a 'closing' a tiempo").toBe(true);
 
-    // Solo un capitán ve "Cerrar mano" — el resto ve el mensaje de espera,
-    // nunca el botón.
+    // Solo los capitanes ven "Cerrar mano" — el resto ve el mensaje de
+    // espera, nunca el botón. Piece LL: ahora hace falta confirmación de
+    // los DOS capitanes (uno por equipo), así que tienen que ser
+    // exactamente 2 sesiones viendo el botón, no "al menos una".
     const botonCerrar = (p) => p.getByRole("button", { name: /^Cerrar mano/ });
     const capitanPages = [];
     const noCapitanPages = [];
@@ -94,13 +96,21 @@ test("online: cerrar mano y repartir mano quedan gateados por rol (capitán / pr
       if (await botonCerrar(p).isVisible().catch(() => false)) capitanPages.push(p);
       else noCapitanPages.push(p);
     }
-    expect(capitanPages.length, "tiene que haber al menos un capitán viendo el botón").toBeGreaterThan(0);
+    expect(capitanPages.length, "tienen que ser exactamente 2 capitanes viendo el botón").toBe(2);
     for (const p of noCapitanPages) {
       await expect(botonCerrar(p)).toHaveCount(0);
-      await expect(p.getByText(/Esperando a que un capitán cierre la mano/)).toBeVisible();
+      await expect(p.getByText(/Esperando a que (LOCAL|VISITANTE) y (LOCAL|VISITANTE) confirmen|Esperando a que (LOCAL|VISITANTE) confirme/)).toBeVisible();
     }
 
+    // Piece LL: un solo capitán confirmando no alcanza — la mano tiene
+    // que seguir en 'closing' (el botón del OTRO capitán sigue ahí) y ese
+    // primer capitán ve un mensaje de espera propio en vez de poder
+    // volver a clickear.
     await botonCerrar(capitanPages[0]).click();
+    await expect(capitanPages[0].getByText(/Ya confirmaste — esperando a que (LOCAL|VISITANTE) confirme/)).toBeVisible();
+    await expect(botonCerrar(capitanPages[1])).toBeVisible();
+
+    await botonCerrar(capitanPages[1]).click();
 
     // Repartir mano (piece U: ahora el botón "DAR", ícono de mazo, no
     // texto "Repartir mano") — solo el próximo repartidor lo ve.

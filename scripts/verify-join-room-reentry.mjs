@@ -90,8 +90,10 @@ async function main() {
     const { data: hand } = await clients[seat].from("hands").select("cards").eq("room_id", room.id).eq("hand_number", gs.hand_number).single();
     gs = await rpc(clients[seat], "play_card", { p_room_id: room.id, p_card_uid: hand.cards[0].uid });
   }
-  const captainSeat = (await playersForRoom(p0, room.id)).find((p) => p.is_captain).seat;
-  gs = await rpc(clients[captainSeat], "close_hand", { p_room_id: room.id });
+  // Piece LL: close_hand now needs a captain of EACH team to confirm.
+  const captainSeats = (await playersForRoom(p0, room.id)).filter((p) => p.is_captain).map((p) => p.seat);
+  await rpc(clients[captainSeats[0]], "close_hand", { p_room_id: room.id });
+  gs = await rpc(clients[captainSeats[1]], "close_hand", { p_room_id: room.id });
   const dealerSeat = gs.dealer_seat;
   gs = await rpc(clients[dealerSeat], "deal_hand", { p_room_id: room.id });
   const manoTeam2 = gs.mano_seat % 2;
@@ -102,8 +104,10 @@ async function main() {
     const { data: hand } = await clients[seat].from("hands").select("cards").eq("room_id", room.id).eq("hand_number", gs.hand_number).single();
     gs = await rpc(clients[seat], "play_card", { p_room_id: room.id, p_card_uid: hand.cards[0].uid });
   }
-  const captainSeat2 = (await playersForRoom(p0, room.id)).find((p) => p.is_captain).seat;
-  gs = await rpc(clients[captainSeat2], "close_hand", { p_room_id: room.id });
+  const captainSeats2 = (await playersForRoom(p0, room.id)).filter((p) => p.is_captain).map((p) => p.seat);
+  await rpc(clients[captainSeats2[0]], "close_hand", { p_room_id: room.id });
+  gs = await rpc(clients[captainSeats2[1]], "close_hand", { p_room_id: room.id });
+  const captainSeat2 = captainSeats2[1];
   assertEq(gs.phase, "finished", "2-hand structure exhausted, game finished");
 
   const rejoinFinished = await rpc(p2, "join_room", { p_code: room.code, p_name: "P" });
