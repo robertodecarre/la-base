@@ -4,11 +4,12 @@ import { sortearRepartoInicial, repartirMano } from "../lib/game";
 import { marcarListo, elegirEquipo } from "../lib/rooms";
 import { mensajeDeError } from "../lib/erroresSala";
 import { SorteoAnimado } from "../components/SorteoAnimado";
+import { BotonSalir } from "../components/BotonSalir";
 import { PantallaPartidaOnline } from "./PantallaPartidaOnline";
 import {
   FONTS_URL, colors, fonts, bevel, panelStyle, badgeStyle, tituloStyle, codigoStyle,
   equipoLabelStyle, filaStyle, filaVaciaStyle, puntoStyle, nombreStyle,
-  ctaStyle, secondaryBtnStyle, WORDMARK, diagonalWordmarkStyle,
+  ctaStyle, WORDMARK, diagonalWordmarkStyle,
 } from "../theme";
 
 
@@ -100,7 +101,7 @@ function SeleccionEquipo({ roomId, nJug, players, onSalir, onElegido }) {
         </div>
       </div>
 
-      <button onClick={onSalir} style={secondaryBtnStyle()}>Salir de la sala</button>
+      <BotonSalir onSalir={onSalir}/>
     </div>
   );
 }
@@ -260,7 +261,7 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
         <div style={{ fontSize: 12, color: "#ffb3a8", background: "rgba(160,50,30,0.18)", border: "1px solid rgba(255,140,100,0.4)", borderRadius: 10, padding: "10px 14px", textAlign: "center", fontFamily: fonts.body }}>
           No se pudo cargar la sala: {error.message}
         </div>
-        <button onClick={onSalir} style={secondaryBtnStyle()}>Salir de la sala</button>
+        <BotonSalir onSalir={onSalir}/>
       </div>
     );
   }
@@ -385,7 +386,7 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
         </div>
       </div>
 
-      <button onClick={onSalir} style={secondaryBtnStyle()}>Salir de la sala</button>
+      <BotonSalir onSalir={onSalir}/>
     </div>
   );
 }

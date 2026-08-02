@@ -8,6 +8,7 @@ import { AvionKamikaze } from "../components/AvionKamikaze";
 import { CartaSVG } from "../components/cards/CartaSVG";
 import { Btn } from "../components/Btn";
 import { BotonDar } from "../components/BotonDar";
+import { BotonSalir } from "../components/BotonSalir";
 import {
   enviarPedido, jugarCarta, siguienteBase, resolverCopas, resolverOros,
   repartirMano, cerrarMano, reclamarTiempo, revanchaPartida,
@@ -131,64 +132,6 @@ function FilaCartasJugadas({ cartas, seatDestacado }) {
           </svg>
         </div>
       ))}
-    </div>
-  );
-}
-
-// "Salir de la sala" (piece E, batch overnight post-5r): aislado del resto
-// de las acciones de cada pantalla — chico, rojo (colors.danger via Btn
-// danger+small), con margen propio arriba para separarlo visualmente de
-// la acción principal en vez de sentarse pegado a "Cerrar mano"/"Repartir
-// mano" como antes.
-//
-// Piece M (batch overnight post-5r): onSalir ya no dispara directo del
-// click — antes un click perdido (o un toque en mobile) sacaba a alguien
-// de la sala sin aviso, y aunque piece M's join_room fix ahora deja
-// volver a entrar mid-game, seguía siendo una acción destructiva sin
-// red. Confirmación acotada al propio botón (estado local, no en el
-// padre) para no tener que tocar los 9 lugares donde se monta.
-function BotonSalir({ onSalir }) {
-  const [confirmando, setConfirmando] = useState(false);
-  return (
-    <div style={{ marginTop: 18 }}>
-      <Btn danger small onClick={() => setConfirmando(true)}>Salir de la sala</Btn>
-      {confirmando && (
-        <ConfirmarSalirOverlay onConfirmar={onSalir} onCancelar={() => setConfirmando(false)} />
-      )}
-    </div>
-  );
-}
-
-// Piece V (batch overnight post-5r): copy/botones con la voz irreverente
-// propia de esta app (misma línea que "la está haciendo" — ver piece G/
-// online-habitacion.spec.js) — texto tal cual pedido, sin suavizar.
-// "ME QUEDO" reusa colors.positive (Btn verde), el mismo verde que ya usa
-// el resto del chrome para "confirmar/continuar" — no un acento nuevo.
-function ConfirmarSalirOverlay({ onConfirmar, onCancelar }) {
-  return (
-    <div
-      onClick={onCancelar}
-      style={{
-        position: "fixed", inset: 0, background: "rgba(6,8,20,0.72)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 60, padding: 16,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ ...panelStyle, width: "100%", maxWidth: 300, padding: 18, display: "flex", flexDirection: "column", gap: 14, alignItems: "center", textAlign: "center" }}
-      >
-        <div style={{ fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 14, color: colors.text.secondary }}>
-          ¿Ya te vas, forro?
-        </div>
-        <div style={{ fontSize: 11, color: "rgba(201,168,76,0.6)" }}>
-          Podés volver a entrar con el mismo código.
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <Btn verde small onClick={onCancelar}>ME QUEDO</Btn>
-          <Btn danger small onClick={onConfirmar}>ME VOY A LA MIERDA</Btn>
-        </div>
-      </div>
     </div>
   );
 }
