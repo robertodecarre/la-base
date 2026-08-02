@@ -8,10 +8,25 @@ import { colors, fonts, panelStyle } from "../theme";
 // componente compartido para que la sala (PantallaOnlineSala.jsx, que
 // antes montaba su propio <button style={secondaryBtnStyle()}> sin
 // confirmación) y la partida (PantallaPartidaOnline.jsx) usen EXACTAMENTE
-// el mismo botón — mismo tamaño/color/confirmación, y ahora clavado en la
-// esquina inferior izquierda (position:fixed) en vez de vivir en el flujo
-// normal de cada pantalla, que es lo que hacía que apareciera en una
-// posición distinta según cuánto contenido tuviera cada una arriba.
+// el mismo botón — mismo tamaño/color/confirmación en las dos.
+//
+// Piece PP (batch overnight post-EE, resumida): al principio (piece MM)
+// esto era position:fixed, clavado en la esquina de la ventana por
+// encima de todo — un overlay flotante, no parte de la pantalla. Ahora
+// vive en el flujo normal del documento (alignSelf:"flex-start" para
+// despegarse del centrado del contenedor flex-column de cada pantalla,
+// ver fondoStyle en PantallaPartidaOnline.jsx/PantallaOnlineSala.jsx —
+// todas comparten el mismo patrón alignItems:"center"). Como este
+// componente ya se monta como el último hijo (o el anteúltimo, antes de
+// los overlays) de cada pantalla, en las pantallas que sí tienen "la
+// habitación" (MesaCircular — playing/resolving/copas_menu/oros_menu/
+// closing/bidding) queda automáticamente pegado justo debajo del borde
+// exterior de esa mesa cuadrada, sin lógica extra; en las que no la
+// tienen (dealing/finished/fallback genérico, y las 3 pantallas de sala
+// en PantallaOnlineSala.jsx) queda igual de no-flotante, abajo a la
+// izquierda del contenido que haya — mismo principio universal ("no
+// flotante, chico, abajo a la izquierda"), el anclaje a la habitación es
+// estructura extra solo donde ese borde existe.
 //
 // Piece M (batch overnight post-5r): onSalir ya no dispara directo del
 // click — antes un click perdido (o un toque en mobile) sacaba a alguien
@@ -21,7 +36,7 @@ import { colors, fonts, panelStyle } from "../theme";
 export function BotonSalir({ onSalir }) {
   const [confirmando, setConfirmando] = useState(false);
   return (
-    <div style={{ position: "fixed", left: 14, bottom: 14, zIndex: 40 }}>
+    <div style={{ alignSelf: "flex-start" }}>
       <Btn danger small onClick={() => setConfirmando(true)}>Salir de la sala</Btn>
       {confirmando && (
         <ConfirmarSalirOverlay onConfirmar={onSalir} onCancelar={() => setConfirmando(false)} />
