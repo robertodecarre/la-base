@@ -66,8 +66,18 @@ async function playTrick(sessions, room, gs) {
   return gs;
 }
 
-async function playOneHandToFinished(sessions, room, players) {
-  let gs = await rpc(sessions[0], "deal_hand", { p_room_id: room.id });
+async function playOneHandToFinished(sessions, room, players, dealerSeat = 0) {
+  // deal_hand_dealer_only (20260706200000_captain_dealer_gates.sql) only
+  // lets the actual dealer_seat call deal_hand once a game_state row
+  // already exists (2nd+ hand of a room's life, including hand 0 of a
+  // REVANCHA) — the room's very first hand ever (no game_state row yet)
+  // is ungated, which is why the original default of seat 0 worked for
+  // match 1 here (no real sorteo in this test, so dealer_seat there is
+  // whatever deal_hand's own random fallback picks — irrelevant, since
+  // that branch doesn't check who's calling). Piece II's revancha fix
+  // makes the REMATCH's dealer_seat a real, non-zero seat sometimes, so
+  // callers past match 1 must pass the actual dealer.
+  let gs = await rpc(sessions[dealerSeat], "deal_hand", { p_room_id: room.id });
   const teamMano = gs.mano_seat % 2;
   const captainMano = players.find((p) => p.team === teamMano && p.is_captain);
   // estructura=[1]: pie has exactly one legal bid (opcionesValidas
@@ -122,9 +132,17 @@ async function main() {
   }
 
   console.log("\n=== Playing the match's only hand to 'finished' ===");
-  await playOneHandToFinished(sessions, room, players);
+  const gsFinished = await playOneHandToFinished(sessions, room, players);
   assertEq(await playedCardsCount(sessions[0], room.id), N_JUG, "played_cards has the 4 cards from hand 0, pre-revancha");
   assertEq(await handResultsCount(sessions[0], room.id), 1, "hand_results has 1 row, pre-revancha");
+  // close_hand's 'finished' branch never touches dealer_seat/mano_seat, so
+  // these are exactly the last (only) hand's pie/mano — piece II's fix
+  // target.
+  const oldDealerSeat = gsFinished.dealer_seat;
+  const oldManoSeat = gsFinished.mano_seat;
+  const oldPieTeam = oldDealerSeat % 2;
+  const oldManoTeam = oldManoSeat % 2;
+  console.log(`  (pre-revancha) pie(dealer) seat=${oldDealerSeat} team=${oldPieTeam}, mano seat=${oldManoSeat} team=${oldManoTeam}`);
 
   console.log("\n=== Requesting revancha ===");
   // Non-captain, non-dealer, arbitrary seat — proves it's ungated by role.
@@ -153,10 +171,23 @@ async function main() {
     .map((p) => ({ seat: p.seat, team: p.team, is_captain: p.is_captain, name: p.name }));
   assertEq(playersAfter, playersBefore, "same seats/teams/captains/names preserved across revancha (no team-selection replay)");
 
+  // Piece II: revancha_partida seeds the new dealer_seat from the OLD
+  // mano_seat — assert that directly off its own return value, before
+  // deal_hand runs again and could muddy which RPC actually set it.
+  assertEq(gs.dealer_seat, oldManoSeat, "revancha's new dealer_seat (pie) is seeded from the last match's mano_seat");
+
   console.log("\n=== Second match plays through cleanly from the reset state ===");
-  gs = await playOneHandToFinished(sessions, room, players);
+  gs = await playOneHandToFinished(sessions, room, players, gs.dealer_seat);
   assertEq(gs.hand_number, 0, "hand_number of the rematch's only hand is 0, not 1 (a real second match, not a continuation)");
   assertEq(await handResultsCount(sessions[0], room.id), 1, "hand_results has exactly 1 row again (the rematch's hand 0, not appended to the old one)");
+
+  // Piece II core assertion: the team that was PIE in the finished match
+  // must be MANO in the rematch (and, symmetrically, the old mano team is
+  // the new pie team) — read off the rematch's own hand-0 dealer_seat/
+  // mano_seat as computed by deal_hand, not re-derived by hand.
+  console.log("\n=== Piece II: pie/mano inversion across REVANCHA ===");
+  assertEq(gs.dealer_seat % 2, oldManoTeam, "rematch's pie team is the old match's mano team");
+  assertEq(gs.mano_seat % 2, oldPieTeam, "rematch's mano team is the old match's pie team");
 
   console.log("\nALL CHECKS PASSED against the real project.");
 }
