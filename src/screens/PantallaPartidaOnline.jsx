@@ -786,12 +786,36 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     // only); esto solo evita mostrarle el botón a quien igual lo rebotaría.
     const esProximoRepartidor = mySeat === gameState.dealer_seat;
     const nombreProximoRepartidor = jugadorEnAsiento(gameState.dealer_seat)?.name;
+    // Piece EE: la mano recién cerrada — close_hand ya avanzó hand_number
+    // antes de entrar en 'dealing', así que la fila de hand_results de la
+    // mano que acaba de terminar es hand_number-1.
+    const resultadoManoAnterior = handResults.find((h) => h.hand_number === gameState.hand_number - 1);
     return (
       <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
           Mano {gameState.hand_number+1} de {room.config?.estructura?.length ?? "?"}
         </div>
+        {resultadoManoAnterior && (() => {
+          const { delta_team0: dLocal, delta_team1: dVisitante } = resultadoManoAnterior;
+          const empatada = dLocal === dVisitante;
+          const ganoLocal = dLocal > dVisitante;
+          const tituloColor = empatada ? colors.text.secondary : (ganoLocal ? colors.team.local.accent : colors.team.visitante.accent);
+          const colorDelta = (d) => (d >= 0 ? colors.positive.border : colors.negative);
+          const signo = (d) => (d >= 0 ? "+" : "");
+          return (
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+              <div style={{fontSize:13,fontWeight:700,color:tituloColor}}>
+                {empatada ? "Mano empatada" : ganoLocal ? "Ganó Local" : "Ganó Visitante"}
+              </div>
+              <div style={{fontSize:12,display:"flex",alignItems:"center",gap:8}}>
+                <span style={{color:colors.team.local.accent}}>LOCAL <b style={{color:colorDelta(dLocal)}}>{signo(dLocal)}{dLocal}</b></span>
+                <span style={{color:"rgba(201,168,76,0.4)"}}>·</span>
+                <span style={{color:colors.team.visitante.accent}}>VISITANTE <b style={{color:colorDelta(dVisitante)}}>{signo(dVisitante)}{dVisitante}</b></span>
+              </div>
+            </div>
+          );
+        })()}
         {errorReparto && (
           <div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",textAlign:"center",maxWidth:340}}>
             {errorReparto}

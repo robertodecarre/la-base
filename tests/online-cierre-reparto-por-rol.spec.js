@@ -119,6 +119,13 @@ test("online: cerrar mano y repartir mano quedan gateados por rol (capitán / pr
       await expect(p.getByText(/Esperando a que .* reparta/)).toBeVisible();
     }
 
+    // Piece EE: la pantalla de 'dealing' también muestra el resultado de
+    // la mano que acaba de cerrar (quién ganó + delta de puntos por
+    // equipo), no solo el mensaje de espera del próximo reparto.
+    await expect(repartidorPage.getByText(/Ganó Local|Ganó Visitante|Mano empatada/)).toBeVisible();
+    await expect(repartidorPage.getByText(/^LOCAL/)).toBeVisible();
+    await expect(repartidorPage.getByText(/^VISITANTE/)).toBeVisible();
+
     await botonRepartir(repartidorPage).click();
     for (const p of pages) {
       await expect(p.getByText(/Mano 2/)).toBeVisible({ timeout: 20000 });
