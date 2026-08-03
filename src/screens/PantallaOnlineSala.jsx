@@ -1,16 +1,75 @@
 import { useEffect, useState } from "react";
 import { useSala } from "../hooks/useSala";
 import { sortearRepartoInicial, repartirMano } from "../lib/game";
-import { marcarListo, elegirEquipo } from "../lib/rooms";
+import { marcarListo, elegirEquipo, guardarApariencia, guardarSenasMapping } from "../lib/rooms";
 import { mensajeDeError } from "../lib/erroresSala";
 import { SorteoAnimado } from "../components/SorteoAnimado";
 import { BotonSalir } from "../components/BotonSalir";
 import { PantallaPartidaOnline } from "./PantallaPartidaOnline";
+import { ReactionFace, HAIR_STYLES, HAIR_COLOR_KEYS } from "../components/ReactionFace";
+import { DEFAULT_SENAS, GESTOS_EDITABLES, senasEfectivas } from "../lib/senas";
 import {
   FONTS_URL, colors, fonts, bevel, panelStyle, badgeStyle, tituloStyle, codigoStyle,
   equipoLabelStyle, filaStyle, filaVaciaStyle, puntoStyle, nombreStyle,
-  ctaStyle, WORDMARK, diagonalWordmarkStyle,
+  ctaStyle, secondaryBtnStyle, segmentedOptionStyle, checkRowStyle, checkboxStyle, inputStyle,
+  WORDMARK, diagonalWordmarkStyle,
 } from "../theme";
+
+const HAIR_LABELS = { pelado: "Pelado", corto: "Corto", mohawk: "Mohawk", largo: "Largo", entradas: "Entradas" };
+const HAIR_COLOR_LABELS = { castano: "Castaño", rubio: "Rubio", negro: "Negro" };
+const APARIENCIA_DEFAULT = { hairStyle: "pelado", hairColor: "castano", glasses: false };
+
+// Customizador de cara (pieza J) — mismo ReactionFace que se ve en la mesa,
+// siempre en 'neutral' acá (elegir el look, no un gesto). Autoguarda en
+// cada cambio (guardarApariencia) en vez de tener un botón "confirmar"
+// aparte: es puramente cosmético, no hay ningún estado a medio-confirmar
+// que proteger. `yo` puede no tener fila de appearance todavía (jugador
+// nuevo) — el estado local arranca en APARIENCIA_DEFAULT, que coincide con
+// lo que set_appearance/ReactionFace ya asumen cuando la columna es null.
+function CustomizarCara({ roomId, yo }) {
+  const [apariencia, setApariencia] = useState(yo?.appearance ?? APARIENCIA_DEFAULT);
+  const [error, setError] = useState(null);
+
+  const actualizar = async (patch) => {
+    const next = { ...apariencia, ...patch };
+    setApariencia(next);
+    setError(null);
+    try {
+      await guardarApariencia(roomId, next);
+    } catch (err) {
+      setError(await mensajeDeError(err));
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", alignItems: "center" }}>
+      <ReactionFace gestureKey="neutral" appearance={apariencia} size={72} />
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
+        {HAIR_STYLES.map((h) => (
+          <button key={h} onClick={() => actualizar({ hairStyle: h })} style={{ ...segmentedOptionStyle(apariencia.hairStyle === h), fontSize: 11, padding: "6px 10px" }}>
+            {HAIR_LABELS[h]}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 6, justifyContent: "center", opacity: apariencia.hairStyle === "pelado" ? 0.4 : 1 }}>
+        {HAIR_COLOR_KEYS.map((c) => (
+          <button key={c} disabled={apariencia.hairStyle === "pelado"} onClick={() => actualizar({ hairColor: c })} style={{ ...segmentedOptionStyle(apariencia.hairColor === c), fontSize: 11, padding: "6px 10px" }}>
+            {HAIR_COLOR_LABELS[c]}
+          </button>
+        ))}
+      </div>
+
+      <label style={{ ...checkRowStyle(apariencia.glasses), cursor: "pointer", fontSize: 12, color: colors.text.primary, fontFamily: fonts.body }}>
+        <input type="checkbox" checked={apariencia.glasses} onChange={(e) => actualizar({ glasses: e.target.checked })} style={checkboxStyle} />
+        Anteojos
+      </label>
+
+      {error && <div style={{ fontSize: 10, color: "#ffb3a8" }}>{error}</div>}
+    </div>
+  );
+}
 
 
 // Pantalla de selección de equipo (piece 5r) — se muestra a CADA jugador
@@ -24,9 +83,10 @@ import {
 // sin haber tenido que tocarlas (ver choose_team_rpc.sql). Montada como
 // sub-vista de PantallaOnlineSala, mismo patrón que SorteoAnimado —
 // reusa la instancia de useSala del padre, sin suscripción propia.
-function SeleccionEquipo({ roomId, nJug, players, onSalir, onElegido }) {
+function SeleccionEquipo({ roomId, nJug, players, userId, onSalir, onElegido }) {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);
+  const yo = players.find((p) => p.user_id === userId) ?? null;
   const cupo = nJug / 2;
   const equipos = [
     { team: 0, key: "local", nombre: "LOCAL", cuenta: players.filter((p) => p.team === 0).length },
@@ -66,6 +126,8 @@ function SeleccionEquipo({ roomId, nJug, players, onSalir, onElegido }) {
       <div style={{ ...panelStyle, width: "100%", maxWidth: 420, padding: "20px 18px 24px", display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
         <div style={badgeStyle}>LB</div>
         <div style={tituloStyle}>ELEGÍ TU EQUIPO</div>
+
+        <CustomizarCara roomId={roomId} yo={yo} />
 
         {error && (
           <div style={{ fontSize: 11, color: "#ffb3a8", background: "rgba(160,50,30,0.18)", border: "1px solid rgba(255,140,100,0.4)", borderRadius: 10, padding: "8px 12px", textAlign: "center", width: "100%", fontFamily: fonts.body }}>
@@ -133,6 +195,73 @@ function FilaAsiento({ seat, jugador, mySeat, team }) {
       {ocupado && jugador.is_captain && (
         <span style={{ fontSize: 9, color: colors.team[team].accent, whiteSpace: "nowrap", fontFamily: fonts.body, fontWeight: 600 }}>★ CAP</span>
       )}
+    </div>
+  );
+}
+
+// Remapeo de señas por equipo (pieza J) — colapsado por default, visible
+// solo en el lobby (room.status==='waiting' siempre acá, esta pantalla
+// nunca se monta después de que arrancó la partida). Compartido por los
+// dos compañeros del mismo equipo: cualquiera de los dos puede editar y
+// guardar, set_senas_mapping pisa el mapping entero de ESE equipo (no
+// hace falta coordinarse, el último Guardar gana — igual criterio que el
+// resto de esta pantalla, ningún estado a medio-confirmar que proteger).
+// set_senas_mapping ya rechaza room_not_open una vez que la partida
+// arrancó, así que no hace falta duplicar ese gate acá.
+function PersonalizarSenas({ roomId, team, senasGuardadas }) {
+  const [abierto, setAbierto] = useState(false);
+  const [borrador, setBorrador] = useState(() => senasEfectivas(senasGuardadas));
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState(null);
+  const [guardado, setGuardado] = useState(false);
+
+  const guardar = async () => {
+    setGuardando(true);
+    setError(null);
+    setGuardado(false);
+    try {
+      await guardarSenasMapping(roomId, borrador);
+      setGuardado(true);
+    } catch (err) {
+      setError(await mensajeDeError(err));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  if (!abierto) {
+    return (
+      <button onClick={() => setAbierto(true)} style={secondaryBtnStyle({ full: true })}>
+        Personalizar señas del equipo
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ ...panelStyle, width: "100%", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 12, letterSpacing: 1, color: colors.text.secondary }}>SEÑAS DEL EQUIPO</div>
+        <button onClick={() => setAbierto(false)} style={{ background: "none", border: "none", color: colors.text.secondary, fontSize: 14, cursor: "pointer", padding: 4 }}>✕</button>
+      </div>
+      <div style={{ fontSize: 10, color: "rgba(200,210,255,0.45)", fontStyle: "italic" }}>
+        Solo antes de arrancar la partida. Se comparte con tu compañero — el último que guarda gana.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 260, overflowY: "auto" }}>
+        {GESTOS_EDITABLES.map((key) => (
+          <div key={key} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <input
+              value={borrador[key] ?? ""}
+              onChange={(e) => setBorrador((b) => ({ ...b, [key]: e.target.value }))}
+              placeholder={DEFAULT_SENAS[key]}
+              style={{ ...inputStyle(), textAlign: "left", fontSize: 12, padding: "6px 12px" }}
+            />
+          </div>
+        ))}
+      </div>
+      {error && <div style={{ fontSize: 10, color: "#ffb3a8" }}>{error}</div>}
+      <button onClick={guardar} disabled={guardando} style={ctaStyle({ disabled: guardando })}>
+        {guardando ? "Guardando…" : guardado ? "✓ Guardado" : "Guardar señas"}
+      </button>
     </div>
   );
 }
@@ -285,7 +414,7 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
   // está seteado (deal_hand exige seat asignado para las n_jug filas), así
   // que esta rama nunca compite con la mesa de juego real.
   if (yo && yo.team == null && equipoLocalElegido == null) {
-    return <SeleccionEquipo roomId={roomId} nJug={nJug} players={players} onSalir={onSalir} onElegido={setEquipoLocalElegido} />;
+    return <SeleccionEquipo roomId={roomId} nJug={nJug} players={players} userId={userId} onSalir={onSalir} onElegido={setEquipoLocalElegido} />;
   }
 
   // Ya se repartió la primera mano: la mesa de juego real (pieza 5d cubre
@@ -371,6 +500,10 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
             ))}
           </div>
         </div>
+
+        {yo && myTeam != null && (
+          <PersonalizarSenas roomId={roomId} team={myTeam} senasGuardadas={room.senas_mapping?.[`team${myTeam}`]} />
+        )}
 
         {errorListo&&(
           <div style={{ fontSize: 11, color: "#ffb3a8", background: "rgba(160,50,30,0.18)", border: "1px solid rgba(255,140,100,0.4)", borderRadius: 10, padding: "8px 12px", textAlign: "center", width: "100%", fontFamily: fonts.body }}>

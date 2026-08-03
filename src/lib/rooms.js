@@ -42,3 +42,23 @@ export async function elegirEquipo(roomId, team) {
   if (error) throw error;
   return data; // fila de players
 }
+
+// Guarda la apariencia de cara elegida (pieza J) para el propio jugador —
+// { hairStyle, hairColor, glasses }. Puramente cosmético, sin gate de fase.
+export async function guardarApariencia(roomId, appearance) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("set_appearance", { p_room_id: roomId, p_appearance: appearance });
+  if (error) throw error;
+  return data; // fila de players
+}
+
+// Guarda el remapeo de señas del propio EQUIPO (pieza J) — solo mientras
+// la sala sigue en 'waiting' (set_senas_mapping rechaza room_not_open una
+// vez que arrancó la partida). p_mapping es { gestureKey: label, ... },
+// parcial: solo los gestos que el equipo eligió remapear.
+export async function guardarSenasMapping(roomId, mapping) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("set_senas_mapping", { p_room_id: roomId, p_mapping: mapping });
+  if (error) throw error;
+  return data; // fila de rooms
+}

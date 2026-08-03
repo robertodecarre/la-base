@@ -14,6 +14,9 @@ import {
   repartirMano, cerrarMano, reclamarTiempo, revanchaPartida,
 } from "../lib/game";
 import { mensajeDeError } from "../lib/erroresSala";
+import { useGestos } from "../hooks/useGestos";
+import { GESTOS_EDITABLES, senasEfectivas } from "../lib/senas";
+import { ReactionFace } from "../components/ReactionFace";
 import { colors, fonts, panelStyle } from "../theme";
 
 // Resumen fusionado arriba de MesaCircular (piece 5n, ver direccion-integrada.html):
@@ -200,6 +203,54 @@ function RelojOverlay({ tiempoLocal, tiempoVisitante, corriendo, agotadoLocal, a
   );
 }
 
+// Overlay de señas (pieza J) — mismo patrón que TableroOverlay/RelojOverlay
+// (backdrop clickeable, panelStyle), pero hace doble función: hoja de
+// referencia PRIVADA (nadie más ve que la abriste, ni tu propio
+// compañero — por eso vive puramente en estado local del cliente, sin
+// broadcast de "se abrió") Y disparador de gestos — cada fila es
+// clickeable y manda ESE gesto de una. Fusionar las dos cosas evita un
+// segundo panel separado solo para "elegir qué cara poner": la lista ya
+// tiene que existir para la referencia, y dado que solo el propio jugador
+// ve estas etiquetas, no hay ninguna fuga en dejar clickear desde acá
+// mismo. abrirla cuesta lo mismo que espiar a un rival (mientras está
+// abierta no estás mirando la mesa) — ver spec de pieza J.
+function SenasOverlay({ senas, onEnviar, onCerrar }) {
+  return (
+    <div
+      onClick={onCerrar}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(6,8,20,0.72)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 50, padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ ...panelStyle, width: "100%", maxWidth: 340, maxHeight: "80vh", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 13, letterSpacing: 2, color: colors.text.secondary }}>SEÑAS</div>
+          <button onClick={onCerrar} style={{ background: "none", border: "none", color: colors.text.secondary, fontSize: 16, cursor: "pointer", lineHeight: 1, padding: 4 }}>✕</button>
+        </div>
+        <div style={{ fontSize: 10, color: "rgba(200,210,255,0.4)", fontStyle: "italic" }}>
+          Tocá una para mandarla. Solo vos ves esta lista.
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, overflowY: "auto" }}>
+          {GESTOS_EDITABLES.map((key) => (
+            <button key={key} onClick={() => { onEnviar(key); onCerrar(); }} style={{
+              display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 10,
+              border: "1px solid rgba(140,160,240,0.25)", background: "rgba(255,255,255,0.03)", cursor: "pointer", textAlign: "left",
+            }}>
+              <ReactionFace gestureKey={key} size={34} />
+              <span style={{ fontSize: 12, color: colors.text.primary, fontFamily: fonts.body }}>{senas[key]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════
 // PANTALLA PARTIDA ONLINE — mesa real (piezas 5d/5e/5f/5g)
 // ══════════════════════════════════════════════
@@ -240,6 +291,11 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   // Piece O: mismo criterio que tableroAbierto — preferencia del jugador,
   // no se resetea entre manos.
   const [relojAbierto, setRelojAbierto] = useState(false);
+  // Pieza J: la hojita de señas — mismo criterio que tableroAbierto/
+  // relojAbierto (preferencia del jugador, no se resetea entre manos).
+  // Privada a propósito (ver SenasOverlay más abajo): abrirla nunca se
+  // transmite a nadie, ni siquiera al propio compañero de equipo.
+  const [senasAbierto, setSenasAbierto] = useState(false);
   // Piece Q (batch overnight post-5r): reparto animado. cartasLlegadas
   // cuenta, por asiento, cuántas cartas ya "aterrizaron" visualmente —
   // alimenta jugadoresMesa truncado mientras la animación corre; vacío
@@ -253,6 +309,12 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   // primera vez que esta sesión ve phase==='bidding' para ese hand_number
   // (ver el useEffect de más abajo).
   const manoAnimadaRef = useRef(null);
+
+  // Pieza J: capa de señas — broadcast en vivo, no atado a ninguna fase en
+  // particular (los gestos se pueden mandar durante toda la partida, no
+  // solo mientras es el turno de nadie). Ver useGestos.js.
+  const { gestosPorAsiento, enviarGesto } = useGestos(roomId, mySeat);
+  const misSenas = senasEfectivas(room.senas_mapping?.[`team${myTeam}`]);
 
   // La propia mano nunca viaja por Realtime (ver useSala) — hay que pedirla
   // explícitamente cada vez que cambia el número de mano (deal_hand ya dejó
@@ -471,7 +533,11 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     // solo muestra las cartas que ya "llegaron" (abanico/pila creciendo) —
     // fuera de la animación, la mano completa de siempre.
     const mano = animandoReparto ? manoCompleta.slice(0, cartasLlegadas[seat] ?? 0) : manoCompleta;
-    return { nombre: jugador?.name ?? `Asiento ${seat}`, eq: jugador?.team ?? (seat % 2), mano, bases: jugador?.tricks_won ?? 0 };
+    return {
+      nombre: jugador?.name ?? `Asiento ${seat}`, eq: jugador?.team ?? (seat % 2), mano, bases: jugador?.tricks_won ?? 0,
+      appearance: jugador?.appearance ?? null,
+      gestureKey: gestosPorAsiento[seat] ?? "neutral",
+    };
   });
 
   // Piece I: kamikaze solo lo puede declarar el equipo mano
@@ -845,7 +911,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               mySeat={mySeat}
               totalBases={totalBases}
               tableroAbierto={tableroAbierto}
-              onToggleTablero={()=>setTableroAbierto((v)=>!v)}
+              onToggleTablero={()=>setTableroAbierto((v)=>!v)} senasAbierto={senasAbierto} onToggleSenas={()=>setSenasAbierto((v)=>!v)}
               hayReloj={hayReloj}
               relojAbierto={relojAbierto}
               onToggleReloj={()=>setRelojAbierto((v)=>!v)}
@@ -856,6 +922,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
         {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
+        {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
   }
@@ -883,7 +950,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
-              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
+              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} senasAbierto={senasAbierto} onToggleSenas={()=>setSenasAbierto((v)=>!v)}
               onSiguienteBase={onSiguienteBase} enviandoResolucion={enviandoResolucion}
             />
           </BloqueMesa>
@@ -898,6 +965,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
         {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
+        {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
   }
@@ -938,7 +1006,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
-              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
+              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} senasAbierto={senasAbierto} onToggleSenas={()=>setSenasAbierto((v)=>!v)}
               hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
             />
           </BloqueMesa>
@@ -972,6 +1040,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
         {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
+        {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
   }
@@ -1000,7 +1069,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
-              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
+              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} senasAbierto={senasAbierto} onToggleSenas={()=>setSenasAbierto((v)=>!v)}
               hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
             />
           </BloqueMesa>
@@ -1040,6 +1109,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
         {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
+        {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
   }
@@ -1102,7 +1172,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
-              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
+              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} senasAbierto={senasAbierto} onToggleSenas={()=>setSenasAbierto((v)=>!v)}
               hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
               resultadoMano={resultadoMano}
             />
@@ -1151,6 +1221,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
         {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
+        {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
   }
@@ -1301,7 +1372,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
             pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
             expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
             cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
-            tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)}
+            tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} senasAbierto={senasAbierto} onToggleSenas={()=>setSenasAbierto((v)=>!v)}
             hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
             cartasViajandoReparto={viajandoReparto}
             contenidoBidding={contenidoBidding}
@@ -1312,6 +1383,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       <BotonSalir onSalir={onSalir}/>
       {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
       {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
+      {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
     </div>
   );
 }
