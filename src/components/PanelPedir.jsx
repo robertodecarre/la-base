@@ -2,6 +2,17 @@ import { useState, useEffect, useRef } from "react";
 import { opcionesValidas } from "../engine/bidding";
 import { colors, fonts, bevel, filaStyle, segmentedOptionStyle, secondaryBtnStyle } from "../theme";
 
+// Tamaño de los botones de número en función de cuántos hay que mostrar —
+// grillas de mano y pie se miden CADA UNA por su propia cuenta (pie casi
+// siempre tiene menos opciones que mano, ver opcionesValidas), así que
+// pueden terminar en tamaños distintos entre sí, a propósito.
+function tamañoBoton(n) {
+  if (n <= 5) return { size: 25, fontSize: 12 };
+  if (n === 6) return { size: 22, fontSize: 11 };
+  if (n === 7) return { size: 20, fontSize: 10 };
+  return { size: 18, fontSize: 9 }; // 8+ opciones
+}
+
 // ══════════════════════════════════════════════
 // PANEL LATERAL DE PEDIR (no tapa la mesa)
 // ══════════════════════════════════════════════
@@ -110,10 +121,19 @@ export function PanelPedir({ totalBases, nombresMano, nombresEq, esManoEq0, onCo
   // Reusa segmentedOptionStyle (mismo picker que cantidad de jugadores en
   // PantallaOnlineCrear) para normal/seleccionado; "prohibido" (kamikaze
   // exige 0 o el total) se superpone encima con el acento de peligro.
-  const btnNum = (n, seleccionado, onSelect, prohibido) => (
+  //
+  // Follow-up al fix del scrollbar de bidding (batch post-pieza-J): con
+  // totalBases altos (7+), la grilla de botones de número se envolvía a
+  // dos filas dentro del panel angosto, empujándolo más alto de lo
+  // esperado — el -2px de tolerancia del fix anterior no alcanza cuando
+  // el desborde es de contenido real (más filas), no sub-píxel. El
+  // tamaño del botón ahora encoge con la cantidad de opciones (a partir
+  // de 6), en vez de un width/height/fontSize fijo de 25/25/12 sin
+  // importar cuántos botones haya.
+  const btnNum = (n, seleccionado, onSelect, prohibido, tamaño) => (
     <button key={n} onClick={() => !prohibido && onSelect(n)} style={{
       ...segmentedOptionStyle(seleccionado===n),
-      width: 25, height: 25, padding: 0, fontSize: 12,
+      width: tamaño.size, height: tamaño.size, padding: 0, fontSize: tamaño.fontSize,
       display: "flex", alignItems: "center", justifyContent: "center",
       ...(prohibido ? {
         border: `1px solid ${colors.danger.border}`,
@@ -199,7 +219,11 @@ export function PanelPedir({ totalBases, nombresMano, nombresEq, esManoEq0, onCo
             </div>
           )}
           <div style={{ display:"flex", gap:3, flexWrap:"wrap", justifyContent:"center", marginBottom:3 }}>
-            {(kamikazeActivo?[0,totalBases]:Array.from({length:totalBases+1},(_,i)=>i)).map(n => btnNum(n, pedidoMano, setPedidoMano, false))}
+            {(() => {
+              const opsMano = kamikazeActivo ? [0,totalBases] : Array.from({length:totalBases+1},(_,i)=>i);
+              const tamaño = tamañoBoton(opsMano.length);
+              return opsMano.map(n => btnNum(n, pedidoMano, setPedidoMano, false, tamaño));
+            })()}
           </div>
           <button onClick={confirmarMano} disabled={pedidoMano===null} style={confirmBtnStyle(pedidoMano!==null, teamMano)}>
             ★ {nombreCapMano} CONFIRMA →
@@ -220,7 +244,7 @@ export function PanelPedir({ totalBases, nombresMano, nombresEq, esManoEq0, onCo
             ★ Confirma: {nombreCapPie}
           </div>
           <div style={{ display:"flex", gap:3, flexWrap:"wrap", justifyContent:"center", marginBottom:3 }}>
-            {opsPie.map(n => btnNum(n, pedidoPie, setPedidoPie, false))}
+            {opsPie.map(n => btnNum(n, pedidoPie, setPedidoPie, false, tamañoBoton(opsPie.length)))}
           </div>
           <button onClick={confirmarPie} disabled={pedidoPie===null} style={confirmBtnStyle(pedidoPie!==null, teamPie)}>
             ★ {nombreCapPie} CONFIRMA →

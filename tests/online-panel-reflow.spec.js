@@ -118,3 +118,87 @@ test("online: durante bidding, la página nunca queda con scroll horizontal medi
     for (const c of contexts) await c.close();
   }
 });
+
+// Follow-up al fix de arriba: el -2px de tolerancia no alcanzaba con
+// totalBases altos — PanelPedir.jsx dibujaba los botones de número a un
+// width/height/fontSize FIJO (25/25/12) sin importar cuántos hubiera, así
+// que con totalBases=7 (8 botones: 0..7) la grilla se envolvía a dos
+// filas dentro del panel angosto y empujaba el panel — y por lo tanto la
+// página — más alto de lo esperado, reproducido en Firefox/Edge (nunca en
+// Chromium, mismo patrón que el bug original). Fix: tamañoBoton() en
+// PanelPedir.jsx encoge el botón a partir de 6 opciones. Este test
+// confirma las dos puntas: con pocas opciones el tamaño no cambia (25px),
+// y con muchas SÍ encoge Y la grilla se mantiene en una sola fila (todos
+// los botones comparten la misma coordenada Y).
+test("online: los botones de número de PanelPedir encogen con muchas opciones y no envuelven a dos filas", async ({ browser }) => {
+  test.setTimeout(150_000);
+
+  async function botonesDeNumero(pages) {
+    // Solo la sesión del capitán a quien le toca pedir ve la grilla real
+    // (interactiva) — el resto ve el texto de solo-lectura EsperaPedido,
+    // sin botones. Reintenta porque el turno de "mano" puede tardar un
+    // instante en asentarse tras el reparto animado.
+    for (let intento = 0; intento < 30; intento++) {
+      for (const p of pages) {
+        const botones = p.getByRole("button", { name: /^\d+$/ });
+        if (await botones.count().catch(() => 0) > 0) return { page: p, botones };
+      }
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    throw new Error("ninguna sesión mostró la grilla de números a tiempo");
+  }
+
+  async function medirGrilla(pages) {
+    const { botones } = await botonesDeNumero(pages);
+    const n = await botones.count();
+    const cajas = [];
+    for (let i = 0; i < n; i++) cajas.push(await botones.nth(i).boundingBox());
+    const anchos = cajas.map((c) => Math.round(c.width));
+    const ys = cajas.map((c) => Math.round(c.y));
+    return { n, anchoBoton: anchos[0], mismoAncho: anchos.every((w) => w === anchos[0]), unaSolaFila: new Set(ys).size === 1 };
+  }
+
+  // Caso chico (totalBases=3 -> 4 botones, 0..3): tamaño de sobra, no
+  // debería encoger (tamañoBoton(4) = 25px) y obviamente una sola fila.
+  {
+    const nombres = ["P0", "P1", "P2", "P3"];
+    const contexts = await Promise.all(nombres.map(() => browser.newContext()));
+    const pages = await Promise.all(contexts.map((c) => c.newPage()));
+    try {
+      await crearYUnirseSalaOnline(pages, nombres, { nJug: 4, estructuraCustom: "3", sinAses: true });
+      for (const p of pages) await alternarListoEnPantalla(p);
+      await pasarSorteoAnimado(pages);
+      await expect(pages[0].getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
+
+      const { n, anchoBoton, mismoAncho, unaSolaFila } = await medirGrilla(pages);
+      expect(n, "4 botones (0..3)").toBe(4);
+      expect(mismoAncho, "todos los botones del mismo tamaño").toBe(true);
+      expect(anchoBoton, "con pocas opciones el tamaño no encoge (25px)").toBe(25);
+      expect(unaSolaFila, "una sola fila con pocas opciones").toBe(true);
+    } finally {
+      for (const c of contexts) await c.close();
+    }
+  }
+
+  // Caso reportado (totalBases=7 -> 8 botones, 0..7): tiene que encoger
+  // (tamañoBoton(8) = 18px) Y quedarse en una sola fila (ya no envuelve).
+  {
+    const nombres = ["P0", "P1", "P2", "P3"];
+    const contexts = await Promise.all(nombres.map(() => browser.newContext()));
+    const pages = await Promise.all(contexts.map((c) => c.newPage()));
+    try {
+      await crearYUnirseSalaOnline(pages, nombres, { nJug: 4, estructuraCustom: "7", sinAses: true });
+      for (const p of pages) await alternarListoEnPantalla(p);
+      await pasarSorteoAnimado(pages);
+      await expect(pages[0].getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
+
+      const { n, anchoBoton, mismoAncho, unaSolaFila } = await medirGrilla(pages);
+      expect(n, "8 botones (0..7)").toBe(8);
+      expect(mismoAncho, "todos los botones del mismo tamaño").toBe(true);
+      expect(anchoBoton, "con 8 opciones el tamaño encoge (18px)").toBe(18);
+      expect(unaSolaFila, "8 botones de 18px caben en una sola fila (ya no se envuelve)").toBe(true);
+    } finally {
+      for (const c of contexts) await c.close();
+    }
+  }
+});
