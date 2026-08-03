@@ -505,9 +505,23 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
     <div style={{position:"relative",width:"100%"}}>
       {svg}
       {fase==="bidding" && contenidoBidding && (
+        // Piece GG (investigado, no confirmado con certeza): un scrollbar
+        // nativo del SO aparece en Firefox/Edge (nunca reproducido en
+        // Chromium) durante bidding, incluso con de sobra alto libre —
+        // hipótesis: diferencias de sub-píxel en cómo cada motor redondea
+        // este % contra el contenedor relativo (que a su vez depende del
+        // escalado fluido del <svg> por su viewBox), no contenido real
+        // desbordando. Este <div> está `position:absolute`, así que aunque
+        // ya tiene su propio `overflow:auto` para el contenido de ADENTRO,
+        // un redondeo de un par de px de más en su propio tamaño calculado
+        // sí se filtra al scroll de la PÁGINA (los elementos absolutos
+        // cuentan para el overflow scrolleable del contenedor inicial). El
+        // -2px de calc() da margen de sobra para que ese redondeo nunca
+        // empuje la caja más allá de su límite real.
         <div style={{
           position:"absolute", left:"50%", top:"50%", transform:"translate(-50%,-50%)",
-          width:`${biddingWPct}%`, height:`${biddingHPct}%`,
+          width:`calc(${biddingWPct}% - 2px)`, height:`calc(${biddingHPct}% - 2px)`,
+          boxSizing:"border-box",
           display:"flex", alignItems:"flex-start", justifyContent:"center",
           overflow:"auto",
         }}>

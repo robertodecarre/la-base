@@ -44,6 +44,32 @@ export function duracionGesto(key) {
 
 export const GESTURE_KEYS = Object.keys(GESTURES);
 
+// Nombre legible por gesto — puramente una etiqueta de identificación
+// (para saber a qué fila corresponde cada uno en el customizador de
+// señas), NUNCA un significado ("beso" se llama "Beso", no lo que un
+// equipo decida que significa). Traducción literal de la key interna.
+export const GESTURE_LABELS = {
+  guino: "Guiño derecho",
+  guino_r: "Guiño izquierdo",
+  media_sonrisa: "Media sonrisa",
+  siete_oros: "Media sonrisa (espejada)",
+  beso: "Beso",
+  lengua: "Lengua",
+  abrir_boca: "Abrir la boca",
+  cejas: "Levantar cejas",
+  sonreir: "Sonreír",
+  oler_feo: "Oler feo",
+  mejilla: "Inflar cachete",
+  desprecio_r: "Desprecio",
+  pt: "Pt",
+  cerrar_ojos: "Cerrar los ojos",
+  wow: "Wow",
+  jaja: "Jaja",
+  miedo: "Miedo",
+  shhh: "Shhh",
+  enojo: "Enojo",
+};
+
 // ── Pelo ─────────────────────────────────────────
 const HAIR_COLORS = { castano: "#5C3A21", rubio: "#D9A63E", negro: "#1C1410" };
 export const HAIR_STYLES = ["pelado", "corto", "mohawk", "largo", "entradas"];

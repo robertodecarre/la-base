@@ -5,7 +5,6 @@ import { DisplayReloj } from "../components/DisplayReloj";
 import { Tablero } from "../components/Tablero";
 import { EstrellasPedido } from "../components/EstrellasPedido";
 import { AvionKamikaze } from "../components/AvionKamikaze";
-import { CartaSVG } from "../components/cards/CartaSVG";
 import { Btn } from "../components/Btn";
 import { BotonDar } from "../components/BotonDar";
 import { BotonSalir } from "../components/BotonSalir";
@@ -15,7 +14,7 @@ import {
 } from "../lib/game";
 import { mensajeDeError } from "../lib/erroresSala";
 import { useGestos } from "../hooks/useGestos";
-import { GESTOS_EDITABLES, senasEfectivas } from "../lib/senas";
+import { GESTOS_EDITABLES, senasEfectivas, SIN_SENA } from "../lib/senas";
 import { ReactionFace } from "../components/ReactionFace";
 import { colors, fonts, panelStyle } from "../theme";
 
@@ -119,26 +118,6 @@ function EsperaPedido({ totalBases, nombreCapitanTurno, colorTurno, bidMano, kam
   );
 }
 
-// Fila de cartas ya jugadas — played_cards es pública, así que mostrarla no
-// filtra nada. `seatDestacado` es opcional (quién ganó la base, o el
-// portador del As de Copas); sin ganador todavía (as de copas a mitad de
-// ronda, o menú de copas con la base recién completa pero sin resolver) se
-// puede pasar null y no se resalta a nadie.
-function FilaCartasJugadas({ cartas, seatDestacado }) {
-  return (
-    <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center"}}>
-      {cartas.map(({ pc, nombre, seat }) => (
-        <div key={pc.id} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-          <div style={{fontSize:9,color:seat===seatDestacado?"#f0d080":"rgba(201,168,76,0.5)",fontWeight:seat===seatDestacado?"bold":"normal"}}>{nombre}</div>
-          <svg viewBox="0 0 34 50" width={34} height={50}>
-            <CartaSVG carta={pc.card} w={34} h={50}/>
-          </svg>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // Overlay del Tablero (piece F, batch overnight post-5r) — antes el
 // historial de manos era siempre visible debajo de la mesa; ahora se abre
 // como panel flotante al tocar el ícono de libreta entre los capitanes
@@ -237,12 +216,12 @@ function SenasOverlay({ senas, onEnviar, onCerrar }) {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, overflowY: "auto" }}>
           {GESTOS_EDITABLES.map((key) => (
-            <button key={key} onClick={() => { onEnviar(key); onCerrar(); }} style={{
+            <button key={key} data-gesture-key={key} onClick={() => { onEnviar(key); onCerrar(); }} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 10,
               border: "1px solid rgba(140,160,240,0.25)", background: "rgba(255,255,255,0.03)", cursor: "pointer", textAlign: "left",
             }}>
               <ReactionFace gestureKey={key} size={34} />
-              <span style={{ fontSize: 12, color: colors.text.primary, fontFamily: fonts.body }}>{senas[key]}</span>
+              <span style={{ fontSize: 12, color: senas[key] ? colors.text.primary : "rgba(200,210,255,0.35)", fontStyle: senas[key] ? "normal" : "italic", fontFamily: fonts.body }}>{senas[key] || SIN_SENA}</span>
             </button>
           ))}
         </div>
@@ -978,18 +957,6 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     const esCarrier = mySeat === carrierSeat;
     const etapa = trickComplete ? "la próxima base" : "la ronda";
 
-    // La base detrás del As de Copas puede estar completa o no (a
-    // diferencia de oros_menu, que solo se entra con la base ya resuelta) —
-    // en ningún caso hay un ganador todavía: si trick_complete, resolve_trick
-    // recién corre dentro de resolve_copas_menu al elegir el sentido.
-    const cartasEstaBase = playedCards
-      .filter((pc) => pc.hand_number === gameState.hand_number && pc.trick_number === gameState.base_num)
-      .sort((a, b) => a.seq_in_trick - b.seq_in_trick)
-      .map((pc) => {
-        const seat = seatOfPlayerId(pc.player_id);
-        return { pc, seat, nombre: jugadorEnAsiento(seat)?.name ?? `Asiento ${seat}` };
-      });
-
     return (
       <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
@@ -1014,7 +981,6 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
         <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(192,57,43,0.35)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:420,display:"flex",flexDirection:"column",gap:8,alignItems:"center"}}>
           <div style={{fontSize:10,color:"rgba(192,57,43,0.6)",letterSpacing:3}}>AS DE COPAS</div>
-          <FilaCartasJugadas cartas={cartasEstaBase} seatDestacado={carrierSeat}/>
         </div>
 
         {errorCopas && (
@@ -1153,9 +1119,9 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     const nombresLocal = players.filter((p) => p.team === 0).map((p) => p.name);
     const nombresVisitante = players.filter((p) => p.team === 1).map((p) => p.name);
     const resultadoMano = localHizo
-      ? { texto: "GANÓ LOCAL", color: colors.team.local.accent, nombres: nombresLocal }
+      ? { texto: "Local ganó la mano", color: colors.team.local.accent, nombres: nombresLocal }
       : visitanteHizo
-      ? { texto: "GANÓ VISITANTE", color: colors.team.visitante.accent, nombres: nombresVisitante }
+      ? { texto: "Visitante ganó la mano", color: colors.team.visitante.accent, nombres: nombresVisitante }
       : { texto: "PERDIMOS LOS DOS", color: colors.negative, nombres: [] };
 
     return (
@@ -1218,7 +1184,14 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
             </Btn>
           );
         })()}
-        <BotonSalir onSalir={onSalir}/>
+        {/* Excepción puntual a la convención de piece PP ("BotonSalir
+            siempre en flujo normal, nunca flotante") — pedida solo para
+            esta pantalla de cierre de mano: clavado abajo de todo el
+            viewport en vez de quedar pegado bajo la habitación como en
+            los otros 8 puntos de montaje. No tocar los demás. */}
+        <div style={{ position: "fixed", bottom: 12, left: 12, zIndex: 40 }}>
+          <BotonSalir onSalir={onSalir}/>
+        </div>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
         {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
         {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}

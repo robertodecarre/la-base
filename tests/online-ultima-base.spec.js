@@ -88,14 +88,17 @@ test("online: la última base de la mano no muestra Llevar base, y sus cartas qu
     expect(cartasEnMesa, "las 4 cartas de la última base deberían seguir visibles en la mesa durante 'closing'").toBe(4);
 
     // Piece DD: el centro de la mesa también anuncia el resultado DE LA
-    // MANO (no solo de la última base) — exactamente uno de "GANÓ LOCAL"/
-    // "GANÓ VISITANTE"/"PERDIMOS LOS DOS" (mutuamente excluyentes por
-    // regla de juego, ver comentario en PantallaPartidaOnline.jsx), y el
-    // MISMO texto en las 4 sesiones — no se predice cuál de los tres
-    // resultó (depende de qué mano tocó al azar), solo que haya uno solo
-    // y sea consistente entre sesiones, mismo criterio que ya usa este
-    // archivo de tests para el ganador del sorteo.
-    const posibles = ["GANÓ LOCAL", "GANÓ VISITANTE", "PERDIMOS LOS DOS"];
+    // MANO (no solo de la última base) — exactamente uno de "Local ganó
+    // la mano"/"Visitante ganó la mano"/"PERDIMOS LOS DOS" (mutuamente
+    // excluyentes por regla de juego, ver comentario en
+    // PantallaPartidaOnline.jsx), y el MISMO texto en las 4 sesiones — no
+    // se predice cuál de los tres resultó (depende de qué mano tocó al
+    // azar), solo que haya uno solo y sea consistente entre sesiones,
+    // mismo criterio que ya usa este archivo de tests para el ganador del
+    // sorteo. Batch fix #3 (post-pieza-J): los dos textos por-equipo se
+    // reescribieron ("GANÓ LOCAL"/"GANÓ VISITANTE" -> "Local ganó la
+    // mano"/"Visitante ganó la mano"); "PERDIMOS LOS DOS" no cambió.
+    const posibles = ["Local ganó la mano", "Visitante ganó la mano", "PERDIMOS LOS DOS"];
     const resultadosVistos = await Promise.all(pages.map(async (p) => {
       for (const texto of posibles) {
         if (await p.getByText(texto, { exact: true }).isVisible().catch(() => false)) return texto;

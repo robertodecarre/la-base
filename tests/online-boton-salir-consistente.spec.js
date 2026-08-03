@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado } from "./helpers.js";
+import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado, jugarCartaDelTurnoActual } from "./helpers.js";
 
 // Piece MM (batch overnight post-EE) — "Salir de la sala" vivía como un
 // botón distinto en cada pantalla: BotonSalir (chico, rojo, con
@@ -66,6 +66,84 @@ test("online: 'Salir de la sala' vive en flujo normal (no flotante), chico y ali
     expect(svgRect, "la pantalla de bidding tiene que tener la mesa (svg) montada").toBeTruthy();
     expect(rectPartida.y, "el botón cae debajo del borde inferior de la mesa").toBeGreaterThanOrEqual(svgRect.y + svgRect.height - 1);
     expect(rectPartida.y - (svgRect.y + svgRect.height), "el botón queda pegado (sin separación grande) al borde inferior de la mesa").toBeLessThan(70);
+  } finally {
+    for (const c of contexts) await c.close();
+  }
+});
+
+// Batch fix #3 (post-pieza-J): excepción puntual a la convención de piece
+// PP de arriba — SOLO en la pantalla de cierre de mano ('closing'),
+// Roberto pidió que el botón quede clavado abajo de todo el viewport en
+// vez de seguir la regla general de "flujo normal, pegado a la
+// habitación". Los otros 8 puntos de montaje (cubiertos por el test de
+// arriba y el resto de la suite) no cambian — este test confirma que
+// SOLO 'closing' es la excepción.
+test("online: 'Salir de la sala' queda clavado abajo del viewport SOLO en la pantalla de cierre de mano", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const nombres = ["P0", "P1", "P2", "P3"];
+  const contexts = await Promise.all(nombres.map(() => browser.newContext()));
+  const pages = await Promise.all(contexts.map((c) => c.newPage()));
+
+  try {
+    await crearYUnirseSalaOnline(pages, nombres, { nJug: 4, estructuraCustom: "1", sinAses: true });
+    for (const p of pages) await alternarListoEnPantalla(p);
+    await pasarSorteoAnimado(pages);
+    await expect(pages[0].getByText(/Mano 1/)).toBeVisible({ timeout: 45000 });
+
+    // Bidea la única mano (1 carta, pie se auto-resuelve — piece D) y
+    // juega la única base para llegar a 'closing', mismo patrón que
+    // online-libreta.spec.js.
+    const panelConfirma = (page) => page.getByRole("button", { name: /CONFIRMA/ });
+    let manoPage = null;
+    for (let intento = 0; intento < 30 && !manoPage; intento++) {
+      for (const p of pages) {
+        if (await panelConfirma(p).isVisible().catch(() => false)) { manoPage = p; break; }
+      }
+      if (!manoPage) await new Promise((r) => setTimeout(r, 500));
+    }
+    expect(manoPage).toBeTruthy();
+    let confirmado = false;
+    for (let intento = 0; intento < 10 && !confirmado; intento++) {
+      const ok = await manoPage.getByRole("button", { name: /^\d+$/ }).first().click({ timeout: 5000 }).then(() => true).catch(() => false);
+      if (ok) {
+        const btn = panelConfirma(manoPage);
+        if (await btn.isEnabled({ timeout: 3000 }).catch(() => false)) await btn.click({ timeout: 5000 }).catch(() => {});
+      }
+      confirmado = !(await panelConfirma(manoPage).isVisible().catch(() => false));
+      if (!confirmado) await new Promise((r) => setTimeout(r, 500));
+    }
+    expect(confirmado).toBe(true);
+
+    let enClosing = false;
+    for (let i = 0; i < 40 && !enClosing; i++) {
+      for (const p of pages) await jugarCartaDelTurnoActual(p).catch(() => {});
+      for (const p of pages) {
+        if (await p.getByText(/terminada/).isVisible().catch(() => false)) { enClosing = true; break; }
+      }
+      if (!enClosing) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(enClosing, "la mano no llegó a 'closing' a tiempo").toBe(true);
+
+    const host = pages[0];
+    const boton = host.getByRole("button", { name: "Salir de la sala" });
+    await expect(boton).toBeVisible();
+
+    // Recorre los ancestros del botón buscando position:fixed en vez de
+    // adivinar cuál <div> puntual es "el" wrapper — `div:has(boton)`
+    // matchea de sobra (el wrapper fixed que agrega esta pantalla, el de
+    // alignSelf interno de BotonSalir, fondoStyle, #root...), así que
+    // apostar a un índice fijo (.first()/.last()) es frágil.
+    const tieneAncestroFixed = await boton.evaluate((el) => {
+      for (let n = el.parentElement; n; n = n.parentElement) {
+        if (getComputedStyle(n).position === "fixed") return true;
+      }
+      return false;
+    });
+    expect(tieneAncestroFixed, "algún ancestro está clavado con position:fixed en la pantalla de cierre").toBe(true);
+
+    const viewport = host.viewportSize();
+    const rect = await boton.boundingBox();
+    expect(viewport.height - (rect.y + rect.height), "pegado al borde inferior del viewport").toBeLessThan(40);
   } finally {
     for (const c of contexts) await c.close();
   }

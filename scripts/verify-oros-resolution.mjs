@@ -29,7 +29,18 @@
 // room) on the rare chance the engineered play didn't actually land the
 // winning trick on the Oros holder's team.
 import { createClient } from "@supabase/supabase-js";
-import { resolverBase, detectarTriggerOros } from "../src/engine/trick.js";
+// resolverBase/detectarTriggerOros used to live in src/engine/trick.js and
+// powered this script's independent JS-side cross-check of the server's
+// oros_menu trigger — removed from the engine when hotseat mode (the only
+// caller of full client-side trick resolution) was deleted in piece 5q,
+// well after this script was first written. Found stale while re-running
+// this script for batch fix #4 (mano_seat) below; the cross-check itself
+// is gone for good (there is no client-side trick engine left to compare
+// against, server-authoritative resolve_trick is the only source of
+// truth now) so it's removed here rather than resurrected — the server's
+// own `gs.phase === 'oros_menu'` plus the RPC-level assertions below are
+// still a real end-to-end check against the live project, just without
+// the extra belt-and-suspenders recomputation.
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
@@ -102,18 +113,6 @@ async function myHand(client, roomId, handNumber) {
   return data.cards;
 }
 
-async function playedCardsForTrick(client, roomId, handNumber, trickNumber) {
-  const { data, error } = await client
-    .from("played_cards")
-    .select("seq_in_trick, card, player_id")
-    .eq("room_id", roomId)
-    .eq("hand_number", handNumber)
-    .eq("trick_number", trickNumber)
-    .order("seq_in_trick", { ascending: true });
-  if (error) throw error;
-  return data;
-}
-
 async function playersForRoom(client, roomId) {
   const { data, error } = await client.from("players").select("id, seat, team").eq("room_id", roomId);
   if (error) throw error;
@@ -121,12 +120,20 @@ async function playersForRoom(client, roomId) {
 }
 
 // Fresh room, 4 players, hand 0 dealt, bidding resolved -> phase 'playing'.
+//
+// join_room only reserves a headcount since piece 5r (team selection
+// rework) — it no longer assigns seat/team, choose_team does that. Found
+// this script still calling join_room alone (pre-5r shape) while fixing
+// it to re-run for batch fix #4; alternates LOCAL/VISITANTE by join
+// index, same convention tests/helpers.js uses, so seat 0/2=team0,
+// 1/3=team1 exactly as choose_team_rpc.sql guarantees.
 async function setupRoom(sessions) {
   const room = await rpc(sessions[0], "create_room", { p_config: CONFIG });
 
   const players = [];
-  for (let seat = 0; seat < N_JUG; seat++) {
-    const p = await rpc(sessions[seat], "join_room", { p_code: room.code, p_name: `J${seat}` });
+  for (let i = 0; i < N_JUG; i++) {
+    await rpc(sessions[i], "join_room", { p_code: room.code, p_name: `J${i}` });
+    const p = await rpc(sessions[i], "choose_team", { p_room_id: room.id, p_team: i % 2 });
     players.push(p);
   }
 
@@ -137,11 +144,19 @@ async function setupRoom(sessions) {
   const captainMano = players.find((p) => p.team === teamMano && p.is_captain);
   const captainPie = players.find((p) => p.team === teamPie && p.is_captain);
   const bidMano = 0;
-  // submit_bid requires pie's bid to equal exactly total-1-mano or
-  // total+1-mano; total+1-mano (11) is out of the 0..total bound.
+  // With bidMano=0 and total=10, pie's only legal option is total-1-mano=9
+  // (total+1-mano=11 is out of the 0..total bound) — a single-option pie
+  // bid is auto-resolved by submit_bid itself in the SAME call as mano's
+  // (pie_forced_bid_auto_resolve, 20260706190000, added after this script
+  // was first written), landing phase straight on 'playing'. Found this
+  // while re-running the script for batch fix #4: the second submit_bid
+  // call below used to be load-bearing and no longer is — only fire it if
+  // mano's bid didn't already resolve the hand.
   const bidPie = CONFIG.estructura[gs.hand_number] - 1 - bidMano;
-  await rpc(sessions[captainMano.seat], "submit_bid", { p_room_id: room.id, p_value: bidMano, p_kamikaze: false });
-  gs = await rpc(sessions[captainPie.seat], "submit_bid", { p_room_id: room.id, p_value: bidPie, p_kamikaze: false });
+  gs = await rpc(sessions[captainMano.seat], "submit_bid", { p_room_id: room.id, p_value: bidMano, p_kamikaze: false });
+  if (gs.phase === "bidding") {
+    gs = await rpc(sessions[captainPie.seat], "submit_bid", { p_room_id: room.id, p_value: bidPie, p_kamikaze: false });
+  }
 
   return { room, players, gs };
 }
@@ -199,25 +214,6 @@ async function scenarioChooseTeammate(sessions) {
   assertEq(gs.pending_action.carrier_seat, orosSeat, "pending_action.carrier_seat");
   const winningTeam = gs.pending_action.team;
 
-  // Cross-check against the actual engine functions, not a re-derivation.
-  const trickCards = await playedCardsForTrick(sessions[0], room.id, gs0.hand_number, gs0.base_num);
-  const seatById = Object.fromEntries(players.map((p) => [p.id, p.seat]));
-  const ronda = trickCards.map((pc) => ({ carta: pc.card, jugadorIdx: seatById[pc.player_id], orden: pc.seq_in_trick }));
-  const jActuales = players
-    .slice()
-    .sort((a, b) => a.seat - b.seat)
-    .map((p) => ({ eq: p.team }));
-  const { ganIdx } = resolverBase(ronda);
-  const orosTrigger = detectarTriggerOros(ronda, jActuales, ganIdx, CONFIG.ases);
-  if (!orosTrigger) {
-    // The server already reported phase==='oros_menu' for this trick — if
-    // the independent JS recomputation disagrees, that's SQL/JS drift
-    // (the exact risk the SYNC RISK comments flag), not bad luck. Fail
-    // loudly instead of silently retrying past it.
-    throw new Error("server entered oros_menu but detectarTriggerOros disagrees — SQL/JS drift");
-  }
-  assertEq(winningTeam, jActuales[ganIdx].eq, "pending_action.team matches independently recomputed winner's team");
-
   // Negative paths.
   const impostorSeat = (orosSeat + 1) % N_JUG;
   await assertRpcFails(
@@ -238,6 +234,11 @@ async function scenarioChooseTeammate(sessions) {
   assertEq(after.phase, "playing", "phase after choosing a teammate");
   assertEq(after.pending_action, null, "pending_action cleared");
   assertEq(after.turn_seat, partnerSeat, "turn_seat set to the chosen teammate");
+  // Batch fix #4 (post-pieza-J): mano_seat now follows the Oros transfer
+  // too, not just turn_seat — this is what drives the "MANO" badge in
+  // MesaCircular (manoIdx=gameState.mano_seat), which used to stay stuck
+  // on the original dealt mano even after using the power.
+  assertEq(after.mano_seat, partnerSeat, "mano_seat also transferred to the chosen teammate");
 
   return true;
 }
@@ -249,23 +250,11 @@ async function scenarioChooseSelf(sessions) {
 
   console.log(`  orosSeat=${orosSeat} room=${room.code}`);
 
-  const trickCards = await playedCardsForTrick(sessions[0], room.id, gs0.hand_number, gs0.base_num);
-  const seatById = Object.fromEntries(players.map((p) => [p.id, p.seat]));
-  const ronda = trickCards.map((pc) => ({ carta: pc.card, jugadorIdx: seatById[pc.player_id], orden: pc.seq_in_trick }));
-  const jActuales = players
-    .slice()
-    .sort((a, b) => a.seat - b.seat)
-    .map((p) => ({ eq: p.team }));
-  const { ganIdx } = resolverBase(ronda);
-  const orosTrigger = detectarTriggerOros(ronda, jActuales, ganIdx, CONFIG.ases);
-  if (!orosTrigger) {
-    throw new Error("server entered oros_menu but detectarTriggerOros disagrees — SQL/JS drift");
-  }
-
   const after = await rpc(sessions[orosSeat], "resolve_oros_menu", { p_room_id: room.id, p_seat: orosSeat });
   assertEq(after.phase, "playing", "phase after choosing self");
   assertEq(after.pending_action, null, "pending_action cleared");
   assertEq(after.turn_seat, orosSeat, "turn_seat set to the carrier's own seat");
+  assertEq(after.mano_seat, orosSeat, "mano_seat also transferred to the carrier's own seat");
 
   return true;
 }

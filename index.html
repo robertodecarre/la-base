@@ -11,6 +11,14 @@
          ya tapa el body con su propio wrapper, esto es solo el fallback
          visible antes de que React monte o si alguna pantalla no lo hace. */
       body { background: radial-gradient(ellipse at 50% 20%, #24306e 0%, #0d1230 55%, #060814 100%); min-height: 100vh; }
+      /* Piece GG (investigado post-EE, retomado): esta app nunca necesita
+         scroll horizontal a propósito (todo es un único flujo centrado en
+         columna) — cortar overflow-x acá es una red de seguridad universal
+         y sin costo contra cualquier drift de sub-píxel entre motores
+         (Firefox/Edge mostraban un scrollbar nativo que Chromium nunca
+         reproducía), sin arriesgar esconder contenido vertical legítimo en
+         ninguna pantalla. */
+      html, body { overflow-x: hidden; }
     </style>
   </head>
   <body>

@@ -6,8 +6,8 @@ import { mensajeDeError } from "../lib/erroresSala";
 import { SorteoAnimado } from "../components/SorteoAnimado";
 import { BotonSalir } from "../components/BotonSalir";
 import { PantallaPartidaOnline } from "./PantallaPartidaOnline";
-import { ReactionFace, HAIR_STYLES, HAIR_COLOR_KEYS } from "../components/ReactionFace";
-import { DEFAULT_SENAS, GESTOS_EDITABLES, senasEfectivas } from "../lib/senas";
+import { ReactionFace, HAIR_STYLES, HAIR_COLOR_KEYS, GESTURE_LABELS } from "../components/ReactionFace";
+import { DEFAULT_SENAS, GESTOS_EDITABLES, senasEfectivas, SIN_SENA } from "../lib/senas";
 import {
   FONTS_URL, colors, fonts, bevel, panelStyle, badgeStyle, tituloStyle, codigoStyle,
   equipoLabelStyle, filaStyle, filaVaciaStyle, puntoStyle, nombreStyle,
@@ -246,15 +246,19 @@ function PersonalizarSenas({ roomId, team, senasGuardadas }) {
       <div style={{ fontSize: 10, color: "rgba(200,210,255,0.45)", fontStyle: "italic" }}>
         Solo antes de arrancar la partida. Se comparte con tu compañero — el último que guarda gana.
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 260, overflowY: "auto" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
         {GESTOS_EDITABLES.map((key) => (
-          <div key={key} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <input
-              value={borrador[key] ?? ""}
-              onChange={(e) => setBorrador((b) => ({ ...b, [key]: e.target.value }))}
-              placeholder={DEFAULT_SENAS[key]}
-              style={{ ...inputStyle(), textAlign: "left", fontSize: 12, padding: "6px 12px" }}
-            />
+          <div key={key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <ReactionFace gestureKey={key} size={40} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 10, color: "rgba(200,210,255,0.55)", fontFamily: fonts.body, fontWeight: 600 }}>{GESTURE_LABELS[key] ?? key}</div>
+              <input
+                value={borrador[key] ?? ""}
+                onChange={(e) => setBorrador((b) => ({ ...b, [key]: e.target.value }))}
+                placeholder={DEFAULT_SENAS[key] ?? SIN_SENA}
+                style={{ ...inputStyle(), textAlign: "left", fontSize: 12, padding: "6px 12px" }}
+              />
+            </div>
           </div>
         ))}
       </div>
