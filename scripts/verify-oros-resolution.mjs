@@ -239,6 +239,11 @@ async function scenarioChooseTeammate(sessions) {
   // MesaCircular (manoIdx=gameState.mano_seat), which used to stay stuck
   // on the original dealt mano even after using the power.
   assertEq(after.mano_seat, partnerSeat, "mano_seat also transferred to the chosen teammate");
+  // mano_seat/bid_mano_seat split (batch fix post-pieza-J): bid_mano_seat
+  // stays frozen at the hand's original bidding-time mano regardless of
+  // Oros — this is exactly what close_hand's kamikaze check and
+  // revancha_partida's rematch-dealer seed now read instead of mano_seat.
+  assertEq(after.bid_mano_seat, gs0.bid_mano_seat, "bid_mano_seat untouched by the Oros transfer");
 
   return true;
 }
@@ -255,6 +260,7 @@ async function scenarioChooseSelf(sessions) {
   assertEq(after.pending_action, null, "pending_action cleared");
   assertEq(after.turn_seat, orosSeat, "turn_seat set to the carrier's own seat");
   assertEq(after.mano_seat, orosSeat, "mano_seat also transferred to the carrier's own seat");
+  assertEq(after.bid_mano_seat, gs0.bid_mano_seat, "bid_mano_seat untouched by the Oros transfer");
 
   return true;
 }
