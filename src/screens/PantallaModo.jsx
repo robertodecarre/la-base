@@ -11,7 +11,7 @@ import {
 // (PantallaInicio.jsx y el resto del flujo hotseat). El paso intermedio
 // "Jugar online" (antes PantallaOnlineMenu.jsx) se fusionó acá mismo.
 // ══════════════════════════════════════════════
-export function PantallaModo({ onCrear, onUnirse }) {
+export function PantallaModo({ onCrear, onUnirse, onDevFake }) {
   useEffect(() => {
     const link = document.createElement("link");
     link.rel = "stylesheet";
@@ -34,6 +34,17 @@ export function PantallaModo({ onCrear, onUnirse }) {
 
         <button onClick={onCrear} style={ctaStyle()}>Crear sala</button>
         <button onClick={onUnirse} style={secondaryBtnStyle({ full: true })}>Unirse a sala</button>
+
+        {/* Feature #3 (batch post-mano_seat-split): acceso a mesas de 6/8
+            jugadores con datos sintéticos, sin coordinar sesiones reales
+            — import.meta.env.DEV es el flag estándar de Vite (true en
+            `npm run dev`, false en `npm run build`/producción), así que
+            este botón nunca llega al build que se despliega. */}
+        {import.meta.env.DEV && (
+          <button onClick={onDevFake} style={{ ...secondaryBtnStyle({ full: true }), opacity: 0.6, fontSize: 11 }}>
+            🛠 Partida de prueba (6/8 — solo dev)
+          </button>
+        )}
       </div>
     </div>
   );

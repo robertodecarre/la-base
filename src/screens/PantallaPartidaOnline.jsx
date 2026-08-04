@@ -10,12 +10,11 @@ import { BotonDar } from "../components/BotonDar";
 import { BotonSalir } from "../components/BotonSalir";
 import {
   enviarPedido, jugarCarta, siguienteBase, resolverCopas, resolverOros,
-  repartirMano, cerrarMano, reclamarTiempo, revanchaPartida,
+  repartirMano, cerrarMano, reclamarTiempo, reclamarTiempoDeportivo, revanchaPartida,
 } from "../lib/game";
 import { mensajeDeError } from "../lib/erroresSala";
-import { useGestos } from "../hooks/useGestos";
-import { GESTOS_EDITABLES, senasEfectivas, SIN_SENA } from "../lib/senas";
-import { ReactionFace } from "../components/ReactionFace";
+import { senasEfectivas } from "../lib/senas";
+import { SenasOverlay } from "../components/SenasUI";
 import { colors, fonts, panelStyle } from "../theme";
 
 // Resumen fusionado arriba de MesaCircular (piece 5n, ver direccion-integrada.html):
@@ -154,7 +153,7 @@ function TableroOverlay({ estructura, historial, manoActual, onCerrar }) {
 // este overlay se puede abrir en cualquier fase de la mano vía el ícono
 // de reloj en MesaCircular.jsx — deja consultar el tiempo restante de
 // ambos equipos sin tener que esperar a la próxima ronda de pedidos.
-function RelojOverlay({ tiempoLocal, tiempoVisitante, corriendo, agotadoLocal, agotadoVisitante, modoTiempo, onCerrar }) {
+function RelojOverlay({ tiempoLocal, tiempoVisitante, corriendo, agotadoLocal, agotadoVisitante, modoTiempo, graciaTeam, graciaSegundos, onCerrar }) {
   return (
     <div
       onClick={onCerrar}
@@ -176,55 +175,8 @@ function RelojOverlay({ tiempoLocal, tiempoVisitante, corriendo, agotadoLocal, a
           tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendo}
           agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante}
           modoLento={false} modoTiempo={modoTiempo} hayTiempo={true}
+          graciaTeam={graciaTeam} graciaSegundos={graciaSegundos}
         />
-      </div>
-    </div>
-  );
-}
-
-// Overlay de señas (pieza J) — mismo patrón que TableroOverlay/RelojOverlay
-// (backdrop clickeable, panelStyle), pero hace doble función: hoja de
-// referencia PRIVADA (nadie más ve que la abriste, ni tu propio
-// compañero — por eso vive puramente en estado local del cliente, sin
-// broadcast de "se abrió") Y disparador de gestos — cada fila es
-// clickeable y manda ESE gesto de una. Fusionar las dos cosas evita un
-// segundo panel separado solo para "elegir qué cara poner": la lista ya
-// tiene que existir para la referencia, y dado que solo el propio jugador
-// ve estas etiquetas, no hay ninguna fuga en dejar clickear desde acá
-// mismo. abrirla cuesta lo mismo que espiar a un rival (mientras está
-// abierta no estás mirando la mesa) — ver spec de pieza J.
-function SenasOverlay({ senas, onEnviar, onCerrar }) {
-  return (
-    <div
-      onClick={onCerrar}
-      style={{
-        position: "fixed", inset: 0, background: "rgba(6,8,20,0.72)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 50, padding: 16,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ ...panelStyle, width: "100%", maxWidth: 340, maxHeight: "80vh", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 13, letterSpacing: 2, color: colors.text.secondary }}>SEÑAS</div>
-          <button onClick={onCerrar} style={{ background: "none", border: "none", color: colors.text.secondary, fontSize: 16, cursor: "pointer", lineHeight: 1, padding: 4 }}>✕</button>
-        </div>
-        <div style={{ fontSize: 10, color: "rgba(200,210,255,0.4)", fontStyle: "italic" }}>
-          Tocá una para mandarla. Solo vos ves esta lista.
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, overflowY: "auto" }}>
-          {GESTOS_EDITABLES.map((key) => (
-            <button key={key} data-gesture-key={key} onClick={() => { onEnviar(key); onCerrar(); }} style={{
-              display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 10,
-              border: "1px solid rgba(140,160,240,0.25)", background: "rgba(255,255,255,0.03)", cursor: "pointer", textAlign: "left",
-            }}>
-              <ReactionFace gestureKey={key} size={34} />
-              <span style={{ fontSize: 12, color: senas[key] ? colors.text.primary : "rgba(200,210,255,0.35)", fontStyle: senas[key] ? "normal" : "italic", fontFamily: fonts.body }}>{senas[key] || SIN_SENA}</span>
-            </button>
-          ))}
-        </div>
       </div>
     </div>
   );
@@ -238,7 +190,7 @@ function SenasOverlay({ senas, onEnviar, onCerrar }) {
 // 'bidding' (5d), 'playing'/'resolving' (5e), 'copas_menu'/'oros_menu' (5f)
 // y ahora 'closing'/'finished' + el reloj real de 'bidding' (5g) — con esto
 // la pantalla cubre todas las fases del juego.
-export function PantallaPartidaOnline({ roomId, room, players, gameState, playedCards, handResults, mySeat, myTeam, isCaptain, fetchMyHand, recargarEstado, onSalir }) {
+export function PantallaPartidaOnline({ roomId, room, players, gameState, playedCards, handResults, mySeat, myTeam, isCaptain, fetchMyHand, recargarEstado, onSalir, gestosPorAsiento, enviarGesto }) {
   const [misCartas, setMisCartas] = useState(null);
   const [errorMano, setErrorMano] = useState(null);
   const [kamikazeLocal, setKamikazeLocal] = useState(false);
@@ -262,6 +214,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   const [errorRevancha, setErrorRevancha] = useState(null);
   const [ahora, setAhora] = useState(() => Date.now());
   const [reclamandoTiempo, setReclamandoTiempo] = useState(false);
+  const [reclamandoTiempoDeportivo, setReclamandoTiempoDeportivo] = useState(false);
   // Piece F: preferencia del jugador, no estado de la mano — a propósito
   // NO se resetea en el useEffect de "cambio de mano" de más abajo (a
   // diferencia de expandidos/cartasLevantadas/errores), así que si alguien
@@ -291,8 +244,12 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
   // Pieza J: capa de señas — broadcast en vivo, no atado a ninguna fase en
   // particular (los gestos se pueden mandar durante toda la partida, no
-  // solo mientras es el turno de nadie). Ver useGestos.js.
-  const { gestosPorAsiento, enviarGesto } = useGestos(roomId, mySeat);
+  // solo mientras es el turno de nadie). Feature #1 (batch post-mano_seat-
+  // split): gestosPorAsiento/enviarGesto ahora llegan como props — el
+  // hook useGestos.js se levanta una sola vez en PantallaOnlineSala.jsx
+  // (el padre común de esta pantalla y de SorteoAnimado), así el canal de
+  // broadcast sigue conectado sin cortes al pasar de sorteo a partida en
+  // vez de reconectarse de cero acá.
   const misSenas = senasEfectivas(room.senas_mapping?.[`team${myTeam}`]);
 
   // La propia mano nunca viaja por Realtime (ver useSala) — hay que pedirla
@@ -537,6 +494,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   const clockConfig = room.config?.clock;
   const hayReloj = !!clockConfig && typeof clockConfig === "object";
   const esMuerte = clockConfig?.modo === "muerte";
+  const esDeportivo = clockConfig?.modo === "deportivo";
   const clockState = gameState.clock;
   const restante = (team) => {
     if (!clockState) return 0;
@@ -571,6 +529,36 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     setReclamandoTiempo(true);
     reclamarTiempo(roomId).catch(() => {}).finally(() => setReclamandoTiempo(false));
   }, [ahora, hayReloj, esMuerte, gameState.phase, clockState?.running, clockState?.running_since, reclamandoTiempo]);
+
+  // Modo "deportivo": a diferencia de "muerte" (arriba), acá SÍ hay margen
+  // extra — 10s de gracia una vez que el presupuesto principal de un
+  // equipo llega a cero, antes de la derrota automática. Sin columna
+  // nueva en game_state: el deadline de gracia se deriva de las mismas
+  // teamTime/running_since que ya existen (running_since + teamTime[team]
+  // + 10s), igual que claim_deportivo_timeout lo calcula server-side —
+  // ver 20260804020000_deportivo_grace_timeout.sql. graciaRestante(team)
+  // da null si ese equipo ni siquiera agotó su presupuesto principal
+  // todavía (nada que mostrar), o los segundos de gracia que quedan
+  // (puede ser <=0, clamped a 0 en el render).
+  const graciaRestante = (team) => {
+    if (!clockState || clockState.running !== team || !clockState.running_since) return null;
+    const transcurridoTotal = Math.floor((ahora - new Date(clockState.running_since).getTime()) / 1000);
+    const presupuesto = clockState.teamTime?.[team] ?? 0;
+    if (transcurridoTotal < presupuesto) return null; // presupuesto principal todavía no se agotó
+    return 10 - (transcurridoTotal - presupuesto);
+  };
+  const graciaTeam = hayReloj && esDeportivo && clockState?.running != null && graciaRestante(clockState.running) !== null
+    ? clockState.running
+    : null;
+  const graciaSegundos = graciaTeam !== null ? graciaRestante(graciaTeam) : null;
+
+  useEffect(() => {
+    if (!hayReloj || !esDeportivo || gameState.phase !== "bidding") return;
+    if (graciaTeam === null || reclamandoTiempoDeportivo) return;
+    if (graciaSegundos > 0) return;
+    setReclamandoTiempoDeportivo(true);
+    reclamarTiempoDeportivo(roomId).catch(() => {}).finally(() => setReclamandoTiempoDeportivo(false));
+  }, [ahora, hayReloj, esDeportivo, gameState.phase, graciaTeam, graciaSegundos, reclamandoTiempoDeportivo]);
 
   const teamMano = gameState.mano_seat % 2;
   const teamPie = 1 - teamMano;
@@ -900,7 +888,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
-        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
+        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} graciaTeam={graciaTeam} graciaSegundos={graciaSegundos} onCerrar={()=>setRelojAbierto(false)}/>}
         {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
@@ -943,7 +931,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
-        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
+        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} graciaTeam={graciaTeam} graciaSegundos={graciaSegundos} onCerrar={()=>setRelojAbierto(false)}/>}
         {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
@@ -1005,7 +993,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
-        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
+        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} graciaTeam={graciaTeam} graciaSegundos={graciaSegundos} onCerrar={()=>setRelojAbierto(false)}/>}
         {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
@@ -1074,7 +1062,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
-        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
+        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} graciaTeam={graciaTeam} graciaSegundos={graciaSegundos} onCerrar={()=>setRelojAbierto(false)}/>}
         {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
@@ -1193,7 +1181,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           <BotonSalir onSalir={onSalir}/>
         </div>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
-        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
+        {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} graciaTeam={graciaTeam} graciaSegundos={graciaSegundos} onCerrar={()=>setRelojAbierto(false)}/>}
         {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
@@ -1331,6 +1319,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante}
         corriendo={corriendoTeam}
         agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante}
+        graciaTeam={graciaTeam} graciaSegundos={graciaSegundos}
         modoLento={false} modoTiempo={clockConfig?.modo} hayTiempo={hayReloj}
       />
 
@@ -1355,7 +1344,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
       <BotonSalir onSalir={onSalir}/>
       {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
-      {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} onCerrar={()=>setRelojAbierto(false)}/>}
+      {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} graciaTeam={graciaTeam} graciaSegundos={graciaSegundos} onCerrar={()=>setRelojAbierto(false)}/>}
       {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
     </div>
   );

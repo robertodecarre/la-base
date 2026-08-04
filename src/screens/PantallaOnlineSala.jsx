@@ -8,6 +8,7 @@ import { BotonSalir } from "../components/BotonSalir";
 import { PantallaPartidaOnline } from "./PantallaPartidaOnline";
 import { ReactionFace, HAIR_STYLES, HAIR_COLOR_KEYS, GESTURE_LABELS } from "../components/ReactionFace";
 import { DEFAULT_SENAS, GESTOS_EDITABLES, senasEfectivas, SIN_SENA } from "../lib/senas";
+import { useGestos } from "../hooks/useGestos";
 import {
   FONTS_URL, colors, fonts, bevel, panelStyle, badgeStyle, tituloStyle, codigoStyle,
   equipoLabelStyle, filaStyle, filaVaciaStyle, puntoStyle, nombreStyle,
@@ -319,6 +320,14 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
     return () => document.head.removeChild(link);
   }, []);
 
+  // Feature #1 (batch post-mano_seat-split): el canal de señas se levanta
+  // ACÁ (el padre común de SorteoAnimado y PantallaPartidaOnline), no
+  // dentro de cada pantalla — así sigue conectado sin cortes/reconexión al
+  // pasar de sorteo a partida, y las señas quedan usables durante el
+  // sorteo "igual que durante la partida, sin cableado aparte" (pedido de
+  // Roberto), en vez de que cada pantalla abra su propio canal.
+  const { gestosPorAsiento, enviarGesto } = useGestos(roomId, mySeat);
+
   const yo = players.find((p) => p.user_id === userId) ?? null;
   const misListo = yo?.ready ?? false;
 
@@ -445,6 +454,8 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
         fetchMyHand={fetchMyHand}
         recargarEstado={recargarEstado}
         onSalir={onSalir}
+        gestosPorAsiento={gestosPorAsiento}
+        enviarGesto={enviarGesto}
       />
     );
   }
@@ -459,6 +470,8 @@ export function PantallaOnlineSala({ roomId, onSalir }) {
       <SorteoAnimado
         roomId={roomId} nJug={nJug} players={players} mySeat={mySeat}
         sorteo={room.sorteo_inicial} onCumplido={() => setSorteoCumplido(true)}
+        senasMapping={room.senas_mapping?.[`team${myTeam}`]}
+        gestosPorAsiento={gestosPorAsiento} enviarGesto={enviarGesto}
       />
     );
   }

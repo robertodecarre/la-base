@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { posEnCirculo } from "../engine/structures";
+import { posEnCirculo, rotacionHaciaCentro } from "../engine/structures";
 import { CartaSVG } from "./cards/CartaSVG";
+import { ReactionFace } from "./ReactionFace";
+import { SenasIcon, SenasOverlay } from "./SenasUI";
+import { MYSEAT_SCALE } from "./MesaCircular";
 import { marcarFlipSorteo, marcarArrancamosSorteo } from "../lib/game";
+import { senasEfectivas } from "../lib/senas";
 import { colors, fonts, ctaStyle } from "../theme";
 
 // ══════════════════════════════════════════════
@@ -28,13 +32,13 @@ import { colors, fonts, ctaStyle } from "../theme";
 // de asiento y no una regla geométrica de "lado de la mesa"), stagger
 // 90ms entre asientos, flip 0.5s cubic-bezier(.34,1.56,.64,1).
 const CW = 40, CH = 58;
-// Piece X (batch overnight post-5r): mismo factor 1.5x que MYSEAT_SCALE en
-// MesaCircular.jsx — el asiento propio ya se agranda así en la mesa real,
-// esto lo replica acá para que se reconozca por tamaño antes de leer el
-// nombre. No se reusa el push-out de posición (PUSH_OWN) de MesaCircular:
-// ahí compensa el mayor ancho de mano+cartas jugadas, acá solo hay una
-// carta por asiento y el espaciado del círculo de sorteo ya deja margen.
-const MYSEAT_SCALE = 1.5;
+// Feature #1 (batch post-mano_seat-split): MYSEAT_SCALE ahora se importa
+// de MesaCircular.jsx en vez de mantener una copia hardcodeada acá — era
+// el ejemplo concreto que Roberto señaló de "constantes de escala
+// duplicadas a mano" entre esta pantalla y la mesa real. No se reusa el
+// push-out de posición (PUSH_OWN) de MesaCircular: ahí compensa el mayor
+// ancho de mano+cartas jugadas, acá solo hay una carta por asiento y el
+// espaciado del círculo de sorteo ya deja margen.
 const STAGGER_MS = 90;
 const VIAJE_MS = 620;
 const GRACIA_TARDIA_MS = 300; // sesión que reconecta con todo ya confirmado — sin esto, onCumplido() dispara en el mismo tick del mount y la pantalla de sorteo nunca llega a pintarse
@@ -106,10 +110,19 @@ function CartaAsientoSorteo({ pos, carta, flipped, clickable, onClick, w, h }) {
   );
 }
 
-export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplido }) {
+export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplido, senasMapping, gestosPorAsiento, enviarGesto }) {
   const SIZE = 500, CX = 250, CY = 250;
   const RX = nJug === 8 ? 200 : 190;
   const RY = nJug === 8 ? 180 : 170;
+
+  // Feature #1 (batch post-mano_seat-split): señas usables durante el
+  // sorteo igual que durante la partida — gestosPorAsiento/enviarGesto
+  // llegan del MISMO canal de broadcast que PantallaPartidaOnline usa
+  // (levantado en PantallaOnlineSala.jsx, el padre común), sin cableado
+  // propio acá. senasAbierto es puramente local (nunca se ve que la abrís,
+  // mismo criterio de privacidad que en la mesa real).
+  const [senasAbierto, setSenasAbierto] = useState(false);
+  const misSenas = senasEfectivas(senasMapping);
 
   const cartaPorSeat = {};
   for (const { seat, carta } of sorteo.cartas) cartaPorSeat[seat] = carta;
@@ -250,7 +263,15 @@ export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplid
       <div style={{ fontFamily: fonts.display, fontWeight: 700, fontStyle: "italic", fontSize: 11, letterSpacing: 2, color: "rgba(170,182,242,0.55)", marginTop: -8 }}>¿QUIÉN REPARTE PRIMERO?</div>
 
       <svg viewBox={`0 0 ${SIZE} ${SIZE}`} style={{ width: "100%", maxWidth: 500, overflow: "visible" }}>
-        <defs><style>{KEYFRAMES}</style></defs>
+        <defs>
+          <style>{KEYFRAMES}</style>
+          {/* Mismo filtro que MesaCircular.jsx — SenasIcon (SenasUI.jsx) lo
+              referencia como "url(#glow)" cuando está abierto, y este es
+              un <svg> distinto (no hereda los <defs> de la mesa real). */}
+          <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
 
         <ellipse cx={CX} cy={CY} rx={RX + 55} ry={RY + 50} fill="rgba(20,26,64,0.55)" stroke="#4a5aa8" strokeWidth={2} />
 
@@ -278,6 +299,18 @@ export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplid
               <text x={pos.x} y={pos.y - boxH / 2 - 10} textAnchor="middle" fontFamily={fonts.body} fontWeight={600} fontSize={11 * escala} fill={colorEquipo(seat)}>
                 {nombreJugador(seat)}
               </text>
+
+              {/* Feature #1 (batch post-mano_seat-split): misma cara de
+                  reacción/señas que la mesa real, DETRÁS de la carta
+                  (dibujada antes en el orden del DOM) y rotada hacia el
+                  centro con la MISMA fórmula que MesaCircular.jsx usa
+                  (rotacionHaciaCentro — el sorteo comparte el seat layout
+                  real, así que las mismas posiciones/ángulos aplican tal
+                  cual). Jugadores sin apariencia guardada todavía (no
+                  pasaron por el customizador) caen en los defaults de
+                  ReactionFace. */}
+              <ReactionFace gestureKey={gestosPorAsiento?.[seat] || "neutral"} appearance={players.find((p) => p.seat === seat)?.appearance}
+                size={50 * escala} x={pos.x - 25 * escala} y={pos.y - 25 * escala} rotate={rotacionHaciaCentro(seat, nJug)}/>
 
               {/* carta viajera: dos <g> separados a propósito (ver
                   comentario en la referencia) — el exterior fija la
@@ -323,7 +356,15 @@ export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplid
             {ganador?.name ?? "—"}
           </text>
         </g>
+
+        {enviarGesto && (
+          <SenasIcon x={SIZE - 30} y={30} abierta={senasAbierto} onToggle={() => setSenasAbierto((v) => !v)}/>
+        )}
       </svg>
+
+      {senasAbierto && (
+        <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={() => setSenasAbierto(false)}/>
+      )}
 
       {todosFlipeados && (
         <div style={{ width: "100%", maxWidth: 260 }}>

@@ -164,3 +164,19 @@ export async function reclamarTiempo(roomId) {
   if (error) throw error;
   return data; // fila de game_state
 }
+
+// Equivalente a reclamarTiempo pero para modo "deportivo" — ahí SÍ hay
+// consecuencia server-side (a diferencia del comentario de arriba, que
+// describía el estado antes de este batch): el equipo que agota su
+// presupuesto principal tiene 10s de gracia extra (derivados en el
+// servidor de teamTime+running_since, sin columna nueva) antes de perder
+// la partida igual que en "muerte". Mismo modelo de "claim": el servidor
+// vuelve a chequear el deadline real al momento de la llamada.
+export async function reclamarTiempoDeportivo(roomId) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("claim_deportivo_timeout", {
+    p_room_id: roomId,
+  });
+  if (error) throw error;
+  return data; // fila de game_state
+}

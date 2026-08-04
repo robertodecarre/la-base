@@ -102,10 +102,14 @@ function pieBidFor(total, bidMano) {
 async function setupRoom(sessions, config) {
   const room = await rpc(sessions[0], "create_room", { p_config: config });
 
+  // join_room only reserves a headcount since piece 5r (team selection
+  // rework) — it no longer assigns seat/team, choose_team does that.
+  // Found this script still calling join_room alone (pre-5r shape) while
+  // repairing it for the deportivo-clock batch.
   const players = [];
   for (let seat = 0; seat < N_JUG; seat++) {
-    const p = await rpc(sessions[seat], "join_room", { p_code: room.code, p_name: `J${seat}` });
-    players.push(p);
+    await rpc(sessions[seat], "join_room", { p_code: room.code, p_name: `J${seat}` });
+    players.push(await rpc(sessions[seat], "choose_team", { p_room_id: room.id, p_team: seat % 2 }));
   }
 
   const gs = await rpc(sessions[0], "deal_hand", { p_room_id: room.id });
@@ -160,9 +164,13 @@ async function scenarioB(sessions) {
   assertEq(gsAfterMano.clock.running, null, "pie's window never starts (total_bases=1 forces a single option)");
   assertEq(gsAfterMano.clock.running_since, null, "running_since stays null too");
 
-  const bidPie = pieBidFor(1, 0);
-  const gsAfterPie = await rpc(sessions[captainPie.seat], "submit_bid", { p_room_id: room.id, p_value: bidPie, p_kamikaze: false });
-  assertEq(gsAfterPie.clock.running, null, "still null after pie's forced bid (nothing was ever running to stop)");
+  // total_bases=1 forces pie's ONLY legal option, so mano's own submit_bid
+  // call already auto-resolved both bids in one shot (pie_forced_bid_auto_
+  // resolve, 20260706190000) — found while repairing this script; the
+  // second call below would now fail with not_bidding_phase.
+  assertEq(gsAfterMano.phase, "playing", "mano's submit_bid auto-resolved pie's forced bid");
+  const gsAfterPie = gsAfterMano;
+  assertEq(gsAfterPie.clock.running, null, "still null after the forced bid (nothing was ever running to stop)");
   assertEq(gsAfterPie.clock.teamTime[teamPie], gsAfterMano.clock.teamTime[teamPie], "pie's teamTime untouched (no window ever ran for them)");
 
   console.log("  scenario B passed");

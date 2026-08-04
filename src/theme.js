@@ -57,6 +57,16 @@ export const colors = {
     color: "#d4ff00",
     glow: "rgba(212,255,0,0.55)",
   },
+  // Gracia (deportivo, batch post-mano_seat-split): los 10s extra una vez
+  // que el reloj principal de un equipo llega a cero — a propósito un
+  // matiz que no existe en ningún otro lado de la paleta (ni el lima de
+  // `turn`, ni el rojo de `negative`, ni verde/azul/naranja de equipo),
+  // para que se lea como una alarma DISTINTA del reloj normal, no una
+  // sombra más oscura del mismo.
+  grace: {
+    color: "#ff2ec4",
+    glow: "rgba(255,46,196,0.6)",
+  },
   negative: "#ff6a6a",
   // Acento "positivo/continuar" para Btn verde — un verde esmeralda, a
   // propósito bien distinto del lima neón de `turn` y del azul/naranja de

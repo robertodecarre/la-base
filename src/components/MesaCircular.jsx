@@ -1,6 +1,7 @@
-import { posEnCirculo } from "../engine/structures";
+import { posEnCirculo, rotacionHaciaCentro } from "../engine/structures";
 import { CartaSVG } from "./cards/CartaSVG";
 import { ReactionFace } from "./ReactionFace";
+import { SenasIcon } from "./SenasUI";
 import { colors, fonts } from "../theme";
 
 // ══════════════════════════════════════════════
@@ -26,7 +27,16 @@ function PuntosBasesSVG({ ganadas, total, cx, y, color }) {
   );
 }
 
-function CartasManoSVG({ mano, cx, cy, seleccionable, onTirar, expandido, onToggleExpandir, cartaLevantada, onLevantarCarta, bocaAbajo, cw, ch }) {
+// rotDeg (feature de rotación, hasta ahora inexistente en este componente
+// — ver rotacionHaciaCentro en engine/structures.js) gira cada carta hacia
+// el centro de la mesa, como una mano sostenida en ángulo. Se aplica
+// directo en el `transform` del <g> QUE YA EXISTE por carta (compuesto
+// junto al translate existente, `rotate(...) translate(x,y)`) en vez de
+// envolver todo en un <g> nuevo — un wrapper nuevo rompería el conteo de
+// "hijos directos = cartas" que varios tests y tests/helpers.js's
+// jugarCartaDelTurnoActual asumen (ver el comentario largo sobre esto
+// mismo en ReactionFace.jsx, mismo motivo).
+function CartasManoSVG({ mano, cx, cy, seleccionable, onTirar, expandido, onToggleExpandir, cartaLevantada, onLevantarCarta, bocaAbajo, cw, ch, rotDeg=0 }) {
   if (!mano.length) return null;
   // Modo expandido: gap fijo para ver bien las cartas
   // Modo contraído: gap mínimo
@@ -70,7 +80,8 @@ function CartasManoSVG({ mano, cx, cy, seleccionable, onTirar, expandido, onTogg
         };
 
         return (
-          <g key={carta.uid} style={{cursor:seleccionable?"pointer":"default"}} onClick={handleClick}>
+          <g key={carta.uid} style={{cursor:seleccionable?"pointer":"default"}} onClick={handleClick}
+             transform={rotDeg?`rotate(${rotDeg},${cx},${cy})`:undefined}>
             {seleccionable && (
               <rect x={x-2} y={y-2} width={cw+4} height={ch+4} rx={4}
                 fill={esLevantada?"rgba(255,130,80,0.22)":"rgba(255,130,80,0.08)"}
@@ -139,30 +150,6 @@ function ClockIcon({ x, y, abierta, onToggle }) {
         filter={abierta ? "url(#glow)" : undefined}/>
       <line x1={0} y1={0} x2={0} y2={-r * 0.55} stroke={abierta ? activo : "rgba(200,210,255,0.6)"} strokeWidth={1.4} strokeLinecap="round"/>
       <line x1={0} y1={0} x2={r * 0.4} y2={r * 0.15} stroke={abierta ? activo : "rgba(200,210,255,0.6)"} strokeWidth={1.4} strokeLinecap="round"/>
-    </g>
-  );
-}
-
-// Ícono de "señas" (pieza J) — mismo patrón click-to-expand que
-// LibretaIcon/ClockIcon, tercero en la fila entre los capitanes. Abre
-// SenasOverlay (PantallaPartidaOnline.jsx): a la vez hoja de referencia
-// privada (qué significa cada gesto para MI equipo) y disparador ("tocá
-// una para mandarla"). Cara sonriente dibujada a mano, mismo lenguaje de
-// líneas simples que el resto de estos íconos SVG.
-function SenasIcon({ x, y, abierta, onToggle }) {
-  const r = 12;
-  const activo = colors.cta.border, inactivo = colors.panel.border;
-  return (
-    <g transform={`translate(${x},${y})`} style={{ cursor: "pointer" }}
-       role="button" aria-label={abierta ? "Cerrar señas" : "Ver señas"}
-       onClick={(e) => { e.stopPropagation(); onToggle(); }}>
-      <circle cx={0} cy={0} r={r}
-        fill={abierta ? "rgba(255,130,80,0.18)" : "rgba(10,14,38,0.85)"}
-        stroke={abierta ? activo : inactivo} strokeWidth={abierta ? 1.6 : 1.2}
-        filter={abierta ? "url(#glow)" : undefined}/>
-      <circle cx={-4} cy={-2} r={1.4} fill={abierta ? activo : "rgba(200,210,255,0.6)"}/>
-      <circle cx={4} cy={-2} r={1.4} fill={abierta ? activo : "rgba(200,210,255,0.6)"}/>
-      <path d="M-5,3 Q0,7 5,3" stroke={abierta ? activo : "rgba(200,210,255,0.6)"} strokeWidth={1.4} fill="none" strokeLinecap="round"/>
     </g>
   );
 }
@@ -238,7 +225,11 @@ const PUSH_OWN = 1.22;
 // en vez de apilar un 50% adicional sobre él.
 const CARTA_MESA = { w: 37, h: 55 };
 const CARTA_MANO = { w: 31, h: 44 };
-const MYSEAT_SCALE = 1.5;
+// Exportado (feature #1, batch post-mano_seat-split) — SorteoAnimado.jsx
+// lo usa para el mismo factor en vez de mantener su propia copia
+// hardcodeada, que era exactamente el bug reportado ("MYSEAT_SCALE
+// copy-pasteado a mano").
+export const MYSEAT_SCALE = 1.5;
 
 // Piece Q (batch overnight post-5r): keyframe del viaje de reparto,
 // calcado de direccion-reparto-mano-animado.html (0.36s, pico de escala
@@ -397,7 +388,27 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
         const equipo = idx%2===0 ? "local" : "visitante";
         const t = colors.team[equipo];
         const escala = esMiAsiento ? MYSEAT_SCALE : 1;
-        const bw=boxW*escala, bh=boxH*escala, bx=pos.x-bw/2, by=pos.y-bh/2;
+        // Feature de rotación: el abanico de cartas girado hacia el centro
+        // ocupa un rectángulo delimitador más ANCHO en 45°/135°/225°/315°
+        // que en cualquier otro ángulo (una tira ancha y baja, al girarla
+        // en diagonal, pasa a ocupar espacio real en las dos dimensiones a
+        // la vez) — confirmado visualmente con capturas a 6/8 jugadores
+        // (PantallaDevFake), no solo calculado. `diagBoost` crece la caja
+        // del asiento (nunca las cartas en sí, a pedido) hasta un 32% más
+        // en la diagonal exacta, interpolando a 0 en los ángulos rectos
+        // (donde la caja ya alcanza sin agrandar nada).
+        const rotDeg = rotacionHaciaCentro(idx, nJug);
+        const diagBoost = 1 + 0.32 * Math.abs(Math.sin((rotDeg * Math.PI) / 90));
+        const bw=boxW*escala*diagBoost, bh=boxH*escala*diagBoost, bx=pos.x-bw/2, by=pos.y-bh/2;
+        // El contenido (nombre/estado/cara/cartas) sigue anclado a la caja
+        // SIN el diagBoost — solo el fondo (bw/bh/bx/by de arriba) crece.
+        // Si el contenido usara `by` (que sí crece con diagBoost), cada
+        // vez que la caja crece el ancla de las cartas se correría hacia
+        // arriba junto con el borde superior, en vez de quedarse fija con
+        // más margen alrededor — exactamente lo que hacía que agrandar la
+        // caja no evitara el desborde la primera vez que se probó (ver
+        // PantallaDevFake, capturas a 8 jugadores).
+        const byContent = pos.y - (boxH*escala)/2;
         const pedido=pedidos?.[idx%2===0?0:1];
         // Dos señales distintas y no intercambiables: el borde neón marca
         // de QUIÉN es el turno (universal, no depende del equipo); el
@@ -414,14 +425,14 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
                 fill={`url(#${equipo==="local"?"localG":"visitanteG"})`}
                 stroke={borderColor} strokeWidth={borderWidth}/>
             </g>
-            <text x={pos.x} y={by+14*escala} textAnchor="middle" fill={colors.text.primary} fontSize={12*escala} fontFamily={fonts.display} fontWeight={800} fontStyle="italic">
+            <text x={pos.x} y={byContent+14*escala} textAnchor="middle" fill={colors.text.primary} fontSize={12*escala} fontFamily={fonts.display} fontWeight={800} fontStyle="italic">
               {j.nombre}{(idx===capLocal||idx===capVisitante)?" ★CAP":""}
             </text>
-            <text x={pos.x} y={by+25*escala} textAnchor="middle" fill={esTurno?colors.turn.color:"rgba(220,230,255,0.65)"} fontSize={7.5*escala} letterSpacing={1} fontFamily={esTurno?fonts.display:fonts.body} fontWeight={esTurno?800:600} fontStyle={esTurno?"italic":"normal"}>
+            <text x={pos.x} y={byContent+25*escala} textAnchor="middle" fill={esTurno?colors.turn.color:"rgba(220,230,255,0.65)"} fontSize={7.5*escala} letterSpacing={1} fontFamily={esTurno?fonts.display:fonts.body} fontWeight={esTurno?800:600} fontStyle={esTurno?"italic":"normal"}>
               {[esPie&&"PIE",esMano&&"MANO",esTurno&&"▶ SU TURNO",esMiAsiento&&"VOS"].filter(Boolean).join(" · ")}
             </text>
             {pedido!=null&&(
-              <text x={pos.x} y={by+35*escala} textAnchor="middle" fill="rgba(220,230,255,0.6)" fontSize={8*escala} fontFamily={fonts.body}>pide: {pedido}</text>
+              <text x={pos.x} y={byContent+35*escala} textAnchor="middle" fill="rgba(220,230,255,0.6)" fontSize={8*escala} fontFamily={fonts.body}>pide: {pedido}</text>
             )}
             {/* Pieza J: cara de reacción/señas, DETRÁS de las cartas de la
                 mano (mismo <g> del asiento, dibujada antes en el orden del
@@ -433,8 +444,8 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
                 más acá — ver el comentario largo en ReactionFace.jsx sobre
                 por qué eso rompería el conteo de cartas de varios tests. */}
             <ReactionFace gestureKey={j.gestureKey || "neutral"} appearance={j.appearance} size={60*escala}
-              x={pos.x - 30*escala} y={by + 40*escala}/>
-            <CartasManoSVG mano={j.mano} cx={pos.x} cy={by+59*escala} cw={cw} ch={ch}
+              x={pos.x - 30*escala} y={byContent + 40*escala} rotate={rotDeg}/>
+            <CartasManoSVG mano={j.mano} cx={pos.x} cy={byContent+59*escala} cw={cw} ch={ch} rotDeg={rotDeg}
               seleccionable={puedeElegir} onTirar={(ci)=>onTirar(idx,ci)}
               expandido={expandidos?.[idx]||false}
               onToggleExpandir={()=>onToggleExpandir(idx)}

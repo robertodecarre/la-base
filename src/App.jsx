@@ -3,6 +3,7 @@ import { PantallaModo } from "./screens/PantallaModo";
 import { PantallaOnlineCrear } from "./screens/PantallaOnlineCrear";
 import { PantallaOnlineUnirse } from "./screens/PantallaOnlineUnirse";
 import { PantallaOnlineSala } from "./screens/PantallaOnlineSala";
+import { PantallaDevFake } from "./screens/PantallaDevFake";
 
 const ROOM_ID_KEY = "laBaseOnlineRoomId";
 
@@ -42,7 +43,10 @@ export default function App() {
   return (
     <>
       {pantalla==="modo"&&(
-        <PantallaModo onCrear={()=>setPantalla("online-crear")} onUnirse={()=>setPantalla("online-unirse")}/>
+        <PantallaModo onCrear={()=>setPantalla("online-crear")} onUnirse={()=>setPantalla("online-unirse")} onDevFake={()=>setPantalla("dev-fake")}/>
+      )}
+      {pantalla==="dev-fake"&&(
+        <PantallaDevFake onSalir={()=>setPantalla("modo")}/>
       )}
       {pantalla==="online-crear"&&(
         <PantallaOnlineCrear onCreada={(room)=>irAOnlineSala(room.id)} onVolver={()=>setPantalla("modo")}/>

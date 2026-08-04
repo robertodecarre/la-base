@@ -155,13 +155,20 @@ function Brow({ side, browRot, browLift }) {
 // tests/online-reparto-animado.spec.js, helpers.js's jugarCartaDelTurnoActual).
 // Un <g> nuevo ahí rompe ese conteo; un <svg> anidado (viewport SVG válido,
 // soporta x/y nativos) no matchea ese selector porque no es tag `g`.
-export function ReactionFace({ gestureKey = "neutral", appearance, size = 60, x = 0, y = 0 }) {
+export function ReactionFace({ gestureKey = "neutral", appearance, size = 60, x = 0, y = 0, rotate = 0 }) {
   const g = GESTURES[gestureKey] || GESTURES.neutral;
   const { hairStyle = "pelado", hairColor = "castano", glasses = false } = appearance || {};
   const faceFill = g.red ? "#E8503A" : "#FFCF66";
+  // `rotate` (feature de rotación hacia el centro de la mesa, ver
+  // rotacionHaciaCentro en engine/structures.js) se aplica como transform
+  // nativo del propio <svg> anidado — sigue sin agregar ningún <g> nuevo
+  // (ver el comentario de arriba sobre por qué eso importa), un <svg>
+  // también acepta `transform` como cualquier elemento gráfico de SVG.
+  const centro = size / 2;
 
   return (
-    <svg x={x} y={y} viewBox="0 0 200 200" width={size} height={size} style={{ overflow: "visible", pointerEvents: "none" }}>
+    <svg x={x} y={y} viewBox="0 0 200 200" width={size} height={size} style={{ overflow: "visible", pointerEvents: "none" }}
+      transform={rotate ? `rotate(${rotate}, ${x + centro}, ${y + centro})` : undefined}>
       <circle cx={100} cy={110} r={82} fill={faceFill} />
 
       <Brow side="left" browRot={g.browRot} browLift={g.browLift} />
