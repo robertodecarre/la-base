@@ -62,3 +62,50 @@ export async function guardarSenasMapping(roomId, mapping) {
   if (error) throw error;
   return data; // fila de rooms
 }
+
+// Guarda el orden de cards de la pestaña Señas (rediseño de barra de
+// señas) para el propio EQUIPO — a diferencia de guardarSenasMapping, SIN
+// gate de fase: es puro orden visual, se puede reordenar arrastrando
+// durante la partida real (ver set_senas_order). order es un array de
+// gestureKeys.
+export async function guardarSenasOrder(roomId, order) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("set_senas_order", { p_room_id: roomId, p_order: order });
+  if (error) throw error;
+  return data; // fila de rooms
+}
+
+// Prende/apaga y edita el texto de la viñeta de un gesto largo, para el
+// propio EQUIPO — tampoco tiene gate de fase (ver set_senas_bubble).
+export async function guardarSenasBubble(roomId, gestureKey, on, text) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("set_senas_bubble", {
+    p_room_id: roomId, p_gesture_key: gestureKey, p_on: on, p_text: text,
+  });
+  if (error) throw error;
+  return data; // fila de rooms
+}
+
+// Mírenme (mecanismo real, no el toggle simplificado del mockup) — pedido
+// propio (togglea: abre si no tenía uno activo, cancela manualmente si
+// sí, sin importar quién lo esté mirando), "te miro"/"dejar de ver" sobre
+// el pedido de un compañero puntual. Ver game_state.mirenme y las tres
+// RPCs en 20260805000000_senas_order_bubbles_mirenme.sql.
+export async function mirenmePedir(roomId) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("mirenme_request", { p_room_id: roomId });
+  if (error) throw error;
+  return data; // fila de game_state
+}
+export async function mirenmeVerA(roomId, requesterSeat) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("mirenme_watch", { p_room_id: roomId, p_requester_seat: requesterSeat });
+  if (error) throw error;
+  return data; // fila de game_state
+}
+export async function mirenmeDejarDeVerA(roomId, requesterSeat) {
+  await asegurarSesion();
+  const { data, error } = await supabase.rpc("mirenme_unwatch", { p_room_id: roomId, p_requester_seat: requesterSeat });
+  if (error) throw error;
+  return data; // fila de game_state
+}

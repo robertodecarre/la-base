@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PanelPedir } from "../components/PanelPedir";
 import { MesaCircular } from "../components/MesaCircular";
+import { SenasBar } from "../components/SenasUI";
 import { DisplayReloj } from "../components/DisplayReloj";
 import { Tablero } from "../components/Tablero";
 import { EstrellasPedido } from "../components/EstrellasPedido";
@@ -12,9 +13,10 @@ import {
   enviarPedido, jugarCarta, siguienteBase, resolverCopas, resolverOros,
   repartirMano, cerrarMano, reclamarTiempo, reclamarTiempoDeportivo, revanchaPartida,
 } from "../lib/game";
+import {
+  guardarSenasOrder, guardarSenasBubble, mirenmePedir, mirenmeVerA, mirenmeDejarDeVerA,
+} from "../lib/rooms";
 import { mensajeDeError } from "../lib/erroresSala";
-import { senasEfectivas } from "../lib/senas";
-import { SenasOverlay } from "../components/SenasUI";
 import { colors, fonts, panelStyle } from "../theme";
 
 // Resumen fusionado arriba de MesaCircular (piece 5n, ver direccion-integrada.html):
@@ -62,6 +64,44 @@ function BloqueMesa({ resumen, children }) {
     <div style={{...panelStyle, borderRadius:16, width:"100%", maxWidth:640}}>
       <ResumenMarcador {...resumen}/>
       {children}
+    </div>
+  );
+}
+
+// Rediseño de barra de señas: SIBLING de BloqueMesa (nunca anidada
+// adentro) — panelStyle (theme.js) tiene overflow:hidden, así que un
+// full-bleed adentro de ese panel queda recortado en cuanto la barra pasa
+// el borde inferior (confirmado con Playwright: el botón de colapsar
+// existía en el DOM con coordenadas "correctas" pero
+// document.elementsFromPoint no lo encontraba ahí — recortado, no solo
+// tapado por otra cosa). Renderizada acá afuera, en el flujo normal del
+// documento, empuja hacia abajo lo que venga después (BotonSalir,
+// mensajes de error) en vez de flotar encima — un primer intento con
+// position:fixed/portal a document.body sí conseguía salir del recorte,
+// pero al no ocupar espacio en el flujo terminaba tapando BotonSalir
+// (regresión real, atrapada por online-salir-reingreso.spec.js en la
+// corrida completa).
+//
+// `alignSelf:"stretch"` en vez del truco clásico left:50%+width:100vw+
+// margin-left:-50vw: cada wrapper de pantalla de abajo es
+// display:flex+flexDirection:column+alignItems:"center" (fondoStyle), así
+// que "stretch" alcanza para ocupar el ancho completo de ESE contenedor
+// flex sin unidades vw — 100vw casi siempre resulta unos px más ancho que
+// document.documentElement.clientWidth apenas hay scrollbar vertical (el
+// viewport-width unit incluye el gutter del scrollbar en la mayoría de
+// los navegadores), lo que rompía online-panel-reflow.spec.js's chequeo
+// de "nunca queda con scroll horizontal medible" (regresión real, atrapada
+// en la corrida completa) — confirmado que "stretch" no tiene ese problema
+// porque no usa vw en absoluto, solo el ancho real del contenedor flex.
+// Queda con el mismo padding horizontal (8-12px según pantalla) que el
+// resto del contenido de esa pantalla en vez de tocar el borde físico —
+// lectura razonable de "ancho completo de la pantalla" dado que ESE
+// padding ya es el margen visual de toda la página, no algo propio de
+// esta barra.
+function SenasBarFullBleed({ senasBarProps, nombresPorAsiento }) {
+  return (
+    <div style={{ alignSelf: "stretch" }}>
+      <SenasBar {...senasBarProps} nombresPorAsiento={nombresPorAsiento} />
     </div>
   );
 }
@@ -223,11 +263,12 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   // Piece O: mismo criterio que tableroAbierto — preferencia del jugador,
   // no se resetea entre manos.
   const [relojAbierto, setRelojAbierto] = useState(false);
-  // Pieza J: la hojita de señas — mismo criterio que tableroAbierto/
-  // relojAbierto (preferencia del jugador, no se resetea entre manos).
-  // Privada a propósito (ver SenasOverlay más abajo): abrirla nunca se
-  // transmite a nadie, ni siquiera al propio compañero de equipo.
-  const [senasAbierto, setSenasAbierto] = useState(false);
+  // Rediseño de barra de señas: mismo criterio que tableroAbierto/
+  // relojAbierto (preferencia del jugador, no se resetea entre manos) —
+  // ahora colapsa/expande la barra persistente en vez de abrir/cerrar un
+  // modal. Expandir/colapsar mi propia barra sigue sin transmitirse a
+  // nadie (estado puramente local, igual que antes).
+  const [senasAbierto, setSenasAbierto] = useState(true);
   // Piece Q (batch overnight post-5r): reparto animado. cartasLlegadas
   // cuenta, por asiento, cuántas cartas ya "aterrizaron" visualmente —
   // alimenta jugadoresMesa truncado mientras la animación corre; vacío
@@ -250,7 +291,32 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   // (el padre común de esta pantalla y de SorteoAnimado), así el canal de
   // broadcast sigue conectado sin cortes al pasar de sorteo a partida en
   // vez de reconectarse de cero acá.
-  const misSenas = senasEfectivas(room.senas_mapping?.[`team${myTeam}`]);
+  // Props para SenasBar (rediseño de barra de señas) — armadas acá porque
+  // esta pantalla es la única dueña de roomId/gameState/myTeam. SenasBar se
+  // monta acá mismo (SenasBarFullBleed, sibling de BloqueMesa en cada
+  // return de abajo — ver ese componente para por qué NO vive anidada
+  // dentro de MesaCircular/BloqueMesa). rawMapping es la mitad SIN mergear
+  // con DEFAULT_SENAS (SenasBar hace ese merge internamente vía
+  // senasEfectivas) porque _order/_bubbles viven en ese mismo objeto
+  // crudo. mirenmeTeamObj llega ya escopeado a MI equipo — el rival nunca
+  // se lee ni se pasa (ver game_state.mirenme, migración 20260805000000);
+  // MesaCircular recibe ese mismo objeto por separado (mirenmeTeamObj),
+  // para el círculo/ojo sobre la cara, sin necesitar el resto de estos
+  // callbacks.
+  const senasBarProps = {
+    mySeat, myTeam,
+    rawMapping: room.senas_mapping?.[`team${myTeam}`],
+    onEnviar: enviarGesto,
+    abierta: senasAbierto,
+    onToggleAbierta: () => setSenasAbierto((v) => !v),
+    onGuardarOrder: (order) => guardarSenasOrder(roomId, order),
+    onGuardarBubble: (gestureKey, on, text) => guardarSenasBubble(roomId, gestureKey, on, text),
+    mirenmeTeamObj: gameState.mirenme?.[`team${myTeam}`],
+    onMirenmePedir: () => mirenmePedir(roomId).catch(() => {}),
+    onMirenmeVerA: (seat) => mirenmeVerA(roomId, seat).catch(() => {}),
+    onMirenmeDejarDeVerA: (seat) => mirenmeDejarDeVerA(roomId, seat).catch(() => {}),
+  };
+  const nombresPorAsiento = players.reduce((acc, p) => { if (p.seat != null) acc[p.seat] = p.name; return acc; }, {});
 
   // La propia mano nunca viaja por Realtime (ver useSala) — hay que pedirla
   // explícitamente cada vez que cambia el número de mano (deal_hand ya dejó
@@ -878,18 +944,18 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               mySeat={mySeat}
               totalBases={totalBases}
               tableroAbierto={tableroAbierto}
-              onToggleTablero={()=>setTableroAbierto((v)=>!v)} senasAbierto={senasAbierto} onToggleSenas={()=>setSenasAbierto((v)=>!v)}
+              onToggleTablero={()=>setTableroAbierto((v)=>!v)} mirenmeTeamObj={senasBarProps.mirenmeTeamObj} senasMappingCompleto={room.senas_mapping}
               hayReloj={hayReloj}
               relojAbierto={relojAbierto}
               onToggleReloj={()=>setRelojAbierto((v)=>!v)}
             />
           </BloqueMesa>
         </div>
+        <SenasBarFullBleed senasBarProps={senasBarProps} nombresPorAsiento={nombresPorAsiento}/>
 
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
         {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} graciaTeam={graciaTeam} graciaSegundos={graciaSegundos} onCerrar={()=>setRelojAbierto(false)}/>}
-        {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
   }
@@ -917,11 +983,12 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
-              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} senasAbierto={senasAbierto} onToggleSenas={()=>setSenasAbierto((v)=>!v)}
+              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} mirenmeTeamObj={senasBarProps.mirenmeTeamObj} senasMappingCompleto={room.senas_mapping}
               onSiguienteBase={onSiguienteBase} enviandoResolucion={enviandoResolucion}
             />
           </BloqueMesa>
         </div>
+        <SenasBarFullBleed senasBarProps={senasBarProps} nombresPorAsiento={nombresPorAsiento}/>
 
         {errorResolucion && (
           <div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",textAlign:"center",maxWidth:340}}>
@@ -932,7 +999,6 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
         {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} graciaTeam={graciaTeam} graciaSegundos={graciaSegundos} onCerrar={()=>setRelojAbierto(false)}/>}
-        {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
   }
@@ -961,11 +1027,12 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
-              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} senasAbierto={senasAbierto} onToggleSenas={()=>setSenasAbierto((v)=>!v)}
+              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} mirenmeTeamObj={senasBarProps.mirenmeTeamObj} senasMappingCompleto={room.senas_mapping}
               hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
             />
           </BloqueMesa>
         </div>
+        <SenasBarFullBleed senasBarProps={senasBarProps} nombresPorAsiento={nombresPorAsiento}/>
 
         <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(192,57,43,0.35)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:420,display:"flex",flexDirection:"column",gap:8,alignItems:"center"}}>
           <div style={{fontSize:10,color:"rgba(192,57,43,0.6)",letterSpacing:3}}>AS DE COPAS</div>
@@ -994,7 +1061,6 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
         {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} graciaTeam={graciaTeam} graciaSegundos={graciaSegundos} onCerrar={()=>setRelojAbierto(false)}/>}
-        {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
   }
@@ -1023,11 +1089,12 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
-              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} senasAbierto={senasAbierto} onToggleSenas={()=>setSenasAbierto((v)=>!v)}
+              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} mirenmeTeamObj={senasBarProps.mirenmeTeamObj} senasMappingCompleto={room.senas_mapping}
               hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
             />
           </BloqueMesa>
         </div>
+        <SenasBarFullBleed senasBarProps={senasBarProps} nombresPorAsiento={nombresPorAsiento}/>
 
         <div style={{background:"rgba(0,0,0,0.5)",border:"1.5px solid rgba(201,168,76,0.22)",borderRadius:10,padding:"12px 16px",width:"100%",maxWidth:420,display:"flex",flexDirection:"column",gap:4,alignItems:"center"}}>
           <div style={{fontSize:10,color:"rgba(201,168,76,0.4)",letterSpacing:3}}>AS DE OROS</div>
@@ -1063,7 +1130,6 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         <BotonSalir onSalir={onSalir}/>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
         {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} graciaTeam={graciaTeam} graciaSegundos={graciaSegundos} onCerrar={()=>setRelojAbierto(false)}/>}
-        {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
   }
@@ -1126,12 +1192,13 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
               pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
               expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
               cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
-              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} senasAbierto={senasAbierto} onToggleSenas={()=>setSenasAbierto((v)=>!v)}
+              tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} mirenmeTeamObj={senasBarProps.mirenmeTeamObj} senasMappingCompleto={room.senas_mapping}
               hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
               resultadoMano={resultadoMano}
             />
           </BloqueMesa>
         </div>
+        <SenasBarFullBleed senasBarProps={senasBarProps} nombresPorAsiento={nombresPorAsiento}/>
 
         {errorCierre && (
           <div style={{fontSize:11,color:"#e88",background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.4)",borderRadius:6,padding:"8px 10px",textAlign:"center",maxWidth:340}}>
@@ -1182,7 +1249,6 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         </div>
         {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
         {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} graciaTeam={graciaTeam} graciaSegundos={graciaSegundos} onCerrar={()=>setRelojAbierto(false)}/>}
-        {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
       </div>
     );
   }
@@ -1334,18 +1400,18 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
             pedidos={[gameState.bids?.team0, gameState.bids?.team1]} capLocal={capLocal} capVisitante={capVisitante}
             expandidos={expandidos} onToggleExpandir={(idx)=>setExpandidos((e)=>({...e,[idx]:!e[idx]}))}
             cartasLevantadas={cartasLevantadas} onLevantarCarta={()=>{}} mySeat={mySeat} totalBases={totalBases}
-            tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} senasAbierto={senasAbierto} onToggleSenas={()=>setSenasAbierto((v)=>!v)}
+            tableroAbierto={tableroAbierto} onToggleTablero={()=>setTableroAbierto((v)=>!v)} mirenmeTeamObj={senasBarProps.mirenmeTeamObj} senasMappingCompleto={room.senas_mapping}
             hayReloj={hayReloj} relojAbierto={relojAbierto} onToggleReloj={()=>setRelojAbierto((v)=>!v)}
             cartasViajandoReparto={viajandoReparto}
             contenidoBidding={contenidoBidding}
           />
         </BloqueMesa>
       </div>
+      <SenasBarFullBleed senasBarProps={senasBarProps} nombresPorAsiento={nombresPorAsiento}/>
 
       <BotonSalir onSalir={onSalir}/>
       {tableroAbierto && <TableroOverlay estructura={estructuraCompleta} historial={historialTablero} manoActual={gameState.hand_number} onCerrar={()=>setTableroAbierto(false)}/>}
       {relojAbierto && <RelojOverlay tiempoLocal={tiempoLocal} tiempoVisitante={tiempoVisitante} corriendo={corriendoTeam} agotadoLocal={agotadoLocal} agotadoVisitante={agotadoVisitante} modoTiempo={clockConfig?.modo} graciaTeam={graciaTeam} graciaSegundos={graciaSegundos} onCerrar={()=>setRelojAbierto(false)}/>}
-      {senasAbierto && <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={()=>setSenasAbierto(false)}/>}
     </div>
   );
 }

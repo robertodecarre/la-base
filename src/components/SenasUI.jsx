@@ -1,5 +1,7 @@
-import { ReactionFace } from "./ReactionFace";
-import { GESTOS_EDITABLES, SIN_SENA } from "../lib/senas";
+import { useEffect, useRef, useState } from "react";
+import { ReactionFace, GESTURE_LABELS } from "./ReactionFace";
+import { GESTOS_EDITABLES, GESTOS_LARGOS, SIN_SENA, senasEfectivas, ordenEfectivo, bubbleEfectivo } from "../lib/senas";
+import { getSenaColors, setSenaColor, getKeyBindings, setKeyBinding, useSenasKeybindings } from "../lib/senasPrefs";
 import { colors, fonts, panelStyle } from "../theme";
 
 // ══════════════════════════════════════════════
@@ -79,6 +81,273 @@ export function SenasOverlay({ senas, onEnviar, onCerrar }) {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════
+// SENAS BAR — rediseño de barra de señas: reemplaza el ícono+overlay
+// modal de arriba en la mesa real (SorteoAnimado.jsx sigue con el patrón
+// viejo, fuera de alcance de este pase — ver plan). Barra horizontal de
+// ancho completo, siempre montada (no click-to-open): header con
+// título/colapsar/tabs/nota de duración/controles de Mírenme, y debajo
+// una fila scrolleable de cards. `abierta` colapsa solo la fila de cards
+// + controles de Mírenme, el título/toggle del header siempre se ve.
+// ══════════════════════════════════════════════
+
+const COLOR_DOT = { pink: "#ff6fae", cyan: "#38bdf8" };
+function fondoPorColor(color) {
+  if (color === "pink") return "rgba(255,111,174,0.14)";
+  if (color === "cyan") return "rgba(56,189,248,0.14)";
+  return "rgba(255,255,255,0.02)";
+}
+
+const keybindInputStyle = {
+  flexShrink: 0, width: 20, height: 20, textAlign: "center", fontSize: 11,
+  borderRadius: 6, border: `1px solid ${colors.panel.border}`,
+  background: "rgba(0,0,0,0.35)", color: colors.text.primary,
+};
+
+const cardBaseStyle = {
+  display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flexShrink: 0,
+  width: 132, padding: "6px 8px", borderRadius: 8, border: `1px solid ${colors.panel.border}`,
+  boxSizing: "border-box",
+};
+
+function SenaCard({ gestureKey, meaning, color, dragging, onDragStart, onDragEnd, onDragOver, onDrop, onPickColor, keyBinding, onKeyBindingChange, onFire }) {
+  return (
+    <div
+      draggable
+      data-gesture-key={gestureKey}
+      onDragStart={onDragStart} onDragEnd={onDragEnd} onDragOver={onDragOver} onDrop={onDrop}
+      onClick={onFire}
+      style={{ ...cardBaseStyle, background: fondoPorColor(color), cursor: "grab", opacity: dragging ? 0.4 : 1 }}
+    >
+      <ReactionFace gestureKey={gestureKey} size={30} />
+      <span style={{ fontSize: 11, color: meaning ? colors.text.primary : "rgba(200,210,255,0.35)", fontStyle: meaning ? "normal" : "italic", fontFamily: fonts.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
+        {meaning || SIN_SENA}
+      </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }} onClick={(e) => e.stopPropagation()}>
+        <button type="button" title="Marcar rosado" onClick={() => onPickColor("pink")}
+          style={{ flexShrink: 0, width: 12, height: 12, borderRadius: "50%", border: "1px solid rgba(0,0,0,0.4)", background: COLOR_DOT.pink, padding: 0, cursor: "pointer", boxShadow: color === "pink" ? "0 0 0 2px rgba(255,255,255,0.55)" : "none" }} />
+        <input type="text" maxLength={1} value={keyBinding} onChange={onKeyBindingChange} onClick={(e) => e.stopPropagation()}
+          placeholder="—" style={keybindInputStyle} />
+        <button type="button" title="Marcar celeste" onClick={() => onPickColor("cyan")}
+          style={{ flexShrink: 0, width: 12, height: 12, borderRadius: "50%", border: "1px solid rgba(0,0,0,0.4)", background: COLOR_DOT.cyan, padding: 0, cursor: "pointer", boxShadow: color === "cyan" ? "0 0 0 2px rgba(255,255,255,0.55)" : "none" }} />
+      </div>
+    </div>
+  );
+}
+
+function GestoCard({ gestureKey, keyBinding, onKeyBindingChange, onFire, bubble, editing, draftText, onToggleBubble, onStartEdit, onDraftChange, onCommitEdit }) {
+  return (
+    <div onClick={onFire} data-gesture-key={gestureKey} style={{ ...cardBaseStyle, background: "rgba(255,255,255,0.02)", cursor: "pointer" }}>
+      <ReactionFace gestureKey={gestureKey} size={30} />
+      <span style={{ fontSize: 12, color: colors.text.primary, fontFamily: fonts.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
+        {GESTURE_LABELS[gestureKey] ?? gestureKey}
+      </span>
+      <input type="text" maxLength={1} value={keyBinding} onChange={onKeyBindingChange} onClick={(e) => e.stopPropagation()}
+        placeholder="—" style={keybindInputStyle} />
+      {editing ? (
+        <input
+          autoFocus value={draftText} onChange={onDraftChange} onBlur={onCommitEdit}
+          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+          onClick={(e) => e.stopPropagation()}
+          placeholder="Texto de la viñeta"
+          style={{ width: "100%", boxSizing: "border-box", fontSize: 10, borderRadius: 6, border: `1px solid ${colors.cta.border}`, background: "rgba(0,0,0,0.35)", color: colors.text.primary, padding: "2px 4px" }}
+        />
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }} onClick={(e) => e.stopPropagation()}>
+          <button type="button" title="Activar/desactivar viñeta" onClick={onToggleBubble}
+            style={{ flexShrink: 0, fontSize: 9, padding: "2px 6px", borderRadius: 6, border: `1px solid ${colors.panel.border}`, background: bubble.on ? "rgba(255,130,80,0.22)" : "rgba(255,255,255,0.03)", cursor: "pointer", color: colors.text.primary }}>💬</button>
+          <button type="button" title="Editar texto de la viñeta" onClick={onStartEdit}
+            style={{ flexShrink: 0, fontSize: 9, padding: "2px 6px", borderRadius: 6, border: `1px solid ${colors.panel.border}`, background: "rgba(255,255,255,0.03)", cursor: "pointer", color: colors.text.primary }}>✎</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Chip chico de un pedido de Mírenme ajeno ("Te miro"/"Dejar de ver a X").
+function MirenmeChip({ nombre, watching, onWatch, onUnwatch }) {
+  return (
+    <button
+      type="button"
+      onClick={watching ? onUnwatch : onWatch}
+      style={{
+        fontFamily: fonts.body, fontWeight: 600, fontSize: 11, padding: "5px 10px",
+        borderRadius: 999, cursor: "pointer", whiteSpace: "nowrap",
+        border: `1px solid ${watching ? colors.negative : colors.panel.border}`,
+        background: watching ? "rgba(255,106,106,0.16)" : "rgba(255,255,255,0.03)",
+        color: watching ? "#ffb3b3" : colors.text.secondary,
+      }}
+    >
+      {watching ? `Dejar de ver a ${nombre}` : `Te miro (${nombre})`}
+    </button>
+  );
+}
+
+export function SenasBar({
+  mySeat, myTeam, rawMapping, onEnviar,
+  abierta, onToggleAbierta,
+  onGuardarOrder, onGuardarBubble,
+  mirenmeTeamObj, onMirenmePedir, onMirenmeVerA, onMirenmeDejarDeVerA,
+  nombresPorAsiento,
+}) {
+  const [tab, setTab] = useState("senas");
+  const misSenas = senasEfectivas(rawMapping);
+
+  // ── orden (drag-to-reorder), rediseño de barra de señas ──
+  const ordenServidor = ordenEfectivo(rawMapping);
+  const ordenServidorKey = ordenServidor.join(",");
+  const [ordenLocal, setOrdenLocal] = useState(ordenServidor);
+  useEffect(() => { setOrdenLocal(ordenServidor); }, [ordenServidorKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dragKeyRef = useRef(null);
+  const [draggingKey, setDraggingKey] = useState(null);
+  const onDragStart = (key) => (e) => {
+    dragKeyRef.current = key;
+    setDraggingKey(key);
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+  };
+  const onDragEnd = () => setDraggingKey(null);
+  const onDragOverCard = (e) => e.preventDefault();
+  const onDropCard = (targetKey) => (e) => {
+    e.preventDefault();
+    const dragKey = dragKeyRef.current;
+    dragKeyRef.current = null;
+    setDraggingKey(null);
+    if (!dragKey || dragKey === targetKey) return;
+    const arr = ordenLocal.slice();
+    const from = arr.indexOf(dragKey), to = arr.indexOf(targetKey);
+    if (from === -1 || to === -1) return;
+    arr.splice(from, 1);
+    arr.splice(to, 0, dragKey);
+    setOrdenLocal(arr);
+    onGuardarOrder(arr).catch(() => {});
+  };
+
+  // ── color tags, personales (localStorage, ver lib/senasPrefs.js) ──
+  const [colores, setColores] = useState(() => getSenaColors());
+  const onPickColor = (key) => (colorName) => {
+    setColores((prev) => {
+      const actual = prev[key];
+      const nuevo = actual === colorName ? null : colorName;
+      setSenaColor(key, nuevo);
+      const next = { ...prev };
+      if (nuevo) next[key] = nuevo; else delete next[key];
+      return next;
+    });
+  };
+
+  // ── atajos de teclado, personales (localStorage) ──
+  const [bindings, setBindings] = useState(() => getKeyBindings());
+  const onKeyBindingChange = (actionKey) => (e) => {
+    const char = e.target.value.slice(-1);
+    setKeyBinding(actionKey, char);
+    setBindings((prev) => {
+      const next = { ...prev };
+      if (char) next[actionKey] = char; else delete next[actionKey];
+      return next;
+    });
+  };
+  useSenasKeybindings(bindings, (actionKey) => {
+    if (actionKey === "mirenme") onMirenmePedir();
+    else onEnviar(actionKey);
+  });
+
+  // ── viñetas de gestos largos ──
+  const [editingBubbleKey, setEditingBubbleKey] = useState(null);
+  const [bubbleDraft, setBubbleDraft] = useState("");
+  const startEditBubble = (key) => (e) => {
+    e.stopPropagation();
+    setEditingBubbleKey(key);
+    setBubbleDraft(bubbleEfectivo(rawMapping, key).text);
+  };
+  const commitEditBubble = () => {
+    if (!editingBubbleKey) return;
+    const key = editingBubbleKey;
+    const cfg = bubbleEfectivo(rawMapping, key);
+    setEditingBubbleKey(null);
+    onGuardarBubble(key, cfg.on, bubbleDraft).catch(() => {});
+  };
+  const toggleBubble = (key) => (e) => {
+    e.stopPropagation();
+    const cfg = bubbleEfectivo(rawMapping, key);
+    onGuardarBubble(key, !cfg.on, cfg.text).catch(() => {});
+  };
+
+  // ── Mírenme: mi propio pedido + los de mis compañeros ──
+  const miSeatKey = String(mySeat);
+  const miPedidoActivo = !!mirenmeTeamObj && Object.prototype.hasOwnProperty.call(mirenmeTeamObj, miSeatKey);
+  const pedidosDeCompaneros = Object.keys(mirenmeTeamObj || {})
+    .filter((seatKey) => seatKey !== miSeatKey)
+    .map((seatKey) => ({
+      seat: Number(seatKey),
+      watching: (mirenmeTeamObj[seatKey] || []).map(String).includes(miSeatKey),
+    }));
+
+  return (
+    <div style={{ ...panelStyle, width: "100%", padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8, boxSizing: "border-box" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 13, letterSpacing: 2, color: colors.text.secondary }}>SEÑAS</span>
+          <button type="button" onClick={onToggleAbierta} aria-label={abierta ? "Colapsar señas" : "Expandir señas"} style={{ background: "none", border: "none", color: colors.text.secondary, fontSize: 14, cursor: "pointer", lineHeight: 1, padding: 4 }}>
+            {abierta ? "▲" : "▼"}
+          </button>
+          {abierta && (
+            <>
+              <div style={{ display: "inline-flex", overflow: "hidden", border: `1px solid ${colors.panel.border}`, borderRadius: 999 }}>
+                <button type="button" onClick={() => setTab("senas")} style={{ fontFamily: fonts.display, fontWeight: 700, fontStyle: "italic", fontSize: 11, padding: "5px 12px", border: "none", cursor: "pointer", color: tab === "senas" ? "#ffd7c2" : colors.text.secondary, background: tab === "senas" ? "rgba(255,130,80,0.16)" : "transparent" }}>Señas</button>
+                <button type="button" onClick={() => setTab("gestos")} style={{ fontFamily: fonts.display, fontWeight: 700, fontStyle: "italic", fontSize: 11, padding: "5px 12px", border: "none", borderLeft: `1px solid ${colors.panel.border}`, cursor: "pointer", color: tab === "gestos" ? "#ffd7c2" : colors.text.secondary, background: tab === "gestos" ? "rgba(255,130,80,0.16)" : "transparent" }}>Gestos</button>
+              </div>
+              <span style={{ fontSize: 10, opacity: 0.55, color: colors.text.secondary, whiteSpace: "nowrap" }}>Señas: al toque · Gestos: 2s</span>
+            </>
+          )}
+        </div>
+        {abierta && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" onClick={onMirenmePedir} style={{
+              fontFamily: fonts.display, fontWeight: 700, fontStyle: "italic", fontSize: 12, letterSpacing: 1,
+              padding: "6px 14px", borderRadius: 999, cursor: "pointer",
+              border: `1px solid ${miPedidoActivo ? colors.negative : colors.cta.border}`,
+              background: miPedidoActivo ? "rgba(255,106,106,0.16)" : "rgba(255,130,80,0.12)",
+              color: miPedidoActivo ? "#ffb3b3" : "#ffd7c2",
+            }}>
+              {miPedidoActivo ? "Dejar de ver" : "Mírenme"}
+            </button>
+            <input type="text" maxLength={1} value={bindings.mirenme ?? ""} onChange={onKeyBindingChange("mirenme")}
+              placeholder="—" style={keybindInputStyle} />
+            {pedidosDeCompaneros.map(({ seat, watching }) => (
+              <MirenmeChip key={seat} nombre={nombresPorAsiento?.[seat] ?? `Asiento ${seat}`} watching={watching}
+                onWatch={() => onMirenmeVerA(seat)} onUnwatch={() => onMirenmeDejarDeVerA(seat)} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {abierta && (
+        <div style={{ display: "flex", flexDirection: "row", gap: 8, overflowX: "auto", overflowY: "hidden", paddingBottom: 4 }}>
+          {tab === "senas" && ordenLocal.map((key) => (
+            <SenaCard key={key} gestureKey={key} meaning={misSenas[key]} color={colores[key] ?? null}
+              dragging={draggingKey === key}
+              onDragStart={onDragStart(key)} onDragEnd={onDragEnd} onDragOver={onDragOverCard} onDrop={onDropCard(key)}
+              onPickColor={onPickColor(key)}
+              keyBinding={bindings[key] ?? ""} onKeyBindingChange={onKeyBindingChange(key)}
+              onFire={() => onEnviar(key)} />
+          ))}
+          {tab === "gestos" && GESTOS_LARGOS.map((key) => {
+            const bubble = bubbleEfectivo(rawMapping, key);
+            return (
+              <GestoCard key={key} gestureKey={key}
+                keyBinding={bindings[key] ?? ""} onKeyBindingChange={onKeyBindingChange(key)}
+                onFire={() => onEnviar(key)}
+                bubble={bubble} editing={editingBubbleKey === key} draftText={bubbleDraft}
+                onToggleBubble={toggleBubble(key)} onStartEdit={startEditBubble(key)}
+                onDraftChange={(e) => setBubbleDraft(e.target.value)} onCommitEdit={commitEditBubble} />
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

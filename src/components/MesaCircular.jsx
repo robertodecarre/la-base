@@ -1,7 +1,7 @@
 import { posEnCirculo, rotacionHaciaCentro } from "../engine/structures";
 import { CartaSVG } from "./cards/CartaSVG";
 import { ReactionFace } from "./ReactionFace";
-import { SenasIcon } from "./SenasUI";
+import { bubbleEfectivo } from "../lib/senas";
 import { colors, fonts } from "../theme";
 
 // ══════════════════════════════════════════════
@@ -296,7 +296,7 @@ const CENTRO_BIDDING_HK = 0.85;
 // no tiene nada que ocultar). Online, la única mano real es la propia; el
 // resto llega ya boca abajo desde el caller (ver PantallaPartidaOnline.jsx),
 // y acá alcanza con no dejar tirar cartas ajenas aunque sea su turno.
-export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases, tableroAbierto, onToggleTablero, onSiguienteBase, enviandoResolucion, hayReloj, relojAbierto, onToggleReloj, senasAbierto, onToggleSenas, cartasViajandoReparto, contenidoBidding, resultadoMano }) {
+export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases, tableroAbierto, onToggleTablero, onSiguienteBase, enviandoResolucion, hayReloj, relojAbierto, onToggleReloj, mirenmeTeamObj, senasMappingCompleto, cartasViajandoReparto, contenidoBidding, resultadoMano }) {
   const nJug = jugadores.length || 6;
   const G = GEOM[nJug] || GEOM.default;
   const { RX, RY, canvasSize: SIZE, cx: CX, cy: CY, outerRX, outerRY, mesaRX, mesaRY, cartaMesaRX, cartaMesaRY, boxW, boxH } = G;
@@ -306,7 +306,6 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
   const posCapVisitante = posEnCirculo(1, RX, RY, CX, CY, nJug);
   const libretaPos = { x: (posCapLocal.x + posCapVisitante.x) / 2, y: (posCapLocal.y + posCapVisitante.y) / 2 };
   const clockPos = { x: libretaPos.x + 28, y: libretaPos.y };
-  const senasPos = { x: libretaPos.x + 56, y: libretaPos.y };
 
   const svg = (
     <svg viewBox={`0 0 ${SIZE} ${SIZE}`} style={{width:"100%",userSelect:"none"}}>
@@ -418,6 +417,32 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
         const borderWidth = esTurno ? 3 : (esMiAsiento ? 2.5 : 1.5);
         const filtro = esTurno ? "url(#glowTurno)" : undefined;
         const cw = CARTA_MANO.w * escala, ch = CARTA_MANO.h * escala;
+        const faceCx = pos.x, faceCy = byContent + 70*escala;
+
+        // Mírenme (rediseño de barra de señas): mirenmeTeamObj ya llega
+        // escopeado a MI equipo (ver PantallaPartidaOnline.jsx), así que
+        // para un asiento rival esta clave simplemente nunca existe — el
+        // círculo/ojo nunca se calculan para el equipo contrario, ni hace
+        // falta chequear equipo acá. Círculo rojo alrededor de la cara del
+        // pedido: visible solo para el propio pedido y quien lo esté
+        // mirando ahora mismo (spec explícita); ícono de ojo junto a la
+        // cara de cada mirador: visible para todo el equipo (spec no lo
+        // restringe como al círculo).
+        const misMirenme = mirenmeTeamObj;
+        const watchersDeEsteAsiento = misMirenme?.[String(idx)];
+        const circuloMirenmeVisible = !!watchersDeEsteAsiento && watchersDeEsteAsiento.length > 0 &&
+          (idx === mySeat || watchersDeEsteAsiento.map(String).includes(String(mySeat)));
+        const ojoMirenmeVisible = Object.values(misMirenme || {}).some((arr) => (arr || []).map(String).includes(String(idx)));
+
+        // Viñeta de gesto largo (rediseño de barra de señas): a diferencia
+        // de mirenme, la viñeta es pública (mismo alcance que el gesto en
+        // sí, ver useGestos.js) — se resuelve con el senas_mapping COMPLETO
+        // (las dos claves de equipo), no solo el propio, para poder
+        // mostrar la viñeta de un gesto rival también.
+        const bubbleCfg = j.gestureKey && j.gestureKey !== "neutral"
+          ? bubbleEfectivo(senasMappingCompleto?.[`team${idx % 2}`], j.gestureKey)
+          : null;
+
         return (
           <g key={`jug-${idx}`}>
             <g filter={filtro}>
@@ -454,6 +479,17 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
               bocaAbajo={mySeat!=null && idx!==mySeat}
             />
             <PuntosBasesSVG ganadas={j.bases} total={totalBases||0} cx={pos.x} y={by+bh-6*escala} color={t.accent}/>
+            {circuloMirenmeVisible && (
+              <circle cx={faceCx} cy={faceCy} r={34*escala} fill="none" stroke={colors.negative} strokeWidth={2.5} opacity={0.85} filter="url(#glow)"/>
+            )}
+            {ojoMirenmeVisible && (
+              <text x={faceCx + 24*escala} y={faceCy - 20*escala} textAnchor="middle" fontSize={13*escala}>👁</text>
+            )}
+            {bubbleCfg?.on && bubbleCfg.text && (
+              <text x={pos.x} y={byContent - 6*escala} textAnchor="middle" fill={colors.text.primary} fontSize={9*escala} fontFamily={fonts.body} fontWeight={700} filter="url(#glow)">
+                {bubbleCfg.text}
+              </text>
+            )}
           </g>
         );
       })}
@@ -469,9 +505,6 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
       )}
       {onToggleReloj && hayReloj && (
         <ClockIcon x={clockPos.x} y={clockPos.y} abierta={!!relojAbierto} onToggle={onToggleReloj}/>
-      )}
-      {onToggleSenas && (
-        <SenasIcon x={senasPos.x} y={senasPos.y} abierta={!!senasAbierto} onToggle={onToggleSenas}/>
       )}
 
       {fase==="resolviendo" && ganadorBase!=null && onSiguienteBase && (

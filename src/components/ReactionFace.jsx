@@ -30,16 +30,25 @@ export const GESTURES = {
   wow: { mouth: "M82,132 Q82,171 100,171 Q118,171 118,132 Q118,123 100,123 Q82,123 82,132 Z", filled: true, color: DARK, teeth: false, tongue: false, leftEye: "open", rightEye: "open", browRot: 0, browLift: -12, nose: false, sweat: true },
   jaja: { mouth: "M48,108 Q100,215 152,108 Q100,150 48,108 Z", filled: true, color: DARK, teeth: false, tongue: false, leftEye: "squint", rightEye: "squint", browRot: 14, browLift: -6, nose: false, tears: true },
   miedo: { mouth: "M70,150 Q70,180 100,180 Q130,180 130,150 Q130,134 100,134 Q70,134 70,150 Z", filled: true, color: DARK, teeth: false, tongue: false, leftEye: "terror", rightEye: "terror", browRot: 18, browLift: -18, nose: false, sweat: true },
-  shhh: { mouth: "M84,132 Q84,166 100,166 Q116,166 116,132 Q116,120 100,120 Q84,120 84,132 Z", filled: true, color: DARK, teeth: false, tongue: false, leftEye: "open", rightEye: "open", browRot: 4, browLift: -6, nose: false, hand: true },
-  enojo: { mouth: "M78,132 Q78,170 100,170 Q122,170 122,132 Q122,120 100,120 Q78,120 78,132 Z", filled: true, color: "#5A0C0C", teeth: false, tongue: false, leftEye: "open", rightEye: "open", browRot: 22, browLift: 0, nose: false, red: true },
+  shhh: { mouth: "M84,132 Q84,166 100,166 Q116,166 116,132 Q116,120 100,120 Q84,120 84,132 Z", filled: true, color: DARK, teeth: false, tongue: false, leftEye: "open", rightEye: "open", browRot: 4, browLift: -6, nose: false, hand: true, bubble: "PUTO!" },
+  enojo: { mouth: "M78,132 Q78,170 100,170 Q122,170 122,132 Q122,120 100,120 Q78,120 78,132 Z", filled: true, color: "#5A0C0C", teeth: false, tongue: false, leftEye: "open", rightEye: "open", browRot: 22, browLift: 0, nose: false, red: true, bubble: "Dale, la concha de tu madre!" },
 };
 
 // Gestos "largos" (2000ms) — el resto dura 150ms. La duración corta es lo
 // que hace costoso espiar la cara de un rival (mirar una es perderse el
-// resto), no un timer arbitrario.
-const GESTOS_LARGOS = new Set(["wow", "jaja", "miedo", "shhh", "enojo"]);
+// resto), no un timer arbitrario. Exportado (feature de rediseño de la
+// barra de señas) — son también los únicos gestos que pueden llevar una
+// viñeta de texto (💬/✎ en la pestaña Gestos de SenasBar). "bubble" en
+// GESTURES arriba es el texto DEFAULT de fábrica (exacto al que antes
+// venía dibujado a mano dentro del SVG de shhh/enojo, ver más abajo por
+// qué se sacó de ahí); wow/jaja/miedo arrancan sin default (viñeta
+// apagada, ver bubbleEfectivo en lib/senas.js) pero igual llevan los
+// controles, a pedido explícito de Roberto ("Shhh, Enojo, y cualquier
+// gesto largo futuro").
+export const GESTOS_LARGOS = ["wow", "jaja", "miedo", "shhh", "enojo"];
+const GESTOS_LARGOS_SET = new Set(GESTOS_LARGOS);
 export function duracionGesto(key) {
-  return GESTOS_LARGOS.has(key) ? 2000 : 150;
+  return GESTOS_LARGOS_SET.has(key) ? 2000 : 150;
 }
 
 export const GESTURE_KEYS = Object.keys(GESTURES);
@@ -207,19 +216,18 @@ export function ReactionFace({ gestureKey = "neutral", appearance, size = 60, x 
         </>
       )}
 
+      {/* Rediseño de barra de señas: la viñeta de texto ("PUTO!"/"Dale, la
+          concha de tu madre!") ya NO se dibuja acá adentro — vivía como un
+          globo blanco+texto fijo dentro de este SVG rotado, lo que la hacía
+          girar junto con la cara/cartas del asiento (mal: un globo de texto
+          tiene que leerse siempre derecho) y no dejaba editarla por equipo.
+          Ahora es un overlay HTML en screen-space (mismo tratamiento que el
+          nombre del jugador), ver bubbleEfectivo en lib/senas.js y su
+          render en MesaCircular.jsx. La pose de la mano (shhh) sigue acá,
+          es parte de la cara en sí, no de la viñeta. */}
       {g.hand && (
-        <>
-          <path d="M62,170 Q58,120 70,96 Q76,86 84,90 Q90,94 88,106 L88,150 Q88,168 76,178 Q66,182 62,170 Z"
-            fill={faceFill} stroke="#E0A94A" strokeWidth={1.5} />
-          <path d="M158,54 Q210,40 232,58 L226,72 Q206,60 168,68 Z" fill="white" stroke="#c9c9c9" strokeWidth={1} />
-          <text x={196} y={62} textAnchor="middle" fontSize={13} fontWeight={800} fontStyle="italic" fill="#1a1a1a">PUTO!</text>
-        </>
-      )}
-      {g.red && (
-        <>
-          <path d="M118,30 Q210,-10 260,30 L250,52 Q206,20 130,48 Z" fill="white" stroke="#c9c9c9" strokeWidth={1} />
-          <text x={188} y={34} textAnchor="middle" fontSize={10} fontWeight={800} fontStyle="italic" fill="#1a1a1a">Dale, la concha de tu madre!</text>
-        </>
+        <path d="M62,170 Q58,120 70,96 Q76,86 84,90 Q90,94 88,106 L88,150 Q88,168 76,178 Q66,182 62,170 Z"
+          fill={faceFill} stroke="#E0A94A" strokeWidth={1.5} />
       )}
 
       <Hair style={hairStyle} color={hairColor} />
