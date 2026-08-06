@@ -2,6 +2,7 @@ import { layoutMesa, pairAnchor } from "../engine/mesaOvalada";
 import { CartaSVG } from "./cards/CartaSVG";
 import { ReactionFace } from "./ReactionFace";
 import { bubbleEfectivo } from "../lib/senas";
+import { useAspectFit } from "../hooks/useAspectFit";
 import { colors, fonts } from "../theme";
 
 // ══════════════════════════════════════════════
@@ -24,6 +25,68 @@ function PuntosBasesSVG({ ganadas, total, cx, y, color }) {
           stroke={color} strokeWidth={1} opacity={i < ganadas ? 1 : 0.4}/>
       ))}
     </>
+  );
+}
+
+// Burbuja de viñeta de gesto largo — historieta real (fondo crema, borde
+// oscuro, colita apuntando a la carita), calcada del propio tratamiento
+// del mockup de referencia (Mesa Ovalada), portado de HTML/CSS a SVG puro
+// (el resto de la mesa ya es SVG). Antes era texto suelto sin contenedor,
+// además anclado en el mismo punto que el nombre/★CAP en los asientos
+// "sombrero" — se solapaban (bug real reportado en vivo). Ahora se ancla
+// en bubbleBaseX/Y/bubbleTailX/Y (mesaOvalada.js): el hueco real entre la
+// carita y las cartas, que existe del lado de ADENTRO de la carita en
+// TODOS los asientos por igual, mientras que el nombre siempre vive del
+// lado de AFUERA — nunca compiten por el mismo espacio.
+//
+// bubbleWidth: SVG no tiene medición de texto en vivo acá (no hay canvas
+// disponible en el momento del render) — heurística de ancho promedio de
+// glyph, mismo tradeoff que el propio mockup acepta con su
+// white-space:nowrap (nunca hace reflow real, un texto excepcionalmente
+// largo puede sobrepasar la burbuja) — cubre de sobra el caso típico
+// (viñetas cortas tipo "PUTO!" o una frase corta).
+function bubbleWidth(text, fontSize) {
+  return Math.max(50, Math.min(text.length * fontSize * 0.56 + 20, 260));
+}
+
+const BUBBLE_FILL = "#f3f1ea", BUBBLE_STROKE = "#20222c", BUBBLE_TEXT = "#20222c";
+
+function GestureBubble({ baseX, baseY, tailX, tailY, text, fontSize }) {
+  const dx0 = tailX - baseX, dy0 = tailY - baseY;
+  const w = bubbleWidth(text, fontSize);
+  const h = fontSize * 1.9;
+  const left = baseX - w / 2, right = baseX + w / 2, top = baseY - h / 2, bottom = baseY + h / 2;
+
+  // La colita sale del borde de la caja más cercano a la dirección real
+  // hacia la carita (dx0/dy0) — vertical (arriba/abajo) si esa dirección
+  // es mayormente vertical, horizontal si no, así se ve bien tanto en los
+  // asientos de los tramos rectos (arriba/abajo) como en las puntas
+  // redondeadas (costados/diagonales).
+  let tailBaseA, tailBaseB;
+  if (Math.abs(dy0) >= Math.abs(dx0)) {
+    const edgeY = dy0 >= 0 ? bottom : top;
+    tailBaseA = { x: baseX - 7, y: edgeY };
+    tailBaseB = { x: baseX + 7, y: edgeY };
+  } else {
+    const edgeX = dx0 >= 0 ? right : left;
+    tailBaseA = { x: edgeX, y: baseY - 7 };
+    tailBaseB = { x: edgeX, y: baseY + 7 };
+  }
+
+  return (
+    <g pointerEvents="none">
+      {/* Relleno de la colita hasta la base (tapado después por la caja,
+          que dibuja su propio relleno+borde encima) + su contorno propio
+          SOLO en los dos lados que quedan visibles (nunca la base, que
+          queda debajo de la caja) — así no queda una costura de borde
+          duplicado donde la colita se une a la caja. */}
+      <path d={`M ${tailBaseA.x},${tailBaseA.y} L ${tailX},${tailY} L ${tailBaseB.x},${tailBaseB.y} Z`} fill={BUBBLE_FILL}/>
+      <path d={`M ${tailBaseA.x},${tailBaseA.y} L ${tailX},${tailY} L ${tailBaseB.x},${tailBaseB.y}`} fill="none" stroke={BUBBLE_STROKE} strokeWidth={2} strokeLinejoin="round"/>
+      <rect x={left} y={top} width={w} height={h} rx={h * 0.4} fill={BUBBLE_FILL} stroke={BUBBLE_STROKE} strokeWidth={2}/>
+      <text x={baseX} y={baseY + fontSize * 0.35} textAnchor="middle" fill={BUBBLE_TEXT} fontFamily={fonts.body} fontWeight={700} fontSize={fontSize}>
+        {text}
+      </text>
+    </g>
   );
 }
 
@@ -188,12 +251,6 @@ function SiguienteBaseHabitacion({ x, y, esGanador, nombreGanador, enviando, onC
 // de la mesa, solo cambia DÓNDE se ubican (mesaOvalada.js).
 const CARTA_MESA = { w: 37, h: 55 };
 const CARTA_MANO = { w: 31, h: 44 };
-// Exportado (feature #1, batch post-mano_seat-split) — SorteoAnimado.jsx
-// lo usa para el mismo factor en vez de mantener su propia copia
-// hardcodeada. No tiene relación con STADIUM_PARAMS[nJug].mySeatScale
-// (mesaOvalada.js) — SorteoAnimado es una pantalla circular aparte, con su
-// propio afinado.
-export const MYSEAT_SCALE = 1.5;
 
 // Piece Q (batch overnight post-5r): keyframe del viaje de reparto,
 // calcado de direccion-reparto-mano-animado.html (0.36s, pico de escala
@@ -266,6 +323,11 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
   const nJug = jugadores.length || 6;
   const mesa = layoutMesa(nJug, mySeat);
   const { seats, outerPath, innerPath, hw, r, cx: CX, cy: CY, vbMinX, vbMinY, vbW, vbH } = mesa;
+  // Tamaño real en píxeles al que hay que renderizar el <svg> (y el
+  // envoltorio del panel de pedir, que se alinea con ESE tamaño exacto,
+  // no con el del contenedor completo) — ver useAspectFit.js para por qué
+  // esto se mide en JS en vez de con CSS puro.
+  const { containerRef, size } = useAspectFit(vbW, vbH);
   // Punto entre los dos capitanes (siempre seat 0 y seat 1) — pairAnchor
   // (mesaOvalada.js) empuja el punto medio hacia afuera del centro en vez
   // de usar la cuerda entre sus anclas tal cual (esa cuerda cae más cerca
@@ -277,7 +339,7 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
   const clockPos = { x: libretaPos.x + 28, y: libretaPos.y };
 
   const svg = (
-    <svg viewBox={mesa.viewBox} style={{width:"100%",height:"100%",display:"block",userSelect:"none"}}>
+    <svg viewBox={mesa.viewBox} width={size.width} height={size.height} style={{display:"block",userSelect:"none"}}>
       <defs>
         <linearGradient id="positivoG" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#4ae08a"/><stop offset="55%" stopColor="#1e9c5a"/><stop offset="100%" stopColor="#0e5c34"/>
@@ -429,9 +491,7 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
               <text x={seat.faceCx + mirenmeR*0.7} y={seat.faceCy - mirenmeR*0.6} textAnchor="middle" fontSize={13*escala}>👁</text>
             )}
             {bubbleCfg?.on && bubbleCfg.text && (
-              <text x={seat.bubbleAnchorX} y={seat.bubbleAnchorY} textAnchor="middle" fill={colors.text.primary} fontSize={9*escala} fontFamily={fonts.body} fontWeight={700} filter="url(#glow)">
-                {bubbleCfg.text}
-              </text>
+              <GestureBubble baseX={seat.bubbleBaseX} baseY={seat.bubbleBaseY} tailX={seat.bubbleTailX} tailY={seat.bubbleTailY} text={bubbleCfg.text} fontSize={11*escala}/>
             )}
 
             <PuntosBasesSVG ganadas={j.bases} total={totalBases||0} cx={seat.nameX} y={seat.basesY} color={t.accent}/>
@@ -499,15 +559,27 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
   const biddingWPct = ((2 * (hw + r) * CENTRO_BIDDING_WK) / vbW) * 100;
   const biddingHPct = ((2 * r * CENTRO_BIDDING_HK) / vbH) * 100;
 
-  // La mesa se autodimensiona por aspect-ratio (mismo modelo que el propio
-  // mockup de referencia: "table area is a flexible region that sizes
-  // itself via aspect-ratio inside whatever space is left") — el
-  // contenedor de afuera (BloqueMesa/mesaFlexAreaStyle en
-  // PantallaPartidaOnline.jsx) solo necesita darle flex:1+minHeight:0;
-  // este componente no necesita que el caller sepa nada de su viewBox.
+  // La mesa se autodimensiona dentro de lo que sobra (mismo modelo que el
+  // propio mockup de referencia) — el contenedor de afuera (BloqueMesa/
+  // mesaFlexAreaStyle en PantallaPartidaOnline.jsx) solo necesita darle
+  // flex:1+minHeight:0; este componente no necesita que el caller sepa
+  // nada de su viewBox.
+  //
+  // El tamaño real del <svg> (size.width/size.height) se mide en JS
+  // (useAspectFit, containerRef en el <div> de afuera) en vez de con CSS
+  // puro — dos intentos con CSS (aspect-ratio en el div envolvente;
+  // después width/height como atributos + wrapper inline-block)
+  // resolvieron mal el tamaño real en casos reales, medido con
+  // getBoundingClientRect, no en teoría — ver el comentario largo en
+  // useAspectFit.js. El wrapper de acá adentro usa ESE tamaño exacto
+  // (width/height en px, no %), así el panel de pedir (posicionado en %
+  // ADENTRO de este wrapper) siempre queda alineado con el paño real —
+  // antes, cuando el wrapper podía quedar más grande que el contenido
+  // visible del <svg>, el panel de pedir se salía del paño por un costado
+  // — bug real atrapado por online-panel-pedir-mesa.spec.js.
   return (
-    <div style={{position:"relative",width:"100%",height:"100%",minHeight:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{position:"relative",maxWidth:"100%",maxHeight:"100%",width:"100%",aspectRatio:`${vbW} / ${vbH}`}}>
+    <div ref={containerRef} style={{position:"relative",width:"100%",height:"100%",minHeight:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{position:"relative",width:size.width,height:size.height}}>
         {svg}
         {fase==="bidding" && contenidoBidding && (
           <div style={{

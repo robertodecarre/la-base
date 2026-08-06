@@ -1,12 +1,38 @@
-import { useEffect, useRef, useState } from "react";
-import { posEnCirculo, rotacionHaciaCentro } from "../engine/structures";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { layoutMesa } from "../engine/mesaOvalada";
 import { CartaSVG } from "./cards/CartaSVG";
 import { ReactionFace } from "./ReactionFace";
 import { SenasIcon, SenasOverlay } from "./SenasUI";
-import { MYSEAT_SCALE } from "./MesaCircular";
 import { marcarFlipSorteo, marcarArrancamosSorteo } from "../lib/game";
 import { senasEfectivas } from "../lib/senas";
 import { colors, fonts, ctaStyle } from "../theme";
+
+// A diferencia de MesaCircular.jsx (que compite por alto limitado, ver
+// useAspectFit.js), esta pantalla nunca estuvo acotada por alto — antes
+// del rediseño solo tenía un maxWidth:640 fijo, el alto seguía sin límite
+// (scroll de página si hacía falta). Medir SOLO el ancho (sin depender del
+// alto del contenedor, que acá no está definido de antemano) evita la
+// dependencia circular que si hace falta resolver en MesaCircular.jsx.
+function useWidthFit(vbW, vbH) {
+  const containerRef = useRef(null);
+  const [size, setSize] = useState({ width: vbW, height: vbH });
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const compute = () => {
+      const cw = el.clientWidth;
+      if (!cw) return;
+      setSize({ width: cw, height: (cw / vbW) * vbH });
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [vbW, vbH]);
+
+  return { containerRef, size };
+}
 
 // ══════════════════════════════════════════════
 // SORTEO ANIMADO (piece H, batch overnight post-5r) — reemplaza el
@@ -26,19 +52,25 @@ import { colors, fonts, ctaStyle } from "../theme";
 // (mismo patrón boolean-por-asiento, ahora en rooms.sorteo_inicial.
 // arrancamos vía marcar_arrancamos_sorteo) antes de avisar al padre.
 //
+// Rediseño de mesa ovalada (follow-up): esta pantalla ahora comparte
+// mesaOvalada.js con MesaCircular.jsx (misma pista+paño, mismos anclajes
+// de asiento/carita) en vez de su propio layout circular con
+// posEnCirculo — quedó pendiente en el primer pase del rediseño (la mesa
+// real y el sorteo son pantallas separadas, se armó el sorteo aparte a
+// propósito para no arriesgar la mesa real, pero el resultado fue que acá
+// las caritas seguían tapadas por la carta encima — mismo bug de capas
+// que ya se había arreglado en la mesa real, ver mesaOvalada.js — y el
+// sentido de giro de los asientos también salía espejado respecto de la
+// mesa real). Reusar el mismo módulo también arregla las dos cosas de
+// una: mismo push-out cara/carta, mismo sentido horario con seat
+// creciente.
+//
 // Duraciones/easing/rotación calcados de la referencia, no aproximados:
 // viaje 0.62s cubic-bezier(.2,.8,.3,1), escala pico 1.08, giro 540/720deg
 // (signo por seat%2 — ver nota en la referencia sobre por qué es paridad
 // de asiento y no una regla geométrica de "lado de la mesa"), stagger
 // 90ms entre asientos, flip 0.5s cubic-bezier(.34,1.56,.64,1).
 const CW = 40, CH = 58;
-// Feature #1 (batch post-mano_seat-split): MYSEAT_SCALE ahora se importa
-// de MesaCircular.jsx en vez de mantener una copia hardcodeada acá — era
-// el ejemplo concreto que Roberto señaló de "constantes de escala
-// duplicadas a mano" entre esta pantalla y la mesa real. No se reusa el
-// push-out de posición (PUSH_OWN) de MesaCircular: ahí compensa el mayor
-// ancho de mano+cartas jugadas, acá solo hay una carta por asiento y el
-// espaciado del círculo de sorteo ya deja margen.
 const STAGGER_MS = 90;
 const VIAJE_MS = 620;
 const GRACIA_TARDIA_MS = 300; // sesión que reconecta con todo ya confirmado — sin esto, onCumplido() dispara en el mismo tick del mount y la pantalla de sorteo nunca llega a pintarse
@@ -111,9 +143,9 @@ function CartaAsientoSorteo({ pos, carta, flipped, clickable, onClick, w, h }) {
 }
 
 export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplido, senasMapping, gestosPorAsiento, enviarGesto }) {
-  const SIZE = 500, CX = 250, CY = 250;
-  const RX = nJug === 8 ? 200 : 190;
-  const RY = nJug === 8 ? 180 : 170;
+  const mesa = layoutMesa(nJug, mySeat);
+  const { seats, outerPath, innerPath, cx: CX, cy: CY, vbMinX, vbMinY, vbW, vbH } = mesa;
+  const { containerRef, size } = useWidthFit(vbW, vbH);
 
   // Feature #1 (batch post-mano_seat-split): señas usables durante el
   // sorteo igual que durante la partida — gestosPorAsiento/enviarGesto
@@ -262,7 +294,21 @@ export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplid
       <div style={{ fontFamily: fonts.display, fontWeight: 800, fontStyle: "italic", fontSize: 15, letterSpacing: 6, color: colors.text.secondary, textShadow: "0 0 8px rgba(140,160,240,0.5)" }}>SORTEO</div>
       <div style={{ fontFamily: fonts.display, fontWeight: 700, fontStyle: "italic", fontSize: 11, letterSpacing: 2, color: "rgba(170,182,242,0.55)", marginTop: -8 }}>¿QUIÉN REPARTE PRIMERO?</div>
 
-      <svg viewBox={`0 0 ${SIZE} ${SIZE}`} style={{ width: "100%", maxWidth: 500, overflow: "visible" }}>
+      {/* Mismo modelo de autodimensionado que MesaCircular.jsx — la mesa
+          ovalada compartida ya no es un cuadrado fijo (500x500), así que
+          el contenedor tiene que respetar SU proporción real (mesa.vbW/
+          vbH) en vez de forzar un viewBox cuadrado sobre una forma que no
+          lo es. Tamaño medido en JS (useAspectFit), no con CSS puro — ver
+          el comentario largo en useAspectFit.js sobre por qué. maxWidth:
+          640 en el contenedor (no en el <svg>) es el mismo tope que tenía
+          esta pantalla antes del rediseño — el sorteo se queda a una
+          escala más modesta que "la habitación" real (que ahora puede
+          llegar a 900px, ver MESA_PANEL_MAX_W en PantallaPartidaOnline.jsx),
+          a propósito: es una pantalla de tránsito, no la mesa donde se
+          juega la mano. */}
+      <div ref={containerRef} style={{ position: "relative", width: "100%", maxWidth: 640 }}>
+      <div style={{ position: "relative", width: size.width, height: size.height }}>
+      <svg viewBox={mesa.viewBox} width={size.width} height={size.height} style={{ display: "block", overflow: "visible" }}>
         <defs>
           <style>{KEYFRAMES}</style>
           {/* Mismo filtro que MesaCircular.jsx — SenasIcon (SenasUI.jsx) lo
@@ -273,44 +319,61 @@ export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplid
           </filter>
         </defs>
 
-        <ellipse cx={CX} cy={CY} rx={RX + 55} ry={RY + 50} fill="rgba(20,26,64,0.55)" stroke="#4a5aa8" strokeWidth={2} />
+        {/* Misma mesa ovalada (madera+paño) que MesaCircular.jsx — antes
+            de este rediseño el sorteo tenía su propio óvalo genérico
+            gris-azulado, con cada asiento en un recuadro propio; ahora
+            comparte la pista real, sin recuadro por asiento (el paño
+            hace de fondo común, igual que en la mesa real). */}
+        <path d={outerPath} fill="#3c2a1c" stroke="#6b4a2a" strokeWidth={6}/>
+        <path d={innerPath} fill="#1f4a34" stroke="#3a6b4d" strokeWidth={2}/>
 
         {/* mazo central */}
         <rect x={CX - 22} y={CY - 31} width={44} height={62} rx={5} fill="#171f4a" stroke="#4a5aa8" strokeWidth={2}
           style={!yaResueltoAlMontar.current ? { animation: "lbSorteoPulso 0.5s ease-in-out infinite alternate" } : undefined} />
 
-        {Array.from({ length: nJug }, (_, seat) => {
-          const pos = posEnCirculo(seat, RX, RY, CX, CY, nJug);
-          const esMia = seat === mySeat;
-          const flipped = estaFlippeado(seat);
-          const llegada = llegadas.has(seat);
-          const esGanador = todosFlipeados && seat === sorteo.ganador_seat;
+        {seats.map((seat) => {
+          const s = seat.idx;
+          const esMia = s === mySeat;
+          const flipped = estaFlippeado(s);
+          const llegada = llegadas.has(s);
+          const esGanador = todosFlipeados && s === sorteo.ganador_seat;
 
-          const tx = pos.x - CX, ty = pos.y - CY;
-          const rotSigno = seat % 2 === 0 ? 1 : -1;
-          const escala = esMia ? MYSEAT_SCALE : 1;
-          const boxW = 92 * escala, boxH = 96 * escala;
+          const tx = seat.ax - CX, ty = seat.ay - CY;
+          const rotSigno = s % 2 === 0 ? 1 : -1;
+          const escala = seat.scale;
 
           return (
-            <g key={seat}>
-              <rect x={pos.x - boxW / 2} y={pos.y - boxH / 2 - 4} width={boxW} height={boxH} rx={8}
-                fill={esGanador ? "rgba(255,140,60,0.12)" : "rgba(10,14,38,0.6)"}
-                stroke={esGanador ? "#ffab8a" : "rgba(120,140,220,0.25)"} strokeWidth={esGanador ? 2 : 1} />
-              <text x={pos.x} y={pos.y - boxH / 2 - 10} textAnchor="middle" fontFamily={fonts.body} fontWeight={600} fontSize={11 * escala} fill={colorEquipo(seat)}>
-                {nombreJugador(seat)}
+            <g key={s}>
+              {/* Rediseño: anillo distintivo del asiento PROPIO — antes la
+                  única señal era la carta "un poco más grande" (mismo
+                  factor de escala que ya traía la carita/carta), lo que en
+                  un monitor real no se notaba lo suficiente como primer
+                  momento de orientación en la mesa. Un anillo de un color
+                  que no se usa para nada más en esta pantalla (el lima de
+                  "turno" — acá no hay concepto de turno todavía, así que
+                  no compite con ningún otro significado) + la etiqueta
+                  "VOS" (mismo texto/criterio que la mesa real) — visibles
+                  desde el arranque, no solo cuando llega la carta. */}
+              {esMia && (
+                <circle cx={seat.faceCx} cy={seat.faceCy} r={seat.faceR * 1.4} fill="none" stroke={colors.turn.color} strokeWidth={2.5} opacity={0.75} filter="url(#glow)"/>
+              )}
+              {esGanador && (
+                <circle cx={seat.faceCx} cy={seat.faceCy} r={seat.faceR * 1.65} fill="none" stroke={colors.cta.border} strokeWidth={2} opacity={0.85} filter="url(#glow)"/>
+              )}
+
+              <text x={seat.nameX} y={seat.nameY} textAnchor="middle" fontFamily={fonts.body} fontWeight={600} fontSize={11 * escala} fill={colorEquipo(s)}>
+                {nombreJugador(s)}{esMia ? " · VOS" : ""}
               </text>
 
-              {/* Feature #1 (batch post-mano_seat-split): misma cara de
-                  reacción/señas que la mesa real, DETRÁS de la carta
-                  (dibujada antes en el orden del DOM) y rotada hacia el
-                  centro con la MISMA fórmula que MesaCircular.jsx usa
-                  (rotacionHaciaCentro — el sorteo comparte el seat layout
-                  real, así que las mismas posiciones/ángulos aplican tal
-                  cual). Jugadores sin apariencia guardada todavía (no
+              {/* Cara de reacción/señas — anclada más afuera que la carta
+                  (seat.faceX/Y, ver mesaOvalada.js), nunca rota: mismo
+                  arreglo de capas que ya tenía la mesa real (antes acá la
+                  carta se dibujaba en el mismo punto que la cara y la
+                  tapaba). Jugadores sin apariencia guardada todavía (no
                   pasaron por el customizador) caen en los defaults de
                   ReactionFace. */}
-              <ReactionFace gestureKey={gestosPorAsiento?.[seat] || "neutral"} appearance={players.find((p) => p.seat === seat)?.appearance}
-                size={50 * escala} x={pos.x - 25 * escala} y={pos.y - 25 * escala} rotate={rotacionHaciaCentro(seat, nJug)}/>
+              <ReactionFace gestureKey={gestosPorAsiento?.[s] || "neutral"} appearance={players.find((p) => p.seat === s)?.appearance}
+                size={seat.faceSize} x={seat.faceX} y={seat.faceY}/>
 
               {/* carta viajera: dos <g> separados a propósito (ver
                   comentario en la referencia) — el exterior fija la
@@ -319,7 +382,7 @@ export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplid
                   el mismo <g>, la animación reemplazaría por completo el
                   atributo transform en vez de componerlo, y la carta
                   saldría desde (0,0) en vez del mazo. */}
-              {viajando.has(seat) && !llegada && (
+              {viajando.has(s) && !llegada && (
                 <g transform={`translate(${CX - CW / 2},${CY - CH / 2})`}>
                   <g className="lb-sorteo-viajera" style={{
                     "--tx": `${tx}px`, "--ty": `${ty}px`,
@@ -332,17 +395,19 @@ export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplid
               )}
 
               {/* carta asentada: ver CartaAsientoSorteo — flip 2D (no el
-                  rotateY 3D real de la referencia, ver comentario ahí) */}
+                  rotateY 3D real de la referencia, ver comentario ahí) —
+                  anclada en seat.ax/ay, igual que el abanico de la mesa
+                  real. */}
               {llegada && (
                 <CartaAsientoSorteo
-                  pos={pos} carta={cartaPorSeat[seat]} flipped={flipped}
+                  pos={{ x: seat.ax, y: seat.ay }} carta={cartaPorSeat[s]} flipped={flipped}
                   clickable={esMia && !flipped} onClick={esMia ? onClickPropia : undefined}
                   w={CW * escala} h={CH * escala}
                 />
               )}
 
               {esMia && llegada && !flipped && (
-                <circle cx={pos.x} cy={pos.y} r={30 * escala} fill="none" stroke="rgba(255,171,138,0.65)" strokeWidth={1.5}
+                <circle cx={seat.ax} cy={seat.ay} r={30 * escala} fill="none" stroke="rgba(255,171,138,0.65)" strokeWidth={1.5}
                   style={{ animation: "lbSorteoPulso 1.4s ease-out infinite", pointerEvents: "none" }} />
               )}
             </g>
@@ -358,9 +423,11 @@ export function SorteoAnimado({ roomId, nJug, players, mySeat, sorteo, onCumplid
         </g>
 
         {enviarGesto && (
-          <SenasIcon x={SIZE - 30} y={30} abierta={senasAbierto} onToggle={() => setSenasAbierto((v) => !v)}/>
+          <SenasIcon x={vbMinX + vbW - 30} y={vbMinY + 30} abierta={senasAbierto} onToggle={() => setSenasAbierto((v) => !v)}/>
         )}
       </svg>
+      </div>
+      </div>
 
       {senasAbierto && (
         <SenasOverlay senas={misSenas} onEnviar={enviarGesto} onCerrar={() => setSenasAbierto(false)}/>

@@ -2,14 +2,15 @@ import { test, expect } from "@playwright/test";
 import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado } from "./helpers.js";
 
 // Piece K (batch overnight post-5r) — mySeat (el asiento propio, marcado
-// "VOS") renderiza a 1.5x el tamaño del resto de los asientos, no 1.4x
-// (MYSEAT_SCALE en MesaCircular.jsx). Mide el <rect> de borde de mi propio
-// asiento contra el de otro asiento directamente en el SVG en vez de
-// asumir el valor — si alguien vuelve a tocar MYSEAT_SCALE sin querer,
-// esto lo agarra.
+// "VOS") renderiza más grande que el resto de los asientos. Mide el
+// tamaño real de un elemento en el SVG en vez de asumir el valor — si
+// alguien vuelve a tocar el factor de escala sin querer, esto lo agarra.
 //
-// A propósito NO toca la pantalla/animación de sorteo ni gestos de mano
-// sincronizados (fuera de alcance para este batch).
+// Follow-up al rediseño de mesa ovalada: SorteoAnimado.jsx (segundo test
+// de este archivo) ahora también usa mesaOvalada.js/STADIUM_PARAMS (antes
+// tenía su propio layout circular con un factor 1.5x hardcodeado aparte)
+// — los dos tests miden el mismo STADIUM_PARAMS[4].mySeatScale=1.55
+// ahora, no dos números distintos.
 
 test("online: el asiento propio (VOS) mide STADIUM_PARAMS[4].mySeatScale el resto de los asientos", async ({ browser }) => {
   test.setTimeout(90_000);
@@ -57,14 +58,16 @@ test("online: el asiento propio (VOS) mide STADIUM_PARAMS[4].mySeatScale el rest
   }
 });
 
-// Piece X (batch overnight post-5r) — el mismo factor 1.5x ahora también se
-// aplica en la pantalla de sorteo (SorteoAnimado.jsx), no solo en la mesa
-// real: el asiento propio se reconoce por tamaño antes de leer el nombre.
-// Se mide ANTES de tocar "Dar vuelta tu carta"/ARRANCAMOS (el tamaño de la
-// caja no depende de si la carta ya se volteó). El <rect rx="8"> es el
-// borde de la caja del asiento (único rx=8 en esta pantalla — las cartas
-// SVG usan rx=2/3, ver CartaSVG.jsx), a diferencia del rx=16 de MesaCircular.
-test("online: en el sorteo, el asiento propio (VOS) mide 1.5x el resto de los asientos", async ({ browser }) => {
+// Rediseño de mesa ovalada (follow-up): SorteoAnimado.jsx pasó a compartir
+// mesaOvalada.js con MesaCircular.jsx (antes tenía su propio layout
+// circular con recuadro por asiento y un 1.5x hardcodeado aparte) — el
+// asiento propio se reconoce por tamaño antes de leer el nombre, ahora con
+// el mismo STADIUM_PARAMS[4].mySeatScale=1.55 que la mesa real. Se mide
+// ANTES de tocar "Dar vuelta tu carta"/ARRANCAMOS (el tamaño no depende de
+// si la carta ya se volteó). Ya no hay <rect rx="8"> de fondo por asiento
+// (mismo motivo que el primer test de este archivo) — proxy de tamaño:
+// el <svg> anidado de ReactionFace.
+test("online: en el sorteo, el asiento propio (VOS) mide STADIUM_PARAMS[4].mySeatScale el resto de los asientos", async ({ browser }) => {
   test.setTimeout(90_000);
   const nombres = ["P0", "P1", "P2", "P3"];
   const contexts = await Promise.all(nombres.map(() => browser.newContext()));
@@ -81,11 +84,11 @@ test("online: en el sorteo, el asiento propio (VOS) mide 1.5x el resto de los as
     const miAsiento = host.locator("svg g", { hasText: "P0" }).first();
     const otroAsiento = host.locator("svg g", { hasText: "P1" }).first();
 
-    const miAncho = await miAsiento.locator("rect[rx='8']").first().getAttribute("width");
-    const otroAncho = await otroAsiento.locator("rect[rx='8']").first().getAttribute("width");
+    const miAncho = await miAsiento.locator("svg").first().getAttribute("width");
+    const otroAncho = await otroAsiento.locator("svg").first().getAttribute("width");
 
     const ratio = parseFloat(miAncho) / parseFloat(otroAncho);
-    expect(ratio, `esperaba 1.5x, mi ancho=${miAncho} otro ancho=${otroAncho}`).toBeCloseTo(1.5, 2);
+    expect(ratio, `esperaba 1.55x (STADIUM_PARAMS[4].mySeatScale), mi ancho=${miAncho} otro ancho=${otroAncho}`).toBeCloseTo(1.55, 2);
 
     // Cierra el sorteo con normalidad para no dejar la sala en un estado
     // raro (aunque el test ya obtuvo lo que necesitaba).

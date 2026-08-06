@@ -66,9 +66,28 @@ function ResumenMarcador({ scoreLocal, scoreVisitante, pedLocal, hechoLocal, ped
 // MesaCircular.jsx) crece/achica para ocupar exactamente lo que sobra
 // del panel en vez de imponer su propio alto. Ver mesaFlexAreaStyle más
 // abajo para el nivel de afuera (cuánto del viewport le toca a este panel).
+//
+// Follow-up al rediseño: el maxWidth:640 que tenía este panel (heredado
+// de la mesa circular vieja, un cuadrado de ~680-740 unidades — 640px
+// era un tope razonable PARA ESA forma) quedó demasiado angosto para la
+// pista ovalada, bastante más ancha que alta. Subido a MESA_PANEL_MAX_W:
+// en un monitor de escritorio real (1440px) el ALTO disponible para "la
+// habitación" (lo que sobra del viewport después del marcador+señas+
+// botón salir, medido en vivo: ~540-600px en el caso común) es casi
+// siempre el límite real, no el ancho — a esa altura la pista (bastante
+// más ancha que alta, aspect-ratio ~1.35-1.4 en 6/8 jugadores) necesita
+// ~750-840px de ancho real. width:"100%" a secas (probado primero) deja
+// el panel ocupando el ancho COMPLETO del viewport aunque la mesa de
+// adentro nunca lo use — el <svg> hace su propio letterboxing interno
+// (preserveAspectRatio) para no deformarse, así que se ve chica
+// "flotando" en un panel enorme con aire de sobra a los costados,
+// exactamente la queja real reportada. MESA_PANEL_MAX_W deja bastante
+// más aire que el 640 original (mesa más grande que antes) sin ser un
+// full-bleed que deja la mayoría del panel vacío.
+const MESA_PANEL_MAX_W = 900;
 function BloqueMesa({ resumen, children }) {
   return (
-    <div style={{...panelStyle, borderRadius:16, width:"100%", maxWidth:640, display:"flex", flexDirection:"column", flex:"1 1 auto", minHeight:0}}>
+    <div style={{...panelStyle, borderRadius:16, width:"100%", maxWidth:MESA_PANEL_MAX_W, display:"flex", flexDirection:"column", flex:"1 1 auto", minHeight:0}}>
       <ResumenMarcador {...resumen}/>
       <div style={{flex:"1 1 auto", minHeight:0, display:"flex"}}>{children}</div>
     </div>
@@ -143,6 +162,14 @@ const CLOCK_ADAPTER_PANEL = { iniciarPara: () => {}, detener: () => {} };
 // comportamiento visible para el usuario, mecanismo CSS distinto.
 const fondoStyle = { background: colors.bg, height: "100vh", fontFamily: fonts.body };
 
+// Follow-up al rediseño: las 9 pantallas de fase usaban gap/padding
+// ligeramente distintos entre sí (10-16px) sin ningún motivo funcional —
+// 'playing' ya venía con los valores más ajustados (gap:10, padding:
+// "12px 8px"); unificar TODAS las fases a eso le devuelve ~15-25px de
+// alto extra a la mesa (flex:1, ver mesaFlexAreaStyle) en las fases que
+// tenían más aire, sin cambiar nada visible salvo cuánto le toca a la
+// mesa.
+
 // La zona de "la habitación" (BloqueMesa) crece/achica para ocupar el
 // espacio vertical que sobra dentro de fondoStyle (height:100vh) una vez
 // restado el resto del contenido de la pantalla (header, reloj, mano
@@ -150,7 +177,7 @@ const fondoStyle = { background: colors.bg, height: "100vh", fontFamily: fonts.b
 // referencia (mesa a flex:1+aspect-ratio adentro de lo que sobra).
 // minHeight:0 hace falta porque el default de un flex item es
 // min-height:auto (su alto de contenido), que ignoraría flex-shrink.
-const mesaFlexAreaStyle = { width: "100%", maxWidth: 640, flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" };
+const mesaFlexAreaStyle = { width: "100%", maxWidth: MESA_PANEL_MAX_W, flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" };
 
 // Piece P (batch overnight post-5r): ya no dibuja las cartas en sí —
 // duplicaban lo que el propio asiento ("VOS") ya muestra en la mesa,
@@ -877,7 +904,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     // mano que acaba de terminar es hand_number-1.
     const resultadoManoAnterior = handResults.find((h) => h.hand_number === gameState.hand_number - 1);
     return (
-      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"12px 8px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
           Mano {gameState.hand_number+1} de {room.config?.estructura?.length ?? "?"}
@@ -999,7 +1026,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     const seatGanador = gameState.last_trick_winner_seat;
 
     return (
-      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"12px 8px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
           Mano {gameState.hand_number+1} · base {trickNumber+1}/{totalBases}
@@ -1043,7 +1070,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     const etapa = trickComplete ? "la próxima base" : "la ronda";
 
     return (
-      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"12px 8px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
           Mano {gameState.hand_number+1} · base {gameState.base_num+1}/{totalBases}
@@ -1105,7 +1132,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
     const jugadoresDelEquipo = players.filter((p) => p.team === team);
 
     return (
-      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"12px 8px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
           Mano {gameState.hand_number+1} · base {gameState.base_num+1}/{totalBases}
@@ -1210,7 +1237,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       : { texto: "PERDIMOS LOS DOS", color: colors.negative, nombres: [] };
 
     return (
-      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"12px 8px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>Mano {gameState.hand_number+1} terminada</div>
 
@@ -1351,7 +1378,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
       ? (perdiPorTiempo ? "rgba(255,106,106,0.55)" : colors.positive.glow)
       : (equipoGanador === null ? "rgba(220,230,255,0.5)" : colors.team[equipoGanador===0?"local":"visitante"].readyGlow);
     return (
-      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"12px 8px"}}>
         <style>{`
           @keyframes lbGanadorPop { 0% { transform:scale(0.6); opacity:0; } 60% { transform:scale(1.08); opacity:1; } 100% { transform:scale(1); opacity:1; } }
           @keyframes lbGanadorGlow { 0%,100% { filter:drop-shadow(0 0 6px var(--glow)); } 50% { filter:drop-shadow(0 0 22px var(--glow)); } }
@@ -1394,7 +1421,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
   if (gameState.phase !== "bidding") {
     return (
-      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"16px 12px"}}>
+      <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"12px 8px"}}>
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:14,color:"#f0d080"}}>Fase: {gameState.phase}</div>
         <div style={{fontSize:10,color:"rgba(201,168,76,0.35)",fontStyle:"italic",textAlign:"center"}}>
@@ -1406,7 +1433,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
   }
 
   return (
-    <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:14,padding:"16px 12px"}}>
+    <div style={{...fondoStyle,display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"12px 8px"}}>
       <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
       <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>
         Mano {gameState.hand_number+1} · {totalBases} carta{totalBases!==1?"s":""}

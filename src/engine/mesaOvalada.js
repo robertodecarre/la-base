@@ -65,6 +65,27 @@ export function stadiumPoint(s, hw, r) {
   return { x, y, normalDeg: ((normalDeg % 360) + 360) % 360 };
 }
 
+// Distancia de arco `s` para el asiento `i` — recorre la pista en sentido
+// HORARIO con `i` creciente, igual que el mapeo circular viejo
+// (engine/structures.js, POS_ANGULOS: idx creciente ahí también resulta
+// horario — confirmado por cálculo directo del signo del producto cruz
+// entre asientos consecutivos, no a ojo). El propio mockup de referencia
+// recorre el perímetro en sentido antihorario (empezando en el tramo
+// recto inferior); usarlo tal cual invertía visualmente el sentido de
+// giro de la mesa respecto de cómo se veía ANTES del rediseño ovalado —
+// bug real reportado en vivo ("la mano arrancó en sentido horario en vez
+// de antihorario"). turn_seat/direction (play_card_rpc.sql) NUNCA se
+// tocaron en el rediseño — el estado de a quién le toca siempre fue
+// correcto, esto era puramente el mapeo asiento→posición física saliendo
+// espejado. `i=0` se queda en el mismo lugar (s=0, mismo punto de
+// arranque) y el resto recorre hacia atrás — un espejo horizontal exacto
+// de la pista (que es simétrica izquierda-derecha), no una re-derivación:
+// todo lo demás (empuje, nombre, rotación) sigue andando porque depende
+// del (x,y,normalDeg) resultante de stadiumPoint, nunca de `i`/`s` en sí.
+function seatArcLength(i, nJug, total) {
+  return (((nJug - i) % nJug) / nJug) * total;
+}
+
 // Contorno SVG de la pista (mismo hw que el óvalo exterior, solo el radio
 // de punta se achica RIM px, para que el paño verde sea un offset paralelo
 // exacto del borde marrón). hw<=0.5 (mesa de 4, ver STADIUM_PARAMS) cae en
@@ -93,8 +114,8 @@ export function pairAnchor(nJug, idxA, idxB) {
   const params = STADIUM_PARAMS[nJug] || STADIUM_PARAMS[6];
   const { hw, r, seatOffset } = params;
   const total = 4 * hw + 2 * Math.PI * r;
-  const ptA = stadiumPoint((idxA / nJug) * total, hw, r);
-  const ptB = stadiumPoint((idxB / nJug) * total, hw, r);
+  const ptA = stadiumPoint(seatArcLength(idxA, nJug, total), hw, r);
+  const ptB = stadiumPoint(seatArcLength(idxB, nJug, total), hw, r);
   const mx = (ptA.x + ptB.x) / 2, my = (ptA.y + ptB.y) / 2;
   const dist = Math.hypot(mx, my) || 1;
   // 2x seatOffset (no 1x): el punto medio ya arranca más adentro que un
@@ -123,7 +144,7 @@ export function layoutMesa(nJug, mySeat) {
   for (let i = 0; i < nJug; i++) {
     const isMine = mySeat != null && i === mySeat;
     const scale = isMine ? mySeatScale : 1;
-    const s = (i / nJug) * total;
+    const s = seatArcLength(i, nJug, total);
     const pt = stadiumPoint(s, hw, r);
     const normalRad = (pt.normalDeg * Math.PI) / 180;
     const push = seatOffset * (isMine ? 1.15 : 1);
@@ -155,7 +176,6 @@ export function layoutMesa(nJug, mySeat) {
     const isTop = !(pt.y >= r - 0.5);
     const nameX = fax + (isTop ? topNameOffsetX : nameOffsetX);
     const nameY = isTop ? fay - faceSize * 0.58 + topNameOffsetY : fay + faceSize * 0.42 + nameOffsetY;
-    const bubbleAnchorX = fax, bubbleAnchorY = fay - faceSize * 0.58;
     // Dirección "hacia afuera" (contraria al centro) en la que se apilan
     // más líneas de estado (rol/pedido, bases ganadas) debajo o encima del
     // nombre, según isTop — MesaCircular.jsx las consume tal cual en vez
@@ -165,6 +185,26 @@ export function layoutMesa(nJug, mySeat) {
     const escala = faceR / FACE_R;
     const rolY = nameY + outDir * 14 * escala;
     const basesY = nameY + outDir * 26 * escala;
+    // Viñeta de gesto largo: apilada MÁS AFUERA todavía que las bases
+    // ganadas, en la misma dirección (outDir) — no en el hueco entre
+    // carita y cartas (probado primero: ese hueco resultó demasiado
+    // angosto en la práctica, el propio abanico de cartas ya ocupa casi
+    // toda su mitad interna — confirmado renderizando de verdad, no en
+    // teoría) ni en la zona del nombre (bug real reportado en vivo: antes
+    // caía en el mismo punto que nameY para asientos isTop, la carta le
+    // pisaba el nombre). Apilar siempre DESPUÉS de todo lo demás que ya
+    // ocupa esa dirección es lo que garantiza cero superposición por
+    // construcción, sin importar isTop — mismo principio que ya evita el
+    // choque entre nombre/rol/bases entre sí. La colita NO apunta hasta la
+    // carita en sí (probado primero: con bubbleTail=faceCx/faceCy la línea
+    // atravesaba visualmente todo el bloque de nombre/rol/bases en el
+    // medio — confirmado renderizando de verdad) — apunta apenas más allá
+    // de basesY, justo antes de donde arranca la burbuja: un tallo corto
+    // que conecta con "el bloque" (carita+nombre+bases) sin cruzar ningún
+    // texto. GestureBubble (MesaCircular.jsx) elige sola qué borde de la
+    // caja usar según hacia dónde cae ese punto.
+    const bubbleBaseX = nameX, bubbleBaseY = basesY + outDir * 24 * escala;
+    const bubbleTailX = nameX, bubbleTailY = basesY + outDir * 4 * escala;
 
     // Punto de la mesa (paño) asociado a este asiento, para las cartas
     // YA JUGADAS al centro — interpolación 0.52 hacia el centro, igual
@@ -177,7 +217,7 @@ export function layoutMesa(nJug, mySeat) {
       faceCx: fax, faceCy: fay, faceR,
       cw, ch,
       nameX, nameY, rolY, basesY, isTop,
-      bubbleAnchorX, bubbleAnchorY,
+      bubbleBaseX, bubbleBaseY, bubbleTailX, bubbleTailY,
       tableCardPoint,
       cardsTransform: `rotate(${rot} ${ax} ${ay})`,
     });
@@ -195,10 +235,20 @@ export function layoutMesa(nJug, mySeat) {
   // de nJug/escala porque compensa el tamaño de fuente más grande
   // (mySeat) igual que el más chico (11-14px básicos).
   const TEXT_PAD = 22;
+  // La burbuja de viñeta (MesaCircular.jsx) es texto libre editado por el
+  // jugador — este módulo no conoce el contenido, así que en vez de
+  // TEXT_PAD (pensado para una línea corta de nombre) usa un colchón fijo
+  // más generoso pensado para el ANCHO máximo real que arma bubbleWidth()
+  // en MesaCircular.jsx (hasta 260px de ancho de burbuja, la mitad+margen
+  // acá) — un texto de viñeta excepcionalmente largo puede seguir
+  // sobrepasando esto (mismo límite que acepta el propio mockup de
+  // referencia con su `white-space:nowrap`, no una garantía dura), pero
+  // el caso típico (viñetas cortas tipo "PUTO!") queda con aire de sobra.
+  const BUBBLE_PAD_X = 140, BUBBLE_PAD_Y = 30;
   let reachMaxX = hw + r, reachMaxY = r;
   for (const s of seats) {
-    reachMaxX = Math.max(reachMaxX, Math.abs(s.faceCx - CX) + s.faceR, Math.abs(s.nameX - CX) + TEXT_PAD, Math.abs(s.bubbleAnchorX - CX) + TEXT_PAD);
-    reachMaxY = Math.max(reachMaxY, Math.abs(s.faceCy - CY) + s.faceR, Math.abs(s.basesY - CY) + TEXT_PAD, Math.abs(s.bubbleAnchorY - CY) + TEXT_PAD);
+    reachMaxX = Math.max(reachMaxX, Math.abs(s.faceCx - CX) + s.faceR, Math.abs(s.nameX - CX) + TEXT_PAD, Math.abs(s.bubbleBaseX - CX) + BUBBLE_PAD_X);
+    reachMaxY = Math.max(reachMaxY, Math.abs(s.faceCy - CY) + s.faceR, Math.abs(s.basesY - CY) + TEXT_PAD, Math.abs(s.bubbleBaseY - CY) + BUBBLE_PAD_Y);
   }
   const vbMinX = CX - reachMaxX, vbMinY = CY - reachMaxY;
   const vbW = 2 * reachMaxX, vbH = 2 * reachMaxY;

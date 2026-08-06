@@ -6,10 +6,19 @@ import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado } f
 // sobresalía de la elipse "mesa" (mesaRX/mesaRY en MesaCircular.jsx) y no
 // tenía fondo/borde propio removido todavía. Ahora: (1) sin fondo/borde
 // propio (PanelPedir.jsx/EsperaPedido en PantallaPartidaOnline.jsx), y (2)
-// su recuadro (contenidoBidding) siempre cae adentro del bounding box de
-// la elipse mesa, en vez de sobresalir de ella. Usa la estructura con más
+// su recuadro (contenidoBidding) siempre cae adentro del bounding box del
+// paño de la mesa, en vez de sobresalir de ella. Usa la estructura con más
 // bases posible para 4 jugadores (maxCartas(4)=7, ver engine/structures.js)
 // para ejercitar el peor caso (8 botones de número, la fila más alta).
+//
+// Rediseño de mesa ovalada: la elipse interna vieja (<ellipse rx="150"/
+// "165">) ya no existe — la mesa pasó de óvalo elíptico a pista tipo
+// "estadio" (dos semicírculos + tramos rectos, ver mesaOvalada.js), así
+// que el paño verde es un <path>, no un <ellipse>. El selector cambia a
+// buscar ese <path> por su color de relleno (PAÑO_FILL en MesaCircular.jsx,
+// el mismo verde en las tres cantidades de jugadores) en vez de un radio
+// fijo — la propiedad que este test verifica (el panel de pedir cabe
+// adentro del paño) no cambió, solo cómo identificar el paño en el DOM.
 test("online: el panel de pedir no tiene fondo/borde propio y cabe dentro de la elipse mesa", async ({ browser }) => {
   test.setTimeout(90_000);
   const nombres = ["P0", "P1", "P2", "P3"];
@@ -41,15 +50,13 @@ test("online: el panel de pedir no tiene fondo/borde propio y cabe dentro de la 
     const borderWidth = await panelRoot.evaluate((el) => getComputedStyle(el).borderWidth);
     expect(borderWidth, `PanelPedir no debería declarar su propio borde, midió ${borderWidth}`).toBe("0px");
 
-    // (2) el recuadro del centro cabe dentro del bounding box de la elipse
-    // "mesa" (el <ellipse> interno, distinto del óvalo exterior de
-    // asientos) — mesaRX=150 en la variante default (4/6 jugadores, ver
-    // GEOM en MesaCircular.jsx), rx=165 en la de 8.
+    // (2) el recuadro del centro cabe dentro del bounding box del paño
+    // verde (el <path> interno, distinto del borde de madera exterior).
     const dims = await manoPage.evaluate(() => {
-      const mesaEllipse = document.querySelector("ellipse[rx='150'], ellipse[rx='165']");
+      const paño = document.querySelector("path[fill='#1f4a34']");
       const overlay = document.querySelector("svg").nextElementSibling;
       return {
-        mesa: mesaEllipse.getBoundingClientRect(),
+        mesa: paño.getBoundingClientRect(),
         overlay: overlay.getBoundingClientRect(),
       };
     });
