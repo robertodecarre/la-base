@@ -162,15 +162,17 @@ test("online: recargar la página en distintos momentos siempre devuelve al juga
     }
     expect(turnoPagina, "ninguna sesión mostró tener su propio turno activo a tiempo").toBeTruthy();
 
-    // Con 1 carta por mano, el asiento propio en juego son 2 elementos <g>
-    // directos (borde + la única carta; el toggle "▼ ver" no se renderiza
-    // para mano.length===1).
+    // Con 1 carta por mano, el asiento propio en juego es 1 elemento <g>
+    // directo (la única carta; el toggle "▼ ver" no se renderiza para
+    // mano.length===1). Rediseño de mesa ovalada: ya no hay un <g filter>
+    // de borde por asiento — antes del rediseño esto daba 2 (borde+carta),
+    // ver el comentario largo en online-reparto-animado.spec.js.
     const miPropioAsiento = turnoPagina.locator("svg g", { hasText: "VOS" }).first();
-    await expect(miPropioAsiento.locator(":scope > g")).toHaveCount(2, { timeout: 10000 });
+    await expect(miPropioAsiento.locator(":scope > g")).toHaveCount(1, { timeout: 10000 });
 
     await turnoPagina.reload();
     await expect(turnoPagina.getByText(/Mano 1/)).toBeVisible({ timeout: 20000 });
-    await expect(turnoPagina.locator("svg g", { hasText: "VOS" }).first().locator(":scope > g")).toHaveCount(2, { timeout: 10000 });
+    await expect(turnoPagina.locator("svg g", { hasText: "VOS" }).first().locator(":scope > g")).toHaveCount(1, { timeout: 10000 });
 
     // Ahora sí juega la carta (jugarCartaDelTurnoActual — mismo helper
     // probado que ya usa online-hand-refresh.spec.js) y recarga ESA MISMA
@@ -192,7 +194,7 @@ test("online: recargar la página en distintos momentos siempre devuelve al juga
     let manoVacia = false;
     for (let intento = 0; intento < 40 && !manoVacia; intento++) {
       await jugarCartaDelTurnoActual(turnoPagina).catch(() => {});
-      manoVacia = (await miAsientoAntesDeRecargar.locator(":scope > g").count().catch(() => -1)) === 1;
+      manoVacia = (await miAsientoAntesDeRecargar.locator(":scope > g").count().catch(() => -1)) === 0;
       if (!manoVacia) await new Promise((r) => setTimeout(r, 500));
     }
     expect(manoVacia, "la mano propia no quedó vacía tras jugar la única carta").toBe(true);
@@ -205,7 +207,7 @@ test("online: recargar la página en distintos momentos siempre devuelve al juga
     // propia sigue vacía (refleja lo que el server tiene en `hands`), no
     // vuelve a mostrar la carta ya jugada.
     const miAsiento = turnoPagina.locator("svg g", { hasText: "VOS" }).first();
-    await expect(miAsiento.locator(":scope > g")).toHaveCount(1, { timeout: 10000 });
+    await expect(miAsiento.locator(":scope > g")).toHaveCount(0, { timeout: 10000 });
 
     expect(erroresConsola, `errores de consola:\n${erroresConsola.join("\n")}`).toEqual([]);
   } finally {

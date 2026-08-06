@@ -11,7 +11,7 @@ import { crearYUnirseSalaOnline, alternarListoEnPantalla, pasarSorteoAnimado } f
 // A propósito NO toca la pantalla/animación de sorteo ni gestos de mano
 // sincronizados (fuera de alcance para este batch).
 
-test("online: el asiento propio (VOS) mide 1.5x el resto de los asientos, no 1.4x", async ({ browser }) => {
+test("online: el asiento propio (VOS) mide STADIUM_PARAMS[4].mySeatScale el resto de los asientos", async ({ browser }) => {
   test.setTimeout(90_000);
   const nombres = ["P0", "P1", "P2", "P3"];
   const contexts = await Promise.all(nombres.map(() => browser.newContext()));
@@ -26,21 +26,32 @@ test("online: el asiento propio (VOS) mide 1.5x el resto de los asientos, no 1.4
     }
 
     const host = pages[0];
+    // Rediseño de mesa ovalada: ya no hay un <rect rx="16"> de fondo por
+    // asiento (la mesa pasó de casillero cuadrado a carita SVG sobre el
+    // paño) — el proxy de tamaño ahora es el <svg> anidado de ReactionFace
+    // (width=faceR*2.1*2, ver mesaOvalada.js), que escala 1:1 con el
+    // factor de "asiento propio" de ESE asiento. Ya no es un 1.5x fijo
+    // (MYSEAT_SCALE): mesaOvalada.js afina mySeatScale por cantidad de
+    // jugadores (STADIUM_PARAMS[4].mySeatScale = 1.55, valor tal cual el
+    // mockup de referencia "Mesa Ovalada para La Base"), la razón sigue
+    // siendo un chequeo de regresión real (agarra si alguien vuelve a
+    // tocar ese valor sin querer), solo que ya no es el mismo número en
+    // las tres cantidades de jugadores — ver el segundo test de este
+    // archivo (SorteoAnimado, pantalla aparte) que sigue midiendo 1.5x
+    // porque esa pantalla no forma parte de este rediseño.
     // host es siempre P0 (crearYUnirseSalaOnline: el creador de la sala
     // pica LOCAL primero, primer asiento = seat 0) — comparar contra P1
     // específicamente, en vez de un rol como "PIE", evita el caso borde
     // en que host resulte ser también el repartidor (mismo asiento
-    // matchearía las dos búsquedas). El borde de cada asiento es el
-    // primer <rect rx="16"> dentro del <g filter> que lo envuelve (ver
-    // MesaCircular.jsx) — width termina siendo boxW*escala.
+    // matchearía las dos búsquedas).
     const miAsiento = host.locator("svg g", { hasText: "VOS" }).first();
     const otroAsiento = host.locator("svg g", { hasText: "P1" }).first();
 
-    const miAncho = await miAsiento.locator("rect[rx='16']").first().getAttribute("width");
-    const otroAncho = await otroAsiento.locator("rect[rx='16']").first().getAttribute("width");
+    const miAncho = await miAsiento.locator("svg").first().getAttribute("width");
+    const otroAncho = await otroAsiento.locator("svg").first().getAttribute("width");
 
     const ratio = parseFloat(miAncho) / parseFloat(otroAncho);
-    expect(ratio, `esperaba 1.5x, mi ancho=${miAncho} otro ancho=${otroAncho}`).toBeCloseTo(1.5, 2);
+    expect(ratio, `esperaba 1.55x (STADIUM_PARAMS[4].mySeatScale), mi ancho=${miAncho} otro ancho=${otroAncho}`).toBeCloseTo(1.55, 2);
   } finally {
     for (const c of contexts) await c.close();
   }

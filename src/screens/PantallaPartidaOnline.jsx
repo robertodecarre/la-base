@@ -59,11 +59,18 @@ function ResumenMarcador({ scoreLocal, scoreVisitante, pedLocal, hechoLocal, ped
 // Bloque fusionado resumen+mesa, mismo marco compartido — se repite en
 // bidding/playing/resolving/copas_menu/oros_menu/closing (piece 5n: antes
 // la mesa/marcador no se veían fuera de 'playing').
+// Rediseño de mesa ovalada, item 3: BloqueMesa pasa a columna flex con
+// ResumenMarcador (alto natural) arriba y "children" (MesaCircular)
+// abajo a flex:1+minHeight:0 — así la mesa (que ahora se autodimensiona
+// por aspect-ratio, ver el <div> que envuelve el <svg> en
+// MesaCircular.jsx) crece/achica para ocupar exactamente lo que sobra
+// del panel en vez de imponer su propio alto. Ver mesaFlexAreaStyle más
+// abajo para el nivel de afuera (cuánto del viewport le toca a este panel).
 function BloqueMesa({ resumen, children }) {
   return (
-    <div style={{...panelStyle, borderRadius:16, width:"100%", maxWidth:640}}>
+    <div style={{...panelStyle, borderRadius:16, width:"100%", maxWidth:640, display:"flex", flexDirection:"column", flex:"1 1 auto", minHeight:0}}>
       <ResumenMarcador {...resumen}/>
-      {children}
+      <div style={{flex:"1 1 auto", minHeight:0, display:"flex"}}>{children}</div>
     </div>
   );
 }
@@ -119,7 +126,31 @@ const CLOCK_ADAPTER_PANEL = { iniciarPara: () => {}, detener: () => {} };
 // Fondo compartido por TODAS las pantallas de fase de esta partida — sin
 // esto, esta era la única pantalla reskineada que no tapaba el body (ver
 // index.html), dejando ver el verde viejo alrededor/detrás de la mesa.
-const fondoStyle = { background: colors.bg, minHeight: "100vh", fontFamily: fonts.body };
+// Rediseño de mesa ovalada, item 3: pasa de minHeight a height:100vh a
+// propósito — un contenedor flex con solo minHeight (no height) no le da a
+// flex-shrink ningún techo real contra el cual achicar a la mesa (probado
+// en vivo: con minHeight, la mesa siempre renderizaba a su alto "natural"
+// vía aspect-ratio y el contenedor entero crecía para acompañarla, en vez
+// de cederle a la mesa el espacio que sobraba — el flex:1/minHeight:0 de
+// mesaFlexAreaStyle de por sí no alcanza sin un height real arriba). Con
+// height:100vh, flex-shrink SÍ tiene un tope real: si mesa+header+señas
+// entran en 100vh (el caso 1440×900 de referencia), la mesa se achica
+// justo a lo que sobra y no hay scroll; si NO entran (viewports chicos,
+// ver tests/online-panel-reflow.spec.js que resizea a 900x900/500x500), el
+// contenido sigue "escapando" visualmente de esa caja de 100vh hacia abajo
+// (overflow default, sin overflow:hidden en ningún nivel) y el documento
+// vuelve a scrollear como scrolleaba antes de este rediseño — mismo
+// comportamiento visible para el usuario, mecanismo CSS distinto.
+const fondoStyle = { background: colors.bg, height: "100vh", fontFamily: fonts.body };
+
+// La zona de "la habitación" (BloqueMesa) crece/achica para ocupar el
+// espacio vertical que sobra dentro de fondoStyle (height:100vh) una vez
+// restado el resto del contenido de la pantalla (header, reloj, mano
+// propia, señas, botón salir) — mismo modelo que el propio mockup de
+// referencia (mesa a flex:1+aspect-ratio adentro de lo que sobra).
+// minHeight:0 hace falta porque el default de un flex item es
+// min-height:auto (su alto de contenido), que ignoraría flex-shrink.
+const mesaFlexAreaStyle = { width: "100%", maxWidth: 640, flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" };
 
 // Piece P (batch overnight post-5r): ya no dibuja las cartas en sí —
 // duplicaban lo que el propio asiento ("VOS") ya muestra en la mesa,
@@ -923,7 +954,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         {/* Igual que en el panel de pedir: se bloquea la interacción acá
             afuera mientras la RPC está en vuelo, para que un doble tap no
             dispare un segundo play_card. */}
-        <div style={{width:"100%",maxWidth:640,pointerEvents:enviandoJugada?"none":"auto",opacity:enviandoJugada?0.6:1}}>
+        <div style={{...mesaFlexAreaStyle,pointerEvents:enviandoJugada?"none":"auto",opacity:enviandoJugada?0.6:1}}>
           <BloqueMesa resumen={resumenProps}>
             <MesaCircular
               jugadores={jugadoresMesa}
@@ -974,7 +1005,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           Mano {gameState.hand_number+1} · base {trickNumber+1}/{totalBases}
         </div>
 
-        <div style={{width:"100%",maxWidth:640}}>
+        <div style={mesaFlexAreaStyle}>
           <BloqueMesa resumen={resumenProps}>
             <MesaCircular
               jugadores={jugadoresMesa} cartasMesa={cartasDeTrick(trickNumber)}
@@ -1018,7 +1049,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           Mano {gameState.hand_number+1} · base {gameState.base_num+1}/{totalBases}
         </div>
 
-        <div style={{width:"100%",maxWidth:640}}>
+        <div style={mesaFlexAreaStyle}>
           <BloqueMesa resumen={resumenProps}>
             <MesaCircular
               jugadores={jugadoresMesa} cartasMesa={cartasDeTrick(gameState.base_num)}
@@ -1080,7 +1111,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
           Mano {gameState.hand_number+1} · base {gameState.base_num+1}/{totalBases}
         </div>
 
-        <div style={{width:"100%",maxWidth:640}}>
+        <div style={mesaFlexAreaStyle}>
           <BloqueMesa resumen={resumenProps}>
             <MesaCircular
               jugadores={jugadoresMesa} cartasMesa={cartasDeTrick(gameState.base_num - 1)}
@@ -1183,7 +1214,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
         <div style={{fontSize:18,color:"#f0d080",letterSpacing:3}}>SALA {room.code}</div>
         <div style={{fontSize:11,color:"rgba(201,168,76,0.5)"}}>Mano {gameState.hand_number+1} terminada</div>
 
-        <div style={{width:"100%",maxWidth:640}}>
+        <div style={mesaFlexAreaStyle}>
           <BloqueMesa resumen={resumenProps}>
             <MesaCircular
               jugadores={jugadoresMesa} cartasMesa={cartasDeTrick(totalBases - 1)}
@@ -1391,7 +1422,7 @@ export function PantallaPartidaOnline({ roomId, room, players, gameState, played
 
       <MiMano cartas={misCartas} error={errorMano}/>
 
-      <div style={{width:"100%",maxWidth:640}}>
+      <div style={mesaFlexAreaStyle}>
         <BloqueMesa resumen={resumenProps}>
           <MesaCircular
             jugadores={jugadoresMesa} cartasMesa={cartasDeTrick(gameState.base_num)}

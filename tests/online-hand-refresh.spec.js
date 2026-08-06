@@ -176,12 +176,17 @@ test("online: la mano 2 en bidding muestra la mano repartida, no vacía", async 
     // que vivía arriba de la pantalla (MiMano ya no dibuja las cartas,
     // solo error/"Cargando…" — duplicaba el propio asiento en la mesa), así
     // que la única fuente de la mano real ahora es el asiento "VOS" dentro
-    // de MesaCircular: 2 elementos <g> directos para una mano de 1 carta
-    // (borde + la única carta; el toggle "▼ ver" no se renderiza para
-    // mano.length===1 — mismo conteo que ya usa online-reconexion-sala.spec.js).
+    // de MesaCircular: 1 elemento <g> directo para una mano de 1 carta (el
+    // toggle "▼ ver" no se renderiza para mano.length===1 — mismo conteo
+    // que ya usa online-reconexion-sala.spec.js). Rediseño de mesa ovalada:
+    // ya no hay un <g filter> de borde por asiento (el asiento pasó de
+    // casillero cuadrado a carita+abanico sobre el paño), así que el
+    // conteo bajó en 1 respecto de antes del rediseño en TODOS los specs
+    // que usan este mismo patrón — ver el comentario largo en
+    // online-reparto-animado.spec.js.
     for (let i = 0; i < 4; i++) {
       const miAsiento = pages[i].locator("svg g", { hasText: "VOS" }).first();
-      await expect(miAsiento.locator(":scope > g"), `sesión ${NOMBRES[i]}: mano de la carta 2 debería tener 1 carta`).toHaveCount(2, { timeout: 10000 });
+      await expect(miAsiento.locator(":scope > g"), `sesión ${NOMBRES[i]}: mano de la carta 2 debería tener 1 carta`).toHaveCount(1, { timeout: 10000 });
       await expect(pages[i].getByText("Cargando tu mano")).toHaveCount(0);
     }
 

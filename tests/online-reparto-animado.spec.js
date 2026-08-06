@@ -24,8 +24,13 @@ const NOMBRES = ["P0", "P1", "P2", "P3"];
 
 // Cuenta los <g> hijos directos del grupo de un asiento en la mesa —
 // mismo patrón ya usado en online-hand-refresh.spec.js/online-
-// reconexion-sala.spec.js: borde + (toggle "▼ ver" si mano.length>1) +
-// una carta por <g>. Con 3 cartas: borde(1) + toggle(1) + 3 cartas = 5.
+// reconexion-sala.spec.js: (toggle "▼ ver" si mano.length>1) + una carta
+// por <g>. Con 3 cartas: toggle(1) + 3 cartas = 4. Rediseño de mesa
+// ovalada: ya no hay un <g filter> de borde por asiento (el asiento pasó
+// de casillero cuadrado con fondo/borde propio a carita+abanico
+// directamente sobre el paño de la mesa) — antes del rediseño esto daba 5
+// (borde+toggle+3 cartas), confirmado con Playwright real contra el
+// código viejo antes de actualizar este número.
 function gDirectosDeAsiento(page, nombre) {
   return page.locator("svg g", { hasText: nombre }).first().locator(":scope > g");
 }
@@ -84,10 +89,10 @@ test("online: el reparto de la mano viaja carta por carta y bloquea el pedido ha
     // cartas reales) y las otras 3 con su pila boca abajo también
     // completa (3 elementos) — nunca una mano ajena a medio repartir.
     for (let i = 0; i < NOMBRES.length; i++) {
-      await expect(gDirectosDeAsiento(pages[i], NOMBRES[i]), `sesión ${NOMBRES[i]}: su propio abanico`).toHaveCount(5, { timeout: 15000 });
+      await expect(gDirectosDeAsiento(pages[i], NOMBRES[i]), `sesión ${NOMBRES[i]}: su propio abanico`).toHaveCount(4, { timeout: 15000 });
     }
     for (const otro of NOMBRES.filter((n) => n !== "P0")) {
-      await expect(gDirectosDeAsiento(host, otro), `host viendo la pila de ${otro}`).toHaveCount(5, { timeout: 15000 });
+      await expect(gDirectosDeAsiento(host, otro), `host viendo la pila de ${otro}`).toHaveCount(4, { timeout: 15000 });
     }
 
     expect(erroresConsola, `errores de consola:\n${erroresConsola.join("\n")}`).toEqual([]);
@@ -131,7 +136,7 @@ test("online: reconectar a mitad de una mano ya repartida muestra la mano comple
     // Sin el hint de "repartiendo" ni un abanico a medio llegar: la mano
     // completa aparece de una.
     await expect(pages[3].getByText(/Repartiendo tu mano/)).toHaveCount(0);
-    await expect(gDirectosDeAsiento(pages[3], "P3")).toHaveCount(5, { timeout: 5000 });
+    await expect(gDirectosDeAsiento(pages[3], "P3")).toHaveCount(4, { timeout: 5000 });
 
     expect(erroresConsola, `errores de consola:\n${erroresConsola.join("\n")}`).toEqual([]);
   } finally {

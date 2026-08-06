@@ -1,4 +1,4 @@
-import { posEnCirculo, rotacionHaciaCentro } from "../engine/structures";
+import { layoutMesa, pairAnchor } from "../engine/mesaOvalada";
 import { CartaSVG } from "./cards/CartaSVG";
 import { ReactionFace } from "./ReactionFace";
 import { bubbleEfectivo } from "../lib/senas";
@@ -27,13 +27,12 @@ function PuntosBasesSVG({ ganadas, total, cx, y, color }) {
   );
 }
 
-// rotDeg (feature de rotación, hasta ahora inexistente en este componente
-// — ver rotacionHaciaCentro en engine/structures.js) gira cada carta hacia
-// el centro de la mesa, como una mano sostenida en ángulo. Se aplica
-// directo en el `transform` del <g> QUE YA EXISTE por carta (compuesto
-// junto al translate existente, `rotate(...) translate(x,y)`) en vez de
-// envolver todo en un <g> nuevo — un wrapper nuevo rompería el conteo de
-// "hijos directos = cartas" que varios tests y tests/helpers.js's
+// rotDeg gira cada carta hacia el centro de la mesa, como una mano
+// sostenida en ángulo — la carita nunca rota (ver mesaOvalada.js), solo el
+// abanico. Se aplica directo en el `transform` del <g> QUE YA EXISTE por
+// carta (compuesto junto al translate existente, `rotate(...) translate(x,y)`)
+// en vez de envolver todo en un <g> nuevo — un wrapper nuevo rompería el
+// conteo de "hijos directos = cartas" que varios tests y tests/helpers.js's
 // jugarCartaDelTurnoActual asumen (ver el comentario largo sobre esto
 // mismo en ReactionFace.jsx, mismo motivo).
 function CartasManoSVG({ mano, cx, cy, seleccionable, onTirar, expandido, onToggleExpandir, cartaLevantada, onLevantarCarta, bocaAbajo, cw, ch, rotDeg=0 }) {
@@ -154,19 +153,11 @@ function ClockIcon({ x, y, abierta, onToggle }) {
   );
 }
 
-// "Llevar base" (piece G, batch overnight post-5r — renombrado y agrandado
-// 2x en piece W, mismo batch) — antes vivía como <Btn> HTML debajo de la
-// mesa, en PantallaPartidaOnline.jsx; ahora se planta en la esquina
-// inferior derecha de "la habitación": el canvas CUADRADO de este SVG
-// (SIZE×SIZE) es más grande que la elipse redonda de la mesa que contiene
-// (outerRX/outerRY), así que las esquinas quedan con espacio de sobra sin
-// usar — ahí es "la habitación", fuera del círculo. Mismo verde que el
-// <Btn verde> que reemplaza (colors.positive, ver #positivoG en <defs>).
-// Mismo componente cubre las dos audiencias: quien ganó la base ve el
-// botón real, el resto ve el mismo cartel pero como texto de espera con
-// el nombre de quien tiene que confirmar. Piece W: posición/gating sin
-// cambios (mismo anclaje x,y en la esquina inferior derecha) — solo
-// tamaño (w/h y todo lo de adentro, 2x el original 118x30) y label.
+// "Llevar base" (piece G/W) — esquina inferior derecha de "la habitación":
+// el margen del viewBox (mesaOvalada.js) deja espacio de sobra ahí, fuera
+// del óvalo de la mesa. Mismo componente cubre las dos audiencias: quien
+// ganó la base ve el botón real, el resto ve el mismo cartel pero como
+// texto de espera con el nombre de quien tiene que confirmar.
 function SiguienteBaseHabitacion({ x, y, esGanador, nombreGanador, enviando, onConfirmar }) {
   if (esGanador) {
     const w = 236, h = 60;
@@ -191,44 +182,17 @@ function SiguienteBaseHabitacion({ x, y, esGanador, nombreGanador, enviando, onC
   );
 }
 
-// Config geométrica por cantidad de jugadores. RX/RY (radio del anillo de
-// asientos) se mantienen igual que antes del reskin — no es parte de este
-// pase, solo el tamaño de la mesa central, el anillo de cartas jugadas y
-// el canvas (que ahora necesita más margen para el asiento propio
-// agrandado, ver GEOM.pushOwn). direccion-mesa-8p.html se trató aparte
-// (no un 6p escalado): mesa/anillo de cartas propios, no reusa los de 6p.
-const GEOM = {
-  8: {
-    RX: 200, RY: 185,
-    canvasSize: 680, cx: 340, cy: 340,
-    outerRX: 290, outerRY: 270,
-    mesaRX: 165, mesaRY: 145,
-    cartaMesaRX: 129, cartaMesaRY: 106,
-    boxW: 108, boxH: 96,
-  },
-  default: {
-    RX: 220, RY: 200,
-    canvasSize: 740, cx: 370, cy: 370,
-    outerRX: 310, outerRY: 285,
-    mesaRX: 150, mesaRY: 112,
-    cartaMesaRX: 120, cartaMesaRY: 98,
-    boxW: 112, boxH: 98,
-  },
-};
-// Cuánto más lejos del centro se ancla el asiento propio (agrandado) — el
-// resto de los asientos usa RX/RY tal cual.
-const PUSH_OWN = 1.22;
-// Cartas de la mesa y de la mano: 10% más grandes que el tamaño previo al
-// reskin (34x50 mesa, 28x40 mano). El asiento propio (contenedor Y mano)
-// además se escala 1.5x contra el resto de los asientos — piece K (batch
-// overnight post-5r) sube esto desde 1.4x, reemplazando el factor viejo
-// en vez de apilar un 50% adicional sobre él.
+// Cartas de la mesa y de la mano: mismos tamaños fijos que antes del
+// rediseño de la mesa ovalada (10% más grandes que el tamaño previo al
+// primer reskin, 34x50 mesa / 28x40 mano) — esto no cambia con la forma
+// de la mesa, solo cambia DÓNDE se ubican (mesaOvalada.js).
 const CARTA_MESA = { w: 37, h: 55 };
 const CARTA_MANO = { w: 31, h: 44 };
 // Exportado (feature #1, batch post-mano_seat-split) — SorteoAnimado.jsx
 // lo usa para el mismo factor en vez de mantener su propia copia
-// hardcodeada, que era exactamente el bug reportado ("MYSEAT_SCALE
-// copy-pasteado a mano").
+// hardcodeada. No tiene relación con STADIUM_PARAMS[nJug].mySeatScale
+// (mesaOvalada.js) — SorteoAnimado es una pantalla circular aparte, con su
+// propio afinado.
 export const MYSEAT_SCALE = 1.5;
 
 // Piece Q (batch overnight post-5r): keyframe del viaje de reparto,
@@ -275,20 +239,22 @@ function CartaViajeraReparto({ destino, origen }) {
   );
 }
 
-// Fracción del semieje de la elipse "mesa" (mesaRX/mesaRY) que ocupa el
-// recuadro del centro durante 'bidding' — piece Y (batch overnight post-5r,
-// reemplaza el recuadro fijo 280x300 de piece S, que sobresalía de la
-// elipse interna y tapaba la mesa). Ancho/alto en fracciones DISTINTAS (no
-// un único k): la elipse mesa es bastante más ancha que alta (mesaRX>mesaRY
-// en las dos variantes de GEOM), así que un rectángulo con las esquinas
-// estrictamente adentro (fórmula (a/mesaRX)²+(b/mesaRY)²≤1) fuerza un alto
-// muy chico para caber. El panel ya no dibuja su propio fondo/borde (piece
-// Y): lo único que se ve son los controles (chips de número, texto)
-// centrados adentro, así que un poco de margen matemático de sobra en las
-// esquinas del rectángulo invisible no se nota — verificado con captura
-// contra el óvalo real, no asumido.
+// Fracción del semieje de la mesa (hw+r horizontal, r vertical) que ocupa
+// el recuadro del centro durante 'bidding' — mismo criterio que antes del
+// rediseño (verificado con captura contra la forma real, ahora la pista
+// ovalada en vez de la elipse): ancho/alto en fracciones DISTINTAS porque
+// la mesa sigue siendo bastante más ancha que alta.
 const CENTRO_BIDDING_WK = 0.78;
 const CENTRO_BIDDING_HK = 0.85;
+
+// Colores de la mesa en sí (borde de madera + paño verde) — igual que las
+// caritas (ReactionFace.jsx) y las cartas (CartaSVG), son colores de
+// ilustración SVG específicos de esta pieza, no tokens generales de UI:
+// se quedan acá en vez de theme.js, mismo criterio ya establecido para
+// ambos. Calcados del mockup de referencia (Mesa Ovalada para La Base),
+// no aproximados.
+const MADERA_FILL = "#3c2a1c", MADERA_STROKE = "#6b4a2a";
+const PAÑO_FILL = "#1f4a34", PAÑO_STROKE = "#3a6b4d";
 
 // `mySeat` es para la mesa online (pieza 5e): en hotseat es undefined y el
 // tablero se comporta como siempre (cualquier mano visible es jugable en su
@@ -298,30 +264,21 @@ const CENTRO_BIDDING_HK = 0.85;
 // y acá alcanza con no dejar tirar cartas ajenas aunque sea su turno.
 export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx, onTirar, fase, ganadorBase, pedidos, capLocal, capVisitante, expandidos, onToggleExpandir, cartasLevantadas, onLevantarCarta, mySeat, totalBases, tableroAbierto, onToggleTablero, onSiguienteBase, enviandoResolucion, hayReloj, relojAbierto, onToggleReloj, mirenmeTeamObj, senasMappingCompleto, cartasViajandoReparto, contenidoBidding, resultadoMano }) {
   const nJug = jugadores.length || 6;
-  const G = GEOM[nJug] || GEOM.default;
-  const { RX, RY, canvasSize: SIZE, cx: CX, cy: CY, outerRX, outerRY, mesaRX, mesaRY, cartaMesaRX, cartaMesaRY, boxW, boxH } = G;
-  // Punto medio entre los dos capitanes (siempre seat 0 y seat 1) a
-  // escala 1 — ver comentario de LibretaIcon.
-  const posCapLocal = posEnCirculo(0, RX, RY, CX, CY, nJug);
-  const posCapVisitante = posEnCirculo(1, RX, RY, CX, CY, nJug);
-  const libretaPos = { x: (posCapLocal.x + posCapVisitante.x) / 2, y: (posCapLocal.y + posCapVisitante.y) / 2 };
+  const mesa = layoutMesa(nJug, mySeat);
+  const { seats, outerPath, innerPath, hw, r, cx: CX, cy: CY, vbMinX, vbMinY, vbW, vbH } = mesa;
+  // Punto entre los dos capitanes (siempre seat 0 y seat 1) — pairAnchor
+  // (mesaOvalada.js) empuja el punto medio hacia afuera del centro en vez
+  // de usar la cuerda entre sus anclas tal cual (esa cuerda cae más cerca
+  // del centro que cualquiera de los dos asientos, lo que para nJug=4
+  // terminaba metiendo el ícono DENTRO del panel de pedir — confirmado con
+  // Playwright real, el CONFIRMA le tapaba el click). No depende de
+  // mySeat: siempre a la misma posición sin importar quién mire.
+  const libretaPos = pairAnchor(nJug, 0, 1);
   const clockPos = { x: libretaPos.x + 28, y: libretaPos.y };
 
   const svg = (
-    <svg viewBox={`0 0 ${SIZE} ${SIZE}`} style={{width:"100%",userSelect:"none"}}>
+    <svg viewBox={mesa.viewBox} style={{width:"100%",height:"100%",display:"block",userSelect:"none"}}>
       <defs>
-        <radialGradient id="mesaFondo" cx="50%" cy="42%" r="65%">
-          <stop offset="0%" stopColor="#24306e"/><stop offset="55%" stopColor="#0d1230"/><stop offset="100%" stopColor="#060814"/>
-        </radialGradient>
-        <linearGradient id="panelFondo" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#171f4a"/><stop offset="100%" stopColor="#0a0e26"/>
-        </linearGradient>
-        <linearGradient id="localG" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#4a6ac0"/><stop offset="45%" stopColor="#253a80"/><stop offset="100%" stopColor="#16234f"/>
-        </linearGradient>
-        <linearGradient id="visitanteG" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#d8703f"/><stop offset="45%" stopColor="#8a3c1c"/><stop offset="100%" stopColor="#4f1f0e"/>
-        </linearGradient>
         <linearGradient id="positivoG" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#4ae08a"/><stop offset="55%" stopColor="#1e9c5a"/><stop offset="100%" stopColor="#0e5c34"/>
         </linearGradient>
@@ -334,19 +291,22 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
         <style>{REPARTO_KEYFRAMES}</style>
       </defs>
 
-      <ellipse cx={CX} cy={CY} rx={outerRX} ry={outerRY} fill="url(#mesaFondo)" stroke={colors.panel.border} strokeWidth={2}/>
-      <ellipse cx={CX} cy={CY} rx={outerRX-4} ry={outerRY-4} fill="none" stroke="rgba(140,160,240,0.15)" strokeWidth={1}/>
-
-      {jugadores.map((_,idx)=>{
-        const pos=posEnCirculo(idx,RX,RY,CX,CY,nJug);
-        return <line key={`ln-${idx}`} x1={CX} y1={CY} x2={pos.x} y2={pos.y} stroke="rgba(140,160,240,0.06)" strokeWidth={1} strokeDasharray="3,7"/>;
-      })}
-      <ellipse cx={CX} cy={CY} rx={mesaRX} ry={mesaRY} fill="url(#panelFondo)" stroke={colors.panel.border} strokeWidth={2}/>
-      <ellipse cx={CX} cy={CY} rx={mesaRX-5} ry={mesaRY-5} fill="none" stroke="rgba(140,160,240,0.12)" strokeWidth={1}/>
+      {/* Mesa ovalada tipo "pista" — borde de madera + paño verde, ver
+          mesaOvalada.js (_stadiumPath, calcado del mockup de referencia). */}
+      <path d={outerPath} fill={MADERA_FILL} stroke={MADERA_STROKE} strokeWidth={6}/>
+      <path d={innerPath} fill={PAÑO_FILL} stroke={PAÑO_STROKE} strokeWidth={2}/>
 
       {cartasMesa.map((item,i)=>{
-        const p=posEnCirculo(item.jugadorIdx,cartaMesaRX,cartaMesaRY,CX,CY,nJug);
-        return <g key={`cm-${i}`} transform={`translate(${p.x-CARTA_MESA.w/2},${p.y-CARTA_MESA.h/2})`}><CartaSVG carta={item.carta} w={CARTA_MESA.w} h={CARTA_MESA.h}/></g>;
+        const seat = seats[item.jugadorIdx];
+        if (!seat) return null;
+        const p = seat.tableCardPoint;
+        return (
+          <g key={`cm-${i}`} transform={`rotate(${seat.rot} ${p.x} ${p.y})`}>
+            <g transform={`translate(${p.x-CARTA_MESA.w/2},${p.y-CARTA_MESA.h/2})`}>
+              <CartaSVG carta={item.carta} w={CARTA_MESA.w} h={CARTA_MESA.h}/>
+            </g>
+          </g>
+        );
       })}
 
       {ganadorBase!==null ? (
@@ -374,9 +334,8 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
       ) : null}
 
       {jugadores.map((j,idx)=>{
+        const seat = seats[idx];
         const esMiAsiento = mySeat===idx;
-        const push = esMiAsiento ? PUSH_OWN : 1;
-        const pos=posEnCirculo(idx,RX*push,RY*push,CX,CY,nJug);
         const esTurno=idx===turnoIdx&&fase==="jugar";
         const puedeElegir = mySeat==null ? esTurno : (esTurno && idx===mySeat);
         const esPie=idx===pieIdx, esMano=idx===manoIdx;
@@ -386,38 +345,18 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
         // el seat.
         const equipo = idx%2===0 ? "local" : "visitante";
         const t = colors.team[equipo];
-        const escala = esMiAsiento ? MYSEAT_SCALE : 1;
-        // Feature de rotación: el abanico de cartas girado hacia el centro
-        // ocupa un rectángulo delimitador más ANCHO en 45°/135°/225°/315°
-        // que en cualquier otro ángulo (una tira ancha y baja, al girarla
-        // en diagonal, pasa a ocupar espacio real en las dos dimensiones a
-        // la vez) — confirmado visualmente con capturas a 6/8 jugadores
-        // (PantallaDevFake), no solo calculado. `diagBoost` crece la caja
-        // del asiento (nunca las cartas en sí, a pedido) hasta un 32% más
-        // en la diagonal exacta, interpolando a 0 en los ángulos rectos
-        // (donde la caja ya alcanza sin agrandar nada).
-        const rotDeg = rotacionHaciaCentro(idx, nJug);
-        const diagBoost = 1 + 0.32 * Math.abs(Math.sin((rotDeg * Math.PI) / 90));
-        const bw=boxW*escala*diagBoost, bh=boxH*escala*diagBoost, bx=pos.x-bw/2, by=pos.y-bh/2;
-        // El contenido (nombre/estado/cara/cartas) sigue anclado a la caja
-        // SIN el diagBoost — solo el fondo (bw/bh/bx/by de arriba) crece.
-        // Si el contenido usara `by` (que sí crece con diagBoost), cada
-        // vez que la caja crece el ancla de las cartas se correría hacia
-        // arriba junto con el borde superior, en vez de quedarse fija con
-        // más margen alrededor — exactamente lo que hacía que agrandar la
-        // caja no evitara el desborde la primera vez que se probó (ver
-        // PantallaDevFake, capturas a 8 jugadores).
-        const byContent = pos.y - (boxH*escala)/2;
+        // Factor de escala de texto/pips (seat.escala, mesaOvalada.js) —
+        // derivado del radio real de la carita de este asiento (ya incluye
+        // el empuje de "asiento propio" y el afinado por nJug), mismo rol
+        // que la vieja variable `escala`.
+        const escala = seat.escala;
         const pedido=pedidos?.[idx%2===0?0:1];
-        // Dos señales distintas y no intercambiables: el borde neón marca
-        // de QUIÉN es el turno (universal, no depende del equipo); el
-        // tamaño +40% (arriba, `escala`) marca CUÁL asiento es el propio,
-        // de forma permanente incluso cuando el turno neón está activo.
-        const borderColor = esTurno ? colors.turn.color : (esMiAsiento ? t.readyBorder : t.border);
-        const borderWidth = esTurno ? 3 : (esMiAsiento ? 2.5 : 1.5);
-        const filtro = esTurno ? "url(#glowTurno)" : undefined;
-        const cw = CARTA_MANO.w * escala, ch = CARTA_MANO.h * escala;
-        const faceCx = pos.x, faceCy = byContent + 70*escala;
+        // Dos señales distintas y no intercambiables: el anillo de turno
+        // (glow detrás de la carita) marca DE QUIÉN es el turno (universal,
+        // no depende del equipo); el tamaño de la carita (seat.faceR, ya
+        // agrandado por mySeatScale) marca CUÁL asiento es el propio, de
+        // forma permanente incluso cuando el anillo de turno está activo.
+        const nameColor = esTurno ? colors.turn.color : t.accent;
 
         // Mírenme (rediseño de barra de señas): mirenmeTeamObj ya llega
         // escopeado a MI equipo (ver PantallaPartidaOnline.jsx), así que
@@ -433,6 +372,7 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
         const circuloMirenmeVisible = !!watchersDeEsteAsiento && watchersDeEsteAsiento.length > 0 &&
           (idx === mySeat || watchersDeEsteAsiento.map(String).includes(String(mySeat)));
         const ojoMirenmeVisible = Object.values(misMirenme || {}).some((arr) => (arr || []).map(String).includes(String(idx)));
+        const mirenmeR = seat.faceR * 1.65;
 
         // Viñeta de gesto largo (rediseño de barra de señas): a diferencia
         // de mirenme, la viñeta es pública (mismo alcance que el gesto en
@@ -443,34 +383,65 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
           ? bubbleEfectivo(senasMappingCompleto?.[`team${idx % 2}`], j.gestureKey)
           : null;
 
+        // Apilado de texto hacia afuera de la carita (nombre, luego
+        // rol+pedido en una sola línea, luego las bases ganadas) —
+        // seat.rolY/seat.basesY (mesaOvalada.js) son la MISMA fuente que
+        // usa el cálculo del margen del viewBox, así nunca se desincroniza
+        // con lo que en verdad entra en cuadro.
+        const rolTexto = [esPie&&"PIE",esMano&&"MANO",esTurno&&"▶ SU TURNO",esMiAsiento&&"VOS"].filter(Boolean).join(" · ");
+        const pedidoTexto = pedido!=null ? `pide: ${pedido}` : "";
+        const rolLineaY = seat.rolY;
+
         return (
           <g key={`jug-${idx}`}>
-            <g filter={filtro}>
-              <rect x={bx} y={by} width={bw} height={bh} rx={16}
-                fill={`url(#${equipo==="local"?"localG":"visitanteG"})`}
-                stroke={borderColor} strokeWidth={borderWidth}/>
-            </g>
-            <text x={pos.x} y={byContent+14*escala} textAnchor="middle" fill={colors.text.primary} fontSize={12*escala} fontFamily={fonts.display} fontWeight={800} fontStyle="italic">
+            {esTurno && (
+              <circle cx={seat.faceCx} cy={seat.faceCy} r={seat.faceR*1.35} fill="none" stroke={colors.turn.color} strokeWidth={2} opacity={0.6} filter="url(#glowTurno)"/>
+            )}
+            {circuloMirenmeVisible && (
+              <circle cx={seat.faceCx} cy={seat.faceCy} r={mirenmeR} fill="none" stroke={colors.negative} strokeWidth={2.5} opacity={0.85} filter="url(#glow)"/>
+            )}
+
+            {/* Pieza J: cara de reacción/señas — NUNCA rota (ver
+                mesaOvalada.js), a diferencia de las cartas. Apariencia
+                guardada por el propio jugador (SeleccionEquipo/
+                PantallaOnlineSala.jsx), gesto activo llegado por broadcast
+                (useGestos.js, PantallaPartidaOnline.jsx). Anclada más
+                afuera del centro de la mesa que las cartas (seat.faceX/Y
+                vs. seat.ax/ay) — esto es lo que evita el bug de capas
+                (cara tapada por las cartas): no dependen del orden del DOM
+                para no superponerse, están en zonas distintas de la mesa. */}
+            <ReactionFace gestureKey={j.gestureKey || "neutral"} appearance={j.appearance}
+              size={seat.faceSize} x={seat.faceX} y={seat.faceY}/>
+
+            <text x={seat.nameX} y={seat.nameY} textAnchor="middle" fill={nameColor} fontSize={12*escala} fontFamily={fonts.display} fontWeight={800} fontStyle="italic">
               {j.nombre}{(idx===capLocal||idx===capVisitante)?" ★CAP":""}
             </text>
-            <text x={pos.x} y={byContent+25*escala} textAnchor="middle" fill={esTurno?colors.turn.color:"rgba(220,230,255,0.65)"} fontSize={7.5*escala} letterSpacing={1} fontFamily={esTurno?fonts.display:fonts.body} fontWeight={esTurno?800:600} fontStyle={esTurno?"italic":"normal"}>
-              {[esPie&&"PIE",esMano&&"MANO",esTurno&&"▶ SU TURNO",esMiAsiento&&"VOS"].filter(Boolean).join(" · ")}
-            </text>
-            {pedido!=null&&(
-              <text x={pos.x} y={byContent+35*escala} textAnchor="middle" fill="rgba(220,230,255,0.6)" fontSize={8*escala} fontFamily={fonts.body}>pide: {pedido}</text>
+            {rolTexto && (
+              <text x={seat.nameX} y={rolLineaY} textAnchor="middle" fill={esTurno?colors.turn.color:"rgba(220,230,255,0.65)"} fontSize={7.5*escala} letterSpacing={1} fontFamily={esTurno?fonts.display:fonts.body} fontWeight={esTurno?800:600} fontStyle={esTurno?"italic":"normal"}>
+                {rolTexto}
+              </text>
             )}
-            {/* Pieza J: cara de reacción/señas, DETRÁS de las cartas de la
-                mano (mismo <g> del asiento, dibujada antes en el orden del
-                DOM) — apariencia guardada por el propio jugador
-                (SeleccionEquipo/PantallaOnlineSala.jsx), gesto activo
-                llegado por broadcast (useGestos.js, PantallaPartidaOnline.
-                jsx). Posicionada vía x/y nativos de ReactionFace (no un
-                <g transform> propio) para no agregar un <g> hijo directo
-                más acá — ver el comentario largo en ReactionFace.jsx sobre
-                por qué eso rompería el conteo de cartas de varios tests. */}
-            <ReactionFace gestureKey={j.gestureKey || "neutral"} appearance={j.appearance} size={60*escala}
-              x={pos.x - 30*escala} y={byContent + 40*escala} rotate={rotDeg}/>
-            <CartasManoSVG mano={j.mano} cx={pos.x} cy={byContent+59*escala} cw={cw} ch={ch} rotDeg={rotDeg}
+            {pedidoTexto && (
+              <text x={seat.nameX} y={rolLineaY + (rolTexto ? seat.outDir*10*escala : 0)} textAnchor="middle" fill="rgba(220,230,255,0.6)" fontSize={8*escala} fontFamily={fonts.body}>{pedidoTexto}</text>
+            )}
+
+            {ojoMirenmeVisible && (
+              <text x={seat.faceCx + mirenmeR*0.7} y={seat.faceCy - mirenmeR*0.6} textAnchor="middle" fontSize={13*escala}>👁</text>
+            )}
+            {bubbleCfg?.on && bubbleCfg.text && (
+              <text x={seat.bubbleAnchorX} y={seat.bubbleAnchorY} textAnchor="middle" fill={colors.text.primary} fontSize={9*escala} fontFamily={fonts.body} fontWeight={700} filter="url(#glow)">
+                {bubbleCfg.text}
+              </text>
+            )}
+
+            <PuntosBasesSVG ganadas={j.bases} total={totalBases||0} cx={seat.nameX} y={seat.basesY} color={t.accent}/>
+
+            {/* Abanico de cartas — anclado en seat.ax/ay (más cerca del
+                centro que la cara) y rotado hacia el centro; dibujado
+                DESPUÉS de la cara en el DOM (queda "adelante") pero ya no
+                depende de eso para no taparla: geométricamente están
+                separadas. */}
+            <CartasManoSVG mano={j.mano} cx={seat.ax} cy={seat.ay} cw={seat.cw} ch={seat.ch} rotDeg={seat.rot}
               seleccionable={puedeElegir} onTirar={(ci)=>onTirar(idx,ci)}
               expandido={expandidos?.[idx]||false}
               onToggleExpandir={()=>onToggleExpandir(idx)}
@@ -478,25 +449,14 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
               onLevantarCarta={(ci)=>onLevantarCarta(idx,ci)}
               bocaAbajo={mySeat!=null && idx!==mySeat}
             />
-            <PuntosBasesSVG ganadas={j.bases} total={totalBases||0} cx={pos.x} y={by+bh-6*escala} color={t.accent}/>
-            {circuloMirenmeVisible && (
-              <circle cx={faceCx} cy={faceCy} r={34*escala} fill="none" stroke={colors.negative} strokeWidth={2.5} opacity={0.85} filter="url(#glow)"/>
-            )}
-            {ojoMirenmeVisible && (
-              <text x={faceCx + 24*escala} y={faceCy - 20*escala} textAnchor="middle" fontSize={13*escala}>👁</text>
-            )}
-            {bubbleCfg?.on && bubbleCfg.text && (
-              <text x={pos.x} y={byContent - 6*escala} textAnchor="middle" fill={colors.text.primary} fontSize={9*escala} fontFamily={fonts.body} fontWeight={700} filter="url(#glow)">
-                {bubbleCfg.text}
-              </text>
-            )}
           </g>
         );
       })}
 
-      {cartasViajandoReparto?.map(({ seat, key }) => {
-        const push = seat === mySeat ? PUSH_OWN : 1;
-        const destino = { ...posEnCirculo(seat, RX * push, RY * push, CX, CY, nJug), seat };
+      {cartasViajandoReparto?.map(({ seat: seatIdx, key }) => {
+        const seat = seats[seatIdx];
+        if (!seat) return null;
+        const destino = { x: seat.ax, y: seat.ay, seat: seatIdx };
         return <CartaViajeraReparto key={key} destino={destino} origen={{ x: CX, y: CY }} />;
       })}
 
@@ -509,7 +469,7 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
 
       {fase==="resolviendo" && ganadorBase!=null && onSiguienteBase && (
         <SiguienteBaseHabitacion
-          x={SIZE-24} y={SIZE-24}
+          x={vbMinX+vbW-24} y={vbMinY+vbH-24}
           esGanador={mySeat===ganadorBase}
           nombreGanador={jugadores[ganadorBase]?.nombre}
           enviando={!!enviandoResolucion}
@@ -522,57 +482,45 @@ export function MesaCircular({ jugadores, cartasMesa, turnoIdx, pieIdx, manoIdx,
   // Piece S: el panel de pedir (mano/pie + declarar kamikaze) y sus
   // variantes de solo-lectura ("esperando a...", "repartiendo tu mano…")
   // vivían debajo de "la habitación", afuera de la mesa — ahora ocupan el
-  // centro vacío de la elipse. PanelPedir es HTML real (botones, inputs),
-  // no se reescribió en primitivas SVG; se overlaya con CSS position
-  // absolute en vez de <foreignObject> — probado en la práctica que
-  // foreignObject anidado en <svg> puede perder actualizaciones de layout
-  // bajo Chromium+Playwright cuando su contenido cambia de tamaño (el panel
-  // de pedir se vio "atascado" no-visible tras la confirmación de mano,
+  // centro vacío del óvalo. PanelPedir es HTML real (botones, inputs), no
+  // se reescribió en primitivas SVG; se overlaya con CSS position absolute
+  // en vez de <foreignObject> — probado en la práctica que foreignObject
+  // anidado en <svg> puede perder actualizaciones de layout bajo
+  // Chromium+Playwright cuando su contenido cambia de tamaño (el panel de
+  // pedir se vio "atascado" no-visible tras la confirmación de mano,
   // reproducido 2/2 veces en tests\online-habitacion.spec.js aislado,
-  // desaparecía al volver a un <div> HTML normal). CX/CY son siempre
-  // SIZE/2 (mitad del canvas cuadrado) en las dos variantes de GEOM, así
-  // que el centro siempre cae en 50%/50% sin importar nJug — no hace falta
-  // leer RX/RY acá. PantallaPartidaOnline.jsx sigue siendo dueña de TODA
-  // la lógica de qué mostrar (turno propio, reparto en curso, kamikaze
-  // activo, etc.) — este componente solo lo centra, sin saber nada de
-  // bidding.
-  // Ancho/alto en % del contenedor (que es 1:1 con SIZE, ver comentario de
-  // CENTRO_BIDDING_K): así el recuadro escala exactamente igual que el SVG
-  // bajo cualquier reflow/resize, en vez de un tamaño en px fijo que se
-  // desincroniza del <svg> (que sí escala fluido por su viewBox) — overflow
-  // "auto" es una red de seguridad para pedidos con muchas bases (más
-  // filas de números) en vez de volver a sobresalir de la elipse.
-  const biddingWPct = (2 * mesaRX * CENTRO_BIDDING_WK / SIZE) * 100;
-  const biddingHPct = (2 * mesaRY * CENTRO_BIDDING_HK / SIZE) * 100;
+  // desaparecía al volver a un <div> HTML normal). CX/CY caen siempre en
+  // el centro exacto del viewBox (mesaOvalada.js: el margen es simétrico
+  // en las 4 direcciones), así que 50%/50% sigue sirviendo sin importar
+  // nJug. Ancho/alto en % del contenedor (que ahora es 1:1 con el propio
+  // viewBox por el aspect-ratio de abajo, ver mesaFlexAreaStyle en
+  // PantallaPartidaOnline.jsx): así el recuadro escala exactamente igual
+  // que el <svg> bajo cualquier reflow/resize.
+  const biddingWPct = ((2 * (hw + r) * CENTRO_BIDDING_WK) / vbW) * 100;
+  const biddingHPct = ((2 * r * CENTRO_BIDDING_HK) / vbH) * 100;
 
-  const contenido = (
-    <div style={{position:"relative",width:"100%"}}>
-      {svg}
-      {fase==="bidding" && contenidoBidding && (
-        // Piece GG (investigado, no confirmado con certeza): un scrollbar
-        // nativo del SO aparece en Firefox/Edge (nunca reproducido en
-        // Chromium) durante bidding, incluso con de sobra alto libre —
-        // hipótesis: diferencias de sub-píxel en cómo cada motor redondea
-        // este % contra el contenedor relativo (que a su vez depende del
-        // escalado fluido del <svg> por su viewBox), no contenido real
-        // desbordando. Este <div> está `position:absolute`, así que aunque
-        // ya tiene su propio `overflow:auto` para el contenido de ADENTRO,
-        // un redondeo de un par de px de más en su propio tamaño calculado
-        // sí se filtra al scroll de la PÁGINA (los elementos absolutos
-        // cuentan para el overflow scrolleable del contenedor inicial). El
-        // -2px de calc() da margen de sobra para que ese redondeo nunca
-        // empuje la caja más allá de su límite real.
-        <div style={{
-          position:"absolute", left:"50%", top:"50%", transform:"translate(-50%,-50%)",
-          width:`calc(${biddingWPct}% - 2px)`, height:`calc(${biddingHPct}% - 2px)`,
-          boxSizing:"border-box",
-          display:"flex", alignItems:"flex-start", justifyContent:"center",
-          overflow:"auto",
-        }}>
-          {contenidoBidding}
-        </div>
-      )}
+  // La mesa se autodimensiona por aspect-ratio (mismo modelo que el propio
+  // mockup de referencia: "table area is a flexible region that sizes
+  // itself via aspect-ratio inside whatever space is left") — el
+  // contenedor de afuera (BloqueMesa/mesaFlexAreaStyle en
+  // PantallaPartidaOnline.jsx) solo necesita darle flex:1+minHeight:0;
+  // este componente no necesita que el caller sepa nada de su viewBox.
+  return (
+    <div style={{position:"relative",width:"100%",height:"100%",minHeight:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{position:"relative",maxWidth:"100%",maxHeight:"100%",width:"100%",aspectRatio:`${vbW} / ${vbH}`}}>
+        {svg}
+        {fase==="bidding" && contenidoBidding && (
+          <div style={{
+            position:"absolute", left:"50%", top:"50%", transform:"translate(-50%,-50%)",
+            width:`calc(${biddingWPct}% - 2px)`, height:`calc(${biddingHPct}% - 2px)`,
+            boxSizing:"border-box",
+            display:"flex", alignItems:"flex-start", justifyContent:"center",
+            overflow:"auto",
+          }}>
+            {contenidoBidding}
+          </div>
+        )}
+      </div>
     </div>
   );
-  return contenido;
 }
