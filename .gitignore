@@ -9,3 +9,6 @@ playwright/.cache
 supabase/.temp
 
 .claude/skills/**/node_modules/
+
+# mesa3d capture output (scripts/mesa3d-shot.mjs)
+screenshots/mesa3d/

@@ -1,0 +1,17 @@
+{
+  // TypeScript is scoped to the 3D table (src/mesa3d/); the rest of La Base stays plain JS.
+  // Vite transpiles these files with esbuild; `npm run typecheck:mesa3d` (part of `npm run build`)
+  // does the actual type checking.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "skipLibCheck": true,
+    "isolatedModules": true
+  },
+  "include": ["./**/*.ts"]
+}
