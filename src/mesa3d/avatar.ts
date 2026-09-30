@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { PALETTE, hex } from './look'
-import { CHAIR_R, SHOULDER_R, SHOULDER_Y, MAX_BASES, seatAngle, polar, type PlayerCount } from './seats'
+import { CHAIR_R, SHOULDER_R, SHOULDER_Y, MAX_BASES, CARD_H, seatAngle, polar, type PlayerCount } from './seats'
 import type { CardFactory, CardView } from './cards'
 import type { Equipo } from './contract'
 
@@ -155,24 +155,35 @@ export function makeAvatar(seat: number, n: PlayerCount, equipo: Equipo, cards: 
 
   // Held fan: backs toward the table, tight against the chest. La Base hands go from 1 to 10 cards,
   // so the fan spreads with the count (and tightens past 3 so it stays on the chest).
+  const GRIP = new THREE.Vector3(0, 0.93, -0.33) // where the fan is pinched, at the chest
   const hand = Array.from({ length: MAX_BASES }, () => {
     const c = cards.makeCard()
     c.root.visible = false
     root.add(c.root)
     return c
   })
+  // A real fan: every card pivots on the bottom grip, so from across the table each back shows its own
+  // edge and the COUNT reads (game information in La Base). piece 1a-fix: was a tight stack rotating
+  // about each card's centre, which read as one smudge after the post pass.
+  const TILT = 0.35 // face toward the owner, back toward the table
   function layoutHand(total: number) {
-    const step = total > 1 ? Math.min(0.018, 0.13 / (total - 1)) : 0
-    const rot = total > 1 ? Math.min(0.12, 0.75 / (total - 1)) : 0
+    const step = total > 1 ? Math.min(0.022, 0.12 / (total - 1)) : 0
+    const rot = total > 1 ? Math.min(0.2, 1.1 / (total - 1)) : 0
     hand.forEach((c, k) => {
       const d = k - (total - 1) / 2
-      c.root.position.set(d * step, 1.0 - Math.abs(d) * 0.004, -0.33 + k * 0.0012)
-      c.root.rotation.set(0.35, 0, d * -rot, 'YXZ') // face toward the owner, back toward the table
+      const a = -d * rot
+      // card up axis after Euler(TILT, 0, a, 'YXZ'): the centre sits 0.42·H above the grip along it
+      const up = new THREE.Vector3(-Math.sin(a), Math.cos(a) * Math.cos(TILT), Math.cos(a) * Math.sin(TILT))
+      c.root.position.copy(GRIP).add(new THREE.Vector3(d * step, 0, k * 0.0012)).addScaledVector(up, CARD_H * 0.42)
+      c.root.rotation.set(TILT, 0, a, 'YXZ')
     })
   }
+
   layoutHand(3)
 
-  const chestHold = new THREE.Vector3(0, 0.95, -0.34)
+  // Idle hands hold the fan by its two bottom corners (fingers up, from the owner side: the backs stay in view),
+  // instead of both gloves meeting in front of the cards (read as two crossed sticks with post).
+  const holdAt = (sx: number) => GRIP.clone().add(new THREE.Vector3(sx * 0.075, -0.05, 0.035))
   const shoulderLocal = (sx: number, lean: number) => new THREE.Vector3(sx * 0.19, SHOULDER_Y - lean * 0.05, -(CHAIR_R - SHOULDER_R) - lean * 0.1)
 
   // First person: only the arms exist (the camera lives where the head would be).
@@ -188,13 +199,14 @@ export function makeAvatar(seat: number, n: PlayerCount, equipo: Equipo, cards: 
     for (const r of arms) {
       const s = shoulderLocal(r.sx, p.lean)
       const wristWorld = r.sx > 0 ? p.rightWrist : p.leftWrist
-      const target = wristWorld ? root.worldToLocal(wristWorld.clone()) : chestHold.clone().setX(r.sx * 0.05)
+      const target = wristWorld ? root.worldToLocal(wristWorld.clone()) : holdAt(r.sx)
       const pole = s.clone().add(new THREE.Vector3(r.sx * 0.4, -0.5, 0.1))
       const { elbow, wrist } = solveElbow(s, target, pole)
       segment(r.upper, s, elbow)
       segment(r.fore, elbow, wrist)
       r.glove.position.copy(wrist)
-      r.glove.lookAt(root.localToWorld(wrist.clone().add(wrist.clone().sub(elbow))))
+      if (wristWorld) r.glove.lookAt(root.localToWorld(wrist.clone().add(wrist.clone().sub(elbow))))
+      else r.glove.lookAt(root.localToWorld(wrist.clone().add(new THREE.Vector3(-r.sx * 0.12, 1, -0.1)))) // fingers up the fan's edge
     }
   }
   return { root, seat, hand, layoutHand, head, sena, pose }

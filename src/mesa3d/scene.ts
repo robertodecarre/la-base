@@ -92,7 +92,7 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
   overlay.innerHTML = `
     <div data-m="turn" style="position:absolute;left:50%;top:14px;transform:translateX(-50%);font:24px 'VT323',monospace;color:${PALETTE.chalk};text-shadow:0 0 6px #000;white-space:nowrap"></div>
     <div data-m="msg" style="position:absolute;left:50%;top:44px;transform:translateX(-50%);font:20px 'VT323',monospace;color:${PALETTE.chalk};opacity:.75;text-shadow:0 0 6px #000;white-space:nowrap"></div>
-    <div data-m="help" style="position:absolute;left:16px;bottom:12px;right:16px;font:18px/1.25 'VT323',monospace;color:${PALETTE.chalk};opacity:.5">click en carta: jugar · mantené click: mover el brazo y amagar (soltá en el recuadro) · clic der: zoom al cursor (en la mitad lejana te parás) · click en la mesa: mirar / soltar la vista · M: sonido</div>
+    <div data-m="help" style="position:absolute;left:12px;top:10px;max-width:330px;font:14px/1.2 'VT323',monospace;color:${PALETTE.chalk};opacity:.5">click en carta: jugar · mantené click: mover el brazo y amagar (soltá en el recuadro) · clic der: zoom al cursor (en la mitad lejana te parás) · click en la mesa: mirar / soltar la vista · M: sonido · H: ocultar ayuda</div>
     <div data-m="dot" style="position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px;background:${PALETTE.chalk};opacity:0"></div>`
   contenedor.appendChild(overlay)
   const el = (k: string) => overlay.querySelector<HTMLElement>(`[data-m="${k}"]`)!
@@ -109,7 +109,7 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
   const scene = new THREE.Scene()
   const camera = new THREE.PerspectiveCamera(58, 1, 0.03, 30)
   scene.add(camera)
-  setupAtmosphere(scene)
+  const curtain = setupAtmosphere(scene)
   const lamp = buildLamp(scene)
   const post = makePost(renderer, opciones.lowHeight ?? 720)
   let width = 1
@@ -323,16 +323,23 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
     const m = new THREE.Mesh(vmGeo, mat)
     m.visible = false
     viewmodel.add(m)
-    return { mesh: m, mat, face: '', base: { x: 0, y: 0, z: 0, rz: 0 }, lift: 0, placed: false }
+    return { mesh: m, mat, face: '', base: { x: 0, y: 0, z: 0, rz: 0, s: 1 }, lift: 0, placed: false }
   })
   // Fan geometry for c cards: spread and twist shrink as the hand grows so every index stays visible,
   // and big hands shift further left so the fan never covers my own play zone (checked at 10 cards).
+  // The fan is anchored on its RIGHTMOST card (the one nearest my zone) and grows to the left, so no
+  // hand size can push it over my own play zone. Spread and twist shrink as the hand grows (every index
+  // stays visible) and big hands shrink a little so 10 cards still fit between the screen edge and the zone.
+  // Values found by measuring (debug fanZoneGap) at 16:9, 16:10 and 4:3 for every hand size 1..10.
+  // Narrower than 16:10 the left screen edge comes closer: spread and card size scale down with the aspect.
+  const FAN = { xRight: -0.09, rRight: 0.05, xMax: 0.03, xTot: 0.2, rMax: 0.2, rTot: 0.5, y: -0.25, sK: 0.05 }
   function vmBase(k: number, c: number) {
-    const d = k - (c - 1) / 2
-    const xStep = c > 1 ? Math.min(0.03, 0.17 / (c - 1)) : 0
-    const rStep = c > 1 ? Math.min(0.2, 0.8 / (c - 1)) : 0
-    const cx = -0.13 - 0.012 * Math.max(0, c - 3)
-    return { x: cx + d * xStep, y: -0.25 - Math.abs(d) * 0.002, z: -0.36 + k * 0.002, rz: -0.08 - d * rStep }
+    const e = c - 1 - k // cards to my right
+    const xStep = c > 1 ? Math.min(FAN.xMax, FAN.xTot / (c - 1)) : 0
+    const rStep = c > 1 ? Math.min(FAN.rMax, FAN.rTot / (c - 1)) : 0
+    const narrow = Math.min(1, camera.aspect / 1.6) ** 2
+    const s = (1 - FAN.sK * Math.max(0, c - 4)) * narrow
+    return { x: FAN.xRight - e * xStep * s, y: FAN.y - Math.abs(e - (c - 1) / 2) * 0.002, z: -0.36 + k * 0.002, rz: FAN.rRight + e * rStep, s }
   }
   function setVmFace(k: number, c: Carta) {
     const key = `${c.palo}${c.valor}` // both copies render identically
@@ -354,6 +361,7 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
       if (snap || !v.placed) {
         v.mesh.position.set(v.base.x, v.base.y, v.base.z)
         v.mesh.rotation.set(-0.35, 0, v.base.rz)
+        v.mesh.scale.setScalar(v.base.s)
         v.placed = true
       }
     })
@@ -411,6 +419,7 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
     const my = epoch
     tail = tail
       .then(() => localDone)
+      .then(() => frozenGate)
       .then(() => {
         if (my !== epoch || destroyed) return
         if (!loaded) return console.warn(`mesa3d: ${name} ignored before cargarEstado`)
@@ -503,6 +512,7 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
       if (i >= 0) k = i
     }
     const from = heldPose(s, k)
+    const hold = s === 0 ? localGrip().pos : from.pos
     const card = hand[k]
     hand.splice(k, 1)
     card.held = false
@@ -512,7 +522,7 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
     base.push({ v: s, card })
     playing.add(s)
     if (s === turnSeat) turnSeat = null
-    await gesture(s, card, { dur: PHASES.reveal[0], map: (t) => t, from, hold: from.pos, blend: 0.05 })
+    await gesture(s, card, { dur: PHASES.reveal[0], map: (t) => t, from, hold, blend: s === 0 ? 0.25 : 0.05 })
     if (s === 0 && known) {
       // my own card: if the server revealed another one of my cards, swap which fan card left
       const carta = await revealFor(0, card)
@@ -520,7 +530,7 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
       if (other && !mismaCarta(known, carta)) other.carta = known
       earlyReveals.set(0, carta)
     }
-    await finishPlay(s, card, from.pos)
+    await finishPlay(s, card, hold)
   }
 
   // ---------- my arm: hold click on a card, drag to reach, release on the zone to play ----------
@@ -534,8 +544,22 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
   const HOVER_Y = TABLE_Y + 0.025
   const myTurn = () => turnSeat === 0 && !localPlay && !playing.has(0)
 
+  // Where MY right hand holds a card it took from the fan: at the table edge, next to where the forearm
+  // rests. The fan itself is a camera-space prop ~0.3 m from the lens; sending the right hand (or the
+  // unlit world card) up there put a black sleeve/card across the lower-left of the screen (piece 1a-fix).
+  // The card slides down out of the fan to this grip instead, and every own gesture starts/ends here.
+  function localGrip(): HeldPose {
+    const pos = polar(TABLE_R - 0.07, a0, TABLE_Y + 0.05).addScaledVector(rightOf(0), 0.13)
+    return { pos, quat: quatOf(0.35, yawOf(0)) }
+  }
+  // My own card object shows its face while I hold it (only I see my screen); it goes back to "no
+  // identity" once it lies face-down on the zone, and the table only shows it again on revelar.
+  function showOwnFace(card: Card) {
+    if (card.carta) card.view.setIdentity(card.carta.palo, card.carta.valor)
+  }
+
   function dragPose(d: Drag): HeldPose {
-    const hold = heldPose(0, d.k)
+    const hold = localGrip()
     const R = rightOf(0)
     const inward = outOf(0).negate()
     const over = edge0.clone().addScaledVector(inward, Math.max(0, d.fwd)).addScaledVector(R, d.lat).setY(HOVER_Y)
@@ -552,7 +576,7 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
     }
     const down = quatOf(FACE_DOWN, yawOf(0), THREE.MathUtils.clamp(-d.lat * 0.4, -0.2, 0.2))
     if (d.fwd >= 0) return { pos: over, quat: down }
-    const u = ease(THREE.MathUtils.clamp(d.fwd / HOLD_FWD, 0, 1)) // 0 at the edge, 1 at the chest
+    const u = ease(THREE.MathUtils.clamp(d.fwd / HOLD_FWD, 0, 1)) // 0 over the edge, 1 in the hand at the grip
     return { pos: over.lerp(hold.pos, u), quat: down.slerp(hold.quat, u) }
   }
   const zonePos = () => playSlot(0, N).pos
@@ -566,6 +590,7 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
     if (drag || busy || localPlay || !card?.held) return
     const from = heldPose(0, k)
     card.held = false
+    showOwnFace(card)
     place(card, from.pos, from.quat)
     drag = { k, card, fwd: HOLD_FWD, lat: 0, from, t0: performance.now() / 1000, lastSound: null }
     audio.sfx('pick', from.pos)
@@ -596,23 +621,27 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
     base.push({ v: 0, card })
     playing.add(0)
     if (turnSeat === 0) turnSeat = null
-    await finishPlay(0, card, heldPose(0, Math.max(0, Math.min(k, hands[0].length - 1))).pos)
+    await finishPlay(0, card, localGrip().pos)
   }
 
   function returnToHand(card: Card, msg = '') {
     if (msg) hud(msg)
     const now = cardPose(card)
     busy = true
+    showOwnFace(card)
     sched.schedule({
-      dur: 0.32,
+      dur: 0.42,
       stepped: false,
       update: (u) => {
+        // back to the grip at the table edge (hand stays there), then up into the fan by itself
+        const grip = localGrip()
         const k = Math.max(0, hands[0].indexOf(card))
-        const hold = heldPose(0, k)
-        const e = ease(u)
-        card.view.root.position.copy(now.pos.clone().lerp(hold.pos, e))
-        card.view.root.quaternion.copy(now.quat.clone().slerp(hold.quat, e))
-        poses[0].rightWrist = card.view.root.position.clone().add(new THREE.Vector3(0, -0.05, 0))
+        const g = ease(seg(u, 0, 0.6))
+        const f = ease(seg(u, 0.6, 1))
+        const fan = heldPose(0, k)
+        card.view.root.position.copy(now.pos.clone().lerp(grip.pos, g).lerp(fan.pos, f))
+        card.view.root.quaternion.copy(now.quat.clone().slerp(grip.quat, g).slerp(fan.quat, f))
+        poses[0].rightWrist = grip.pos.clone().lerp(card.view.root.position, 1 - g).add(new THREE.Vector3(0, -0.04, 0))
       },
       done: () => {
         card.view.root.visible = false
@@ -631,7 +660,7 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
     if (myTurn() && inZone(now.pos) && d.card.carta) {
       busy = true
       // continue the shared timeline from "set": touch down face-down, then wait for the server
-      const first = gesture(0, d.card, { dur: PHASES.reveal[0] - PHASES.set[0], map: (t) => PHASES.set[0] + t, from: now, blend: 0.12, hold: d.from.pos })
+      const first = gesture(0, d.card, { dur: PHASES.reveal[0] - PHASES.set[0], map: (t) => PHASES.set[0] + t, from: now, blend: 0.12, hold: localGrip().pos })
       localDone = dropAndWait(d.k, d.card, first)
       return
     }
@@ -669,7 +698,9 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
     const from = heldPose(0, k)
     card.held = false
     busy = true
-    const first = gesture(0, card, { dur: PHASES.reveal[0], map: (t) => t, from, hold: from.pos, blend: 0.05 })
+    showOwnFace(card)
+    // the card slides down out of the fan into the right hand at the table edge, then the shared timeline
+    const first = gesture(0, card, { dur: PHASES.reveal[0], map: (t) => t, from, hold: localGrip().pos, blend: 0.25 })
     localDone = dropAndWait(k, card, first)
     return true
   }
@@ -1148,6 +1179,10 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
   on(canvas, 'pointercancel', endDrag)
   on(window, 'keydown', (e: KeyboardEvent) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+    if (e.key.toLowerCase() === 'h') {
+      const help = el('help')
+      help.style.display = help.style.display === 'none' ? '' : 'none'
+    }
     if (e.key.toLowerCase() === 'm') {
       void audio.init(camera)
       hud(audio.toggleMute() ? 'sonido apagado' : 'sonido')
@@ -1217,12 +1252,13 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
       px.y += (v.base.y + v.lift * 0.02 - px.y) * 0.2
       px.z += (v.base.z + v.lift * 0.02 - px.z) * 0.2
       v.mesh.rotation.z += (v.base.rz * (1 - v.lift * 0.6) - v.mesh.rotation.z) * 0.2
+      v.mesh.scale.setScalar(v.mesh.scale.x + (v.base.s - v.mesh.scale.x) * 0.2)
     })
     lowered += ((drag || busy || localPlay || stand > 0.1 ? 1 : 0) - lowered) * 0.12 // the fan drops out of the way while you play
-    viewmodel.position.set(Math.sin(time * 1.3) * 0.003 - 0.04 * lowered, Math.sin(time * 2.1) * 0.002 - 0.12 * aim - 0.09 * lowered, 0)
+    viewmodel.position.set(Math.sin(time * 1.3) * 0.003 - 0.015 * lowered, Math.sin(time * 2.1) * 0.002 - 0.12 * aim - 0.025 * lowered, 0)
 
     post.duotone(null, 0) // momentos (duotone) arrive in a later piece
-    if (opciones.raw) {
+    if (rawNow) {
       renderer.setRenderTarget(null)
       renderer.render(scene, camera)
     } else post.render(scene, camera, time)
@@ -1279,9 +1315,15 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
 
   const timer = new THREE.Timer()
   let started = false
+  // debug only: a frozen clock lets a test capture the SAME frame with and without post
+  let frozenAt: number | null = null
+  let frozenGate: Promise<void> = Promise.resolve() // debug freeze also holds queued orders (same frame)
+  let thaw = () => {}
+  let rawNow = !!opciones.raw
   renderer.setAnimationLoop((t) => {
     timer.update(t)
-    frame(timer.getElapsed(), timer.getDelta())
+    if (frozenAt !== null) frame(frozenAt, 0)
+    else frame(timer.getElapsed(), timer.getDelta())
     if (!started && loaded) {
       started = true
       contenedor.dataset.mesa3dReady = '1'
@@ -1291,6 +1333,86 @@ export function crearMesa(contenedor: HTMLElement, eventos: MesaEvents, opciones
   // ---------- debug hooks (headless tests / reconnection check) ----------
   const r4 = (x: number) => Math.round(x * 1e4) / 1e4
   const debugApi = {
+    freeze(on: boolean) {
+      frozenAt = on ? timer.getElapsed() : null
+      if (on) frozenGate = new Promise((res) => (thaw = res))
+      else thaw()
+    },
+    setRaw(on: boolean) {
+      rawNow = on
+    },
+    // post / light calibration (raw vs post of the same frozen frame)
+    setPost(name: string, value: number) {
+      const u = (post.uniforms as Record<string, { value: unknown }>)[name]
+      if (u && typeof u.value === 'number') u.value = value
+    },
+    setBounce(intensity: number) {
+      lamp.bounce.intensity = intensity
+    },
+    setCurtain(gain: number) {
+      ;(curtain.material as THREE.MeshBasicMaterial).color.setScalar(gain)
+    },
+    setFan(p: Partial<typeof FAN>) {
+      Object.assign(FAN, p)
+    },
+    vmBase: (k: number, c: number) => vmBase(k, c),
+    // Screen-space gap (px) between my fan and my own zone's chalk box, for every hand size 1..10 at the
+    // current view (negative = overlap). Also checks the hovered (lifted) card.
+    fanZoneGap() {
+      camera.updateMatrixWorld()
+      const r = canvas.getBoundingClientRect()
+      const toPx = (p: THREE.Vector3) => {
+        const n = p.clone().project(camera)
+        return new THREE.Vector2(((n.x + 1) / 2) * r.width, ((1 - n.y) / 2) * r.height)
+      }
+      const zc = playSlot(0, N).pos.setY(TABLE_Y)
+      const hw = (CARD_W + 0.04) / 2
+      const hh = (CARD_H + 0.1) / 2
+      const zone = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([a, b]) => toPx(zc.clone().addScaledVector(rightOf(0), a).addScaledVector(outOf(0), b)))
+      const gap = (A: THREE.Vector2[], B: THREE.Vector2[]) => {
+        let best = -Infinity
+        for (const poly of [A, B])
+          for (let i = 0; i < poly.length; i++) {
+            const e = poly[(i + 1) % poly.length].clone().sub(poly[i])
+            const ax = new THREE.Vector2(-e.y, e.x).normalize()
+            const pa = A.map((p) => p.dot(ax))
+            const pb = B.map((p) => p.dot(ax))
+            best = Math.max(best, Math.min(pb[0], ...pb) - Math.max(...pa), Math.min(...pa) - Math.max(...pb))
+          }
+        return best
+      }
+      const out: number[] = []
+      let left = Infinity
+      for (let c = 1; c <= MAX_BASES; c++) {
+        let worst = Infinity
+        for (let k = 0; k < c; k++)
+          for (const lift of [0, 1]) {
+            const b = vmBase(k, c)
+            const m = new THREE.Matrix4().compose(
+              new THREE.Vector3(b.x, b.y + lift * 0.02, b.z + lift * 0.02),
+              new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.35, 0, b.rz * (1 - lift * 0.6))),
+              new THREE.Vector3(b.s, b.s, b.s),
+            )
+            const w = viewmodel.matrixWorld.clone().multiply(m)
+            const quad = [[-CARD_W / 2, -0.05 * CARD_H], [CARD_W / 2, -0.05 * CARD_H], [CARD_W / 2, 0.95 * CARD_H], [-CARD_W / 2, 0.95 * CARD_H]].map(([x, y]) => toPx(new THREE.Vector3(x, y, 0).applyMatrix4(w)))
+            worst = Math.min(worst, gap(quad, zone))
+            left = Math.min(left, quad[3].x) // top-left corner = where the index is
+          }
+        out.push(Math.round(worst))
+      }
+      return { gaps: out, left: Math.round(left), width: Math.round(r.width) }
+    },
+    // camera-space placement of my own avatar's meshes (diagnosing what covers the view)
+    localMeshes() {
+      const inv = camera.matrixWorld.clone().invert()
+      const out: { i: number; type: string; cam: number[]; dist: number; visible: boolean }[] = []
+      avatars[0]?.root.traverse((o) => {
+        if (!(o as THREE.Mesh).isMesh) return
+        const p = o.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv)
+        out.push({ i: out.length, type: (o as THREE.Mesh).geometry.type, cam: [r4(p.x), r4(p.y), r4(p.z)], dist: r4(p.length()), visible: o.visible })
+      })
+      return out
+    },
     vmScreen(k: number) {
       const p = vm[k].mesh.localToWorld(new THREE.Vector3(0, CARD_H * 0.45, 0)).project(camera)
       const r = canvas.getBoundingClientRect()

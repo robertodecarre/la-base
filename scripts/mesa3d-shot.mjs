@@ -3,9 +3,10 @@
 // use puppeteer-core with a Linux chromium path). Plays the local seat by short clicks through the
 // real input path, and checks that cargarEstado mid-hand redraws the table identically.
 //
-// Usage: npm run build && npx vite preview --port 5199   (in another shell; the dev server rejects
+// Usage: npm run build && npx vite preview --port 5199   (in another shell; raw captures use the
+//        debug freeze + raw toggle on the SAME frame; a plain ?raw=1 URL also works there, the dev server rejects
 //        ?raw=1 because Vite reads it as its own raw-import suffix)
-//        node scripts/mesa3d-shot.mjs [http://localhost:5199] [screenshots/mesa3d]
+//        node scripts/mesa3d-shot.mjs [http://localhost:5199] [screenshots/mesa3d] [name-suffix]
 // Uses Chromium's new headless mode with ANGLE/D3D11 (real GPU, ~60 fps). SwiftShader gives ~6 fps,
 // which breaks the timing of clicks and captures; ANGLE/GL hangs on this machine.
 import { chromium } from '@playwright/test'
@@ -13,6 +14,7 @@ import { mkdirSync } from 'node:fs'
 
 const base = process.argv[2] ?? 'http://localhost:5199'
 const out = process.argv[3] ?? 'screenshots/mesa3d'
+const suffix = process.argv[4] ?? '' // e.g. -fix
 mkdirSync(out, { recursive: true })
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const logs = []
@@ -32,7 +34,7 @@ async function open(q) {
 }
 const st = (p) => p.evaluate(() => window.__mesa3d.state())
 async function shot(p, name) {
-  const file = `${out}/${name}.png`
+  const file = `${out}/${name}${suffix}.png`
   await p.screenshot({ path: file })
   console.log(file, JSON.stringify(await st(p)))
   return file
@@ -63,11 +65,17 @@ const totalPiles = (s) => s.piles.reduce((a, [, n]) => a + n, 0)
 const p = await open('n=4')
 await until(p, (s) => s.hand === 3 && s.turn !== null, { play: false })
 await sleep(300)
+await p.evaluate(() => window.__mesa3d.freeze(true))
+await sleep(150)
 await shot(p, '01-n4-mano3-inicio')
+await p.evaluate(() => window.__mesa3d.setRaw(true))
+await sleep(150)
+await shot(p, '08-raw-n4-mano3-inicio') // same frame as 01, no post
+await p.evaluate(() => { window.__mesa3d.setRaw(false); window.__mesa3d.freeze(false) })
 // mid-flight: my own quick-click play, 0.7 s into the gesture
 await until(p, (s) => s.myTurn && !s.busy, { play: false })
 await clickCard(p, 1)
-await sleep(80)
+await sleep(550) // reach phase: the card glides over the felt in my right hand
 await shot(p, '02-carta-en-vuelo')
 if (!(await st(p)).localPlay && (await st(p)).hand === 3) throw new Error('the short click did not start a play')
 // a remote card mid-flight (seat 3 plays right after me)
@@ -115,12 +123,17 @@ await sleep(500)
 await shot(p8, '06b-n8-mano10-hover')
 await p8.close()
 
-// 8: ?raw=1 (no post) at the same moment as capture 01, for comparison
-const pr = await open('n=4&raw=1')
-await until(pr, (s) => s.hand === 3 && s.turn !== null, { play: false })
-await sleep(300)
-await shot(pr, '08-raw-n4-mano3-inicio')
-await pr.close()
+// 02c: my card being dragged by my own arm (hold on a card, push forward; released off the zone)
+const pd = await open('n=4')
+await until(pd, (s) => s.hand === 3 && s.turn !== null, { play: false })
+const dc = await pd.evaluate(() => window.__mesa3d.vmScreen(1))
+await pd.mouse.move(dc.x, dc.y); await sleep(200)
+await pd.mouse.down(); await sleep(300)
+for (let i = 0; i < 40; i++) { await pd.mouse.move(dc.x + i * 2, dc.y - i * 14); await sleep(30) } // out over the felt
+await sleep(250)
+await shot(pd, '02c-carta-arrastrada')
+await pd.mouse.up(); await sleep(600)
+await pd.close()
 
 console.log(logs.join('\n') || 'no console errors')
 await browser.close()

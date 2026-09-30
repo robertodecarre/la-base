@@ -16,7 +16,10 @@ export type CardFactory = ReturnType<typeof makeCardFactory>
 export function makeCardFactory() {
   const geo = new THREE.PlaneGeometry(CARD_W, CARD_H)
   const backTex = toTexture(drawBack())
-  const backMat = new THREE.MeshStandardMaterial({ map: backTex, roughness: 0.85 })
+  // Backs carry the same small emissive as faces (piece 1a-fix): a remote hand held at the chest sits
+  // outside the lamp cone and fell under the post's dark snap, so nobody could count it. Same for every
+  // back of both decks → no marked cards.
+  const backMat = new THREE.MeshStandardMaterial({ map: backTex, roughness: 0.85, emissive: 0xffffff, emissiveMap: backTex, emissiveIntensity: 0.18 })
   const faceTex = new Map<string, THREE.Texture>()
   const faceCache = new Map<string, THREE.MeshStandardMaterial>()
 

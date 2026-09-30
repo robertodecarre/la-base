@@ -111,6 +111,45 @@ export function buildRoom(n: PlayerCount, teams: Equipo[]) {
 export function setupAtmosphere(scene: THREE.Scene) {
   scene.background = new THREE.Color(hex(PALETTE.void))
   scene.fog = new THREE.FogExp2(hex(PALETTE.void), 0.22)
+  return buildCurtain(scene)
+}
+
+// A dim oxblood curtain ring behind the chairs (palette: oxblood = "card backs, curtains"; Loop Hero backdrop).
+// piece 1a-fix: the coats are soot and, after the post's ACES toe + dark snap, landed on the same palette
+// black as the empty room — players lost their silhouettes. Against this band (it snaps to the dark red of
+// DARK_SNAP) every body reads as a dark cut-out without lighting the clothes. Unlit on purpose (no extra
+// light cost); fog still swallows it with distance. Brightness in CURTAIN_GAIN, calibrated raw vs post.
+export const CURTAIN_GAIN = 0.6 // 1.4 read as a theatre curtain; under 0.5 the silhouettes dissolve
+function buildCurtain(scene: THREE.Scene) {
+  const cv = document.createElement('canvas')
+  cv.width = 512
+  cv.height = 128
+  const g = cv.getContext('2d')!
+  g.fillStyle = PALETTE.oxblood
+  g.fillRect(0, 0, cv.width, cv.height)
+  // folds: soft vertical shading, irregular spacing (deterministic)
+  for (let x = 0; x < cv.width; x++) {
+    const f = 0.5 + 0.5 * Math.sin(x * 0.19 + Math.sin(x * 0.031) * 3)
+    g.fillStyle = `rgba(11,9,8,${(0.08 + 0.22 * f).toFixed(3)})` // soft: deep folds broke into stripes under the snap
+    g.fillRect(x, 0, 1, cv.height)
+  }
+  // band: dark at the floor and toward the ceiling, strongest behind the seated heads and shoulders
+  const v = g.createLinearGradient(0, 0, 0, cv.height)
+  v.addColorStop(0, 'rgba(11,9,8,1)')
+  v.addColorStop(0.3, 'rgba(11,9,8,0.1)')
+  v.addColorStop(0.62, 'rgba(11,9,8,0.1)')
+  v.addColorStop(1, 'rgba(11,9,8,1)')
+  g.fillStyle = v
+  g.fillRect(0, 0, cv.width, cv.height)
+  const tex = new THREE.CanvasTexture(cv)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.wrapS = THREE.RepeatWrapping
+  tex.repeat.set(6, 1)
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, color: new THREE.Color(CURTAIN_GAIN, CURTAIN_GAIN, CURTAIN_GAIN) })
+  const curtain = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.7, 2.8, 64, 1, true), mat)
+  curtain.position.y = 1.4
+  scene.add(curtain)
+  return curtain
 }
 
 // ONE key light: the hanging lamp. Everything else is near-black.
@@ -144,12 +183,15 @@ export function buildLamp(scene: THREE.Scene) {
   key.target = target
 
   // Bounce from the lit felt: uplights masks from below (horror uplight), no shadows.
-  const bounce = new THREE.PointLight(hex(PALETTE.feltLit), 3.5, 3, 1.5)
+  // piece 1a-fix: 3.5 → 6. Remote hands and the backs they hold sit outside the lamp cone (at the chest);
+  // at 3.5 they fell under the post's snap edge. 9 read even better but burnt the felt's centre.
+  const bounce = new THREE.PointLight(hex(PALETTE.feltLit), 6, 3, 1.5)
   bounce.position.y = TABLE_Y + 0.1
   scene.add(bounce)
   scene.add(new THREE.AmbientLight(0xffffff, 0.015))
 
   return {
+    bounce,
     update(t: number) {
       pivot.rotation.z = Math.sin(t * 1.7) * 0.012
       pivot.rotation.x = Math.sin(t * 1.1 + 1) * 0.008
