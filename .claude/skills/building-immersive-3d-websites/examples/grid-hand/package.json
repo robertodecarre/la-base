@@ -1,0 +1,12 @@
+{
+  "name": "grid-hand",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fetch-hand": "curl -sL https://cdn.jsdelivr.net/npm/@webxr-input-profiles/assets@1.0.20/dist/profiles/generic-hand/right.glb -o public/hand.glb",
+    "dev": "vite --port 5199",
+    "build": "tsc --noEmit && vite build"
+  },
+  "dependencies": { "three": "^0.186.1" },
+  "devDependencies": { "@types/three": "^0.186.0", "typescript": "^5.9.3", "vite": "^8.3.1" }
+}

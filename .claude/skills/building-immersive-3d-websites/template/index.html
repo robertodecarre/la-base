@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>PROJECT_NAME — PROJECT_TAGLINE</title>
+  <meta name="description" content="PROJECT_DESCRIPTION" />
+  <meta property="og:title" content="PROJECT_NAME" />
+  <meta property="og:description" content="PROJECT_DESCRIPTION" />
+  <meta property="og:image" content="/og.jpg" />
+  <meta name="theme-color" content="#121212" />
+</head>
+<body class="is-loading">
+  <!-- WebGL layer: fixed, behind the DOM, never receives focus -->
+  <canvas id="gl" aria-hidden="true"></canvas>
+
+  <!-- Loader: DOM, fades out when assets + shader warmup are done -->
+  <div class="loader" role="status" aria-live="polite">
+    <span class="loader__label">Cargando</span>
+    <span class="loader__bar"><span class="loader__fill"></span></span>
+  </div>
+
+  <header class="hud">
+    <a class="hud__logo" href="/">PROJECT_NAME</a>
+    <nav class="hud__nav" aria-label="Principal">
+      <a href="#story">Historia</a>
+      <a href="#product">Producto</a>
+      <a href="#buy">Comprar</a>
+    </nav>
+    <button class="hud__sound" type="button" aria-pressed="false">Sonido</button>
+  </header>
+
+  <!--
+    The DOM is the source of truth for scroll length, content, SEO and a11y.
+    Each [data-scene] maps 1:1 to a GL scene placed at the same world height.
+    data-height is in viewport heights (how long the scene "lasts" while scrolling).
+  -->
+  <main>
+    <section class="scene" data-scene="hero" data-height="2" id="top">
+      <div class="scene__sticky">
+        <h1 class="display" data-split>PROJECT_HEADLINE</h1>
+        <p class="lede">PROJECT_SUBHEAD</p>
+        <p class="scroll-hint" aria-hidden="true">Scroll</p>
+      </div>
+    </section>
+
+    <section class="scene" data-scene="story" data-height="3" id="story">
+      <div class="scene__sticky">
+        <h2 class="display" data-split>STORY_BEAT_1</h2>
+        <p>STORY_COPY_1</p>
+      </div>
+    </section>
+
+    <section class="scene" data-scene="product" data-height="2.5" id="product">
+      <div class="scene__sticky">
+        <h2 class="display" data-split>PRODUCT_NAME</h2>
+        <p>PRODUCT_COPY</p>
+      </div>
+    </section>
+
+    <section class="scene scene--flat" data-scene="outro" data-height="1" id="buy">
+      <div class="scene__content">
+        <h2 class="display">CTA_HEADLINE</h2>
+        <a class="cta" href="CTA_URL">CTA_LABEL</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>© PROJECT_NAME</p>
+  </footer>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

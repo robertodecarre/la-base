@@ -1,0 +1,87 @@
+:root {
+  --ink: #121212;
+  --paper: #f3f1e9;
+  --accent: #c82924;
+  --font-display: 'Display', 'Times New Roman', serif;
+  --font-body: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* fluid type: clamp(min, preferred, max) */
+  --fs-display: clamp(3rem, 11vw, 13rem);
+  --fs-body: clamp(0.95rem, 0.6vw + 0.8rem, 1.15rem);
+  --gutter: clamp(16px, 3vw, 40px);
+}
+
+/* Add the project's display font (woff2 in /public/fonts) and preload it in index.html:
+@font-face { font-family: 'Display'; src: url('/fonts/display.woff2') format('woff2'); font-display: swap; } */
+
+*, *::before, *::after { box-sizing: border-box; }
+html { background: var(--ink); color: var(--paper); }
+body { margin: 0; font: var(--fs-body)/1.5 var(--font-body); -webkit-font-smoothing: antialiased; }
+
+/* Lenis recommended CSS */
+html.lenis, html.lenis body { height: auto; }
+.lenis:not(.lenis-autoToggle).lenis-stopped { overflow: clip; }
+.lenis [data-lenis-prevent] { overscroll-behavior: contain; }
+
+#gl {
+  position: fixed; inset: 0; width: 100vw; height: 100lvh;
+  display: block; z-index: 0; pointer-events: none;
+}
+.no-webgl #gl { display: none; }
+
+/* NO z-index on main: a z-index creates a stacking context that isolates mix-blend-mode
+   from the canvas, and the "difference" text trick stops working. */
+main, .footer { position: relative; }
+
+.scene { position: relative; }
+.scene__sticky {
+  position: sticky; top: 0; height: 100svh;
+  display: grid; place-content: center; text-align: center;
+  padding: var(--gutter);
+  mix-blend-mode: difference; /* text stays legible over any GL color */
+}
+.scene--flat { background: var(--paper); color: var(--ink); min-height: 100svh; display: grid; place-content: center; text-align: center; }
+
+.display {
+  font-family: var(--font-display); font-size: var(--fs-display);
+  line-height: 0.9; letter-spacing: -0.01em; text-transform: uppercase; margin: 0;
+  text-wrap: balance;
+}
+.lede { max-width: 40ch; margin: 1.5rem auto 0; }
+.scroll-hint { position: absolute; bottom: 2rem; left: 50%; translate: -50% 0; font-size: 0.75rem; letter-spacing: 0.2em; text-transform: uppercase; opacity: 0.7; }
+
+.hud {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: var(--gutter); mix-blend-mode: difference;
+}
+.hud a, .hud button { color: #fff; text-decoration: none; background: none; border: 0; font: inherit; cursor: pointer; }
+.hud__nav { display: flex; gap: 1.5rem; }
+@media (max-width: 640px) { .hud__nav { display: none; } }
+
+.cta {
+  display: inline-block; margin-top: 2rem; padding: 1rem 2.5rem;
+  border: 3px solid currentColor; color: inherit; text-decoration: none;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  transition: background-color 0.2s, color 0.2s;
+}
+.cta:hover, .cta:focus-visible { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.footer { padding: var(--gutter); background: var(--ink); }
+
+/* Split-text helpers (see src/core/splitText.ts) */
+.split-line { display: inline-block; overflow: clip; vertical-align: top; padding-bottom: 0.05em; }
+.split-word { display: inline-block; will-change: transform; }
+
+.loader {
+  position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; gap: 1rem;
+  background: var(--ink); color: var(--paper); text-align: center;
+  transition: opacity 0.8s ease, visibility 0.8s;
+}
+.loader__bar { width: min(300px, 60vw); height: 3px; background: rgb(255 255 255 / 0.2); overflow: hidden; }
+.loader__fill { display: block; height: 100%; background: currentColor; transform-origin: left; transform: scaleX(var(--progress, 0)); }
+body:not(.is-loading) .loader { opacity: 0; visibility: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
